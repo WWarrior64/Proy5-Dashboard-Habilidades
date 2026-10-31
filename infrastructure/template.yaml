@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Internal Marketplace - AWS Free Tier infrastructure
+
+Resources:
+  TablaTalentos:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: talentos-table
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
+  BucketFrontend:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: frontend-internal-marketplace
+      WebsiteConfiguration:
+        IndexDocument: index.html

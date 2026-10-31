@@ -1,0 +1,23 @@
+{
+  "name": "proy5-dashboard-habilidades",
+  "version": "1.0.0",
+  "description": "Dashboard de Gestión de Talento y Habilidades Internas (Internal Marketplace)",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev:backend": "npm run dev --workspace=backend",
+    "install:all": "npm install --workspaces",
+    "lint": "npm run lint --workspaces"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/equipo/proy5-dashboard-habilidades.git"
+  },
+  "keywords": ["react", "nodejs", "aws", "dynamodb", "dashboard", "talento"],
+  "author": "Grupo B - Universidad Católica de El Salvador",
+  "license": "MIT"
+}

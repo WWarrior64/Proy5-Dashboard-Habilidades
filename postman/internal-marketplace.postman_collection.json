@@ -1,0 +1,26 @@
+{
+  "info": {
+    "name": "Internal Marketplace - API Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Crear Colaborador",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/colaboradores",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nombre\": \"Juan Pérez\", \"rol\": \"EMPLEADO\", \"nivelHabilidad\": \"Mid\"}"
+        }
+      }
+    },
+    {
+      "name": "Listar Colaboradores",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/colaboradores"
+      }
+    }
+  ]
+}
