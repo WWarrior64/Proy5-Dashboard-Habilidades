@@ -7,15 +7,15 @@
     "start": "node src/index.js",
     "dev": "node src/index.js",
     "lint": "echo 'Backend lint skipped - minimal structure'",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest --watchAll"
+    "test": "jest --runInBand"
   },
   "dependencies": {
-    "express": "^4.19.2",
+    "aws-sdk": "^2.1588.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "aws-sdk": "^2.1588.0",
-    "uuid": "^9.0.1",
-    "joi": "^17.13.3"
+    "express": "^4.19.2",
+    "joi": "^17.13.3",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "jest": "^29.7.0",

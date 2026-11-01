@@ -18,4 +18,4 @@ jobs:
       - name: Lint
         run: npm run lint --workspace=frontend
       - name: Test
-        run: npm test --workspaces=backend
+        run: npm run test --workspace=backend
