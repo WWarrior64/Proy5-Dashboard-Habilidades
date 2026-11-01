@@ -1,21 +1,99 @@
-name: Deploy Internal Marketplace
+name: CI/CD Internal Marketplace
 
 on:
   push:
-    branches: [main, develop]
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
 
 jobs:
-  build:
+  # ============================================================================
+  # JOB 1: INTEGRACION CONTINUA (Calidad de Codigo, Pruebas y Validacion SAM)
+  # ============================================================================
+  ci-verify:
+    name: Lint, Test & Validate SAM
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node.js
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+
       - name: Install dependencies
         run: npm ci
-      - name: Lint
+
+      - name: Lint Frontend
         run: npm run lint --workspace=frontend
-      - name: Test
-        run: npm test --workspaces=backend
+
+      - name: Build Frontend (Verify Vite bundle)
+        run: npm run build --workspace=frontend
+
+      - name: Run Backend Tests
+        run: npm run test --workspace=backend
+
+      - name: Setup Python (Requerido para AWS SAM CLI)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Validate AWS SAM Template
+        run: sam validate --template-file infrastructure/template.yaml
+
+  # ============================================================================
+  # JOB 2: DESPLIEGUE CONTINUO A AWS (Desactivado hasta probar despliegue manual)
+  # ============================================================================
+  cd-deploy:
+    name: Deploy to AWS Free Tier
+    needs: ci-verify
+    runs-on: ubuntu-latest
+    # IMPORTANTE: Se mantiene en 'false' en esta etapa segun lineamientos del equipo
+    # hasta configurar AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY en GitHub Secrets
+    # y verificar primero el despliegue manual con 'sam deploy'.
+    if: false && github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: SAM Build
+        run: sam build --template-file infrastructure/template.yaml
+
+      - name: SAM Deploy
+        run: |
+          sam deploy \
+            --template-file .aws-sam/build/template.yaml \
+            --stack-name internal-marketplace-stack \
+            --capabilities CAPABILITY_IAM \
+            --resolve-s3 \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
