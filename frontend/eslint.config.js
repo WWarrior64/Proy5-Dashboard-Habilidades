@@ -1,3 +1,4 @@
+import babelParser from '@babel/eslint-parser'
 import globals from 'globals'
 import pluginJs from '@eslint/js'
 import pluginReactHooks from 'eslint-plugin-react-hooks'
@@ -8,8 +9,15 @@ export default [
   {
     files: ['**/*.{js,jsx}'],
     languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: 'module',
+      parser: babelParser,
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: 'module',
+        requireConfigFile: false,
+        babelOptions: {
+          presets: [['@babel/preset-react', { runtime: 'automatic' }]],
+        },
+      },
       globals: { ...globals.browser, ...globals.node },
     },
     plugins: {

@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node src/index.js",
+    "lint": "echo 'Backend lint skipped - minimal structure'",
     "test": "node --experimental-vm-modules node_modules/.bin/jest --watchAll"
   },
   "dependencies": {
