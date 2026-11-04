@@ -204,6 +204,74 @@ Se realizaron los siguientes ajustes para que el flujo de despliegue pase sin er
 - `npm run build` (frontend): Exitoso.
 - `npm test` (backend): 4 suites y 4 tests pasados.
 
-## 9. Fin del Documento
+## 9. Registro de Cambios - Módulo Rendimiento y Caché (Integrante 3: Elvis)
+
+Rama: `feature/rendimiento-y-cache`
+
+### 9.1 backend/src/services/cache.service.js
+- Se implementó estrategia de caché en memoria con TTL (expiración por tiempo).
+- Métodos implementados:
+  - `obtener(clave)`: retorna el valor si existe y no expiró; si expiró, elimina la entrada y retorna `undefined`.
+  - `guardar(clave, valor, ttlMs)`: almacena un valor con TTL opcional en milisegundos (si se omite, no expira).
+  - `eliminar(clave)`: elimina una clave específica; retorna `boolean`.
+  - `limpiar()`: vacía toda la caché.
+  - `limpiarExpirados()`: elimina solo las entradas expiradas; retorna cantidad eliminada.
+  - `obtenerEstadisticas()`: retorna `{ tamaño, expirados, activos }`.
+- Se mantienen aliases `obtenerClave` y `guardarClave` para retrocompatibilidad.
+- Cada entrada almacena `{ valor, expiraEn }` con marca de expiración en ms.
+
+### 9.2 backend/src/services/filtering.service.js
+- Se optimizó `filtrarPorHabilidades(items, habilidades, opciones)` para filtrado eficiente en memoria:
+  - Uso de `Set` para búsquedas O(1) por habilidad, evitando escaneos lineales repetidos.
+  - Soporte para modo `coincidencia: 'alguna'` (al menos una habilidad, por defecto) y `coincidencia: 'todas'` (todas las habilidades).
+  - Opción `campoHabilidades` para personalizar el campo fuente (por defecto `'habilidades'`).
+  - Manejo de casos vacíos y normalización `toLowerCase().trim()`.
+- Se agregó `construirFiltroDynamoDB(habilidades, opciones)` que genera `FilterExpression`, `ExpressionAttributeNames` y `ExpressionAttributeValues` para permitir a los repositorios usar operaciones dirigidas (Query con GSI o FilterExpression acotado) en lugar de un Scan completo de DynamoDB.
+
+### 9.3 Alcance y restricciones respetadas
+- No se modificó `infrastructure/template.yaml`.
+- No se modificaron handlers ni repositorios de otros compañeros.
+- Se modificaron exclusivamente `backend/src/services/cache.service.js`, `backend/src/services/filtering.service.js` y este archivo `CONTEXTO_EQUIPO.md`.
+
+## Registro de Cambios — Integrante 4: Modelo de Datos y Conexión DynamoDB
+
+Rama: `feature/modelo-dynamodb`
+Objetivo: Completar el modelo de datos y preparar una conexión reutilizable a las nueve tablas DynamoDB.
+
+### Archivos creados (database/schemas/)
+- `database/schemas/cargos.md` — Nueva entidad Cargos (tabla `im_cargos`).
+- `database/schemas/colaborador-habilidad.md` — Nueva entidad ColaboradorHabilidad (tabla `im_colaborador_habilidad`).
+- `database/schemas/proyecto-habilidad.md` — Nueva entidad ProyectoHabilidad (tabla `im_proyecto_habilidad`).
+
+### Archivos actualizados (database/schemas/)
+- `database/schemas/usuarios.md` — Actualizado con modelo definitivo: 10 campos, GSI1 (cognitoSub), GSI2 (correo), sin passwordHash.
+- `database/schemas/colaboradores.md` — Actualizado: cargoId en vez de cargo, sin nivelHabilidad, con rolProfesional, disponibilidad, fechaIngreso, GSI2 (estado + rolProfesional#nombre).
+- `database/schemas/habilidades.md` — Actualizado: nombreNormalizado, categoria, estado, GSI1 (categoria + nombreNormalizado).
+- `database/schemas/proyectos.md` — Actualizado: liderId, objetivo, horasRequeridas, estados BORRADOR/ACTIVO/PAUSADO/COMPLETADO/CANCELADO, fechaPublicacion, GSI1 y GSI2.
+- `database/schemas/postulaciones.md` — Actualizado: clave compuesta (proyectoId + POSTULACION#colaboradorId), GSI1 (colaboradorId + fechaPostulacion#proyectoId).
+- `database/schemas/asignaciones.md` — Actualizado: 13 campos, 3 GSIs (colaboradorId, proyectoId, estado).
+- `database/schemas/data-model.md` — Actualizado con resumen de 9 tablas, relaciones y correcciones al modelo anterior.
+- `database/README.md` — Actualizado con lista de 9 esquemas y convención de nombres `im_`.
+
+### Archivos actualizados (backend/)
+- `backend/.env.example` — Reemplazada `DYNAMODB_TABLE_NAME=talentos-table` por 9 variables `TABLE_*` con nombres `im_*`. Sin credenciales reales (placeholders).
+- `backend/package.json` — Reemplazada `aws-sdk` v2 por `@aws-sdk/client-dynamodb` v3 y `@aws-sdk/lib-dynamodb` v3.
+- `backend/src/config/environment.js` — Reemplazada `dynamoDbTable` por 9 variables `table*`. Agregadas `awsAccessKeyId` y `awsSecretAccessKey`.
+- `backend/src/config/dynamodb.js` — Migrado de AWS SDK v2 (`AWS.DynamoDB.DocumentClient`) a AWS SDK v3 (`DynamoDBClient` + `DynamoDBDocumentClient`). Exporta `dynamoDb` y `client`.
+
+### Archivos NO modificados (según restricción del Integrante 4)
+- `infrastructure/template.yaml` — Sin cambios.
+- `backend/src/functions/*/handler.js` — Sin cambios.
+- `backend/src/index.js` — Sin cambios.
+
+### Contrato de datos entregado al equipo
+Nombres de tabla, campos, claves primarias, GSIs y patrones de consulta documentados en cada archivo de `database/schemas/`. Este es el contrato común que todos los integrantes deben usar.
+
+### Resultado de validación local
+- `node -e "require('@aws-sdk/client-dynamodb')"` — ✅ AWS SDK v3 carga correctamente.
+- `require('./src/config/environment.js')` — ✅ 9 nombres de tabla resueltos correctamente.
+- `backend/npm test` — ✅ 4 suites y 4 tests pasados (sin cambios en tests).
+
+## Fin del Documento
 
 Este archivo debe mantenerse actualizado conforme avance el proyecto.
