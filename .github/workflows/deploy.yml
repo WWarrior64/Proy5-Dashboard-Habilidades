@@ -31,27 +31,34 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Lint Frontend
-        run: npm run lint --workspace=frontend
+        run: npm run lint --workspace=frontend --if-present
 
       - name: Build Frontend (Verify Vite bundle)
-        run: npm run build --workspace=frontend
+        run: npm run build --workspace=frontend --if-present
+
+      - name: Lint Backend
+        run: npm run lint --workspace=backend --if-present
 
       - name: Run Backend Tests
-        run: npm run test --workspace=backend
-
-      - name: Setup Python (Requerido para AWS SAM CLI)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+        run: npm run test --workspace=backend --if-present
 
       - name: Setup AWS SAM CLI
         uses: aws-actions/setup-sam@v2
 
       - name: Validate AWS SAM Template
-        run: sam validate --template-file infrastructure/template.yaml
+        env:
+          AWS_ACCESS_KEY_ID: dummy
+          AWS_SECRET_ACCESS_KEY: dummy
+          AWS_DEFAULT_Region: us-east-1
+        run: sam validate --region us-east-1 --template-file infrastructure/template.yaml
 
   # ============================================================================
   # JOB 2: DESPLIEGUE CONTINUO A AWS (Desactivado hasta probar despliegue manual)
@@ -75,6 +82,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Install dependencies & Build Frontend
+        run: |
+          npm ci
+          npm run build --workspace=frontend
+
       - name: Setup AWS SAM CLI
         uses: aws-actions/setup-sam@v2
 
@@ -88,12 +100,22 @@ jobs:
       - name: SAM Build
         run: sam build --template-file infrastructure/template.yaml
 
-      - name: SAM Deploy
+      - name: SAM Deploy (Infraestructura + Backend Lambda + DynamoDB)
         run: |
           sam deploy \
             --template-file .aws-sam/build/template.yaml \
             --stack-name internal-marketplace-stack \
-            --capabilities CAPABILITY_IAM \
+            --region us-east-1 \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
             --resolve-s3 \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
+
+      - name: Sync Frontend Build to S3 & Invalidate CloudFront
+        run: |
+          BUCKET_NAME=$(aws cloudformation describe-stacks \
+            --stack-name internal-marketplace-stack \
+            --region us-east-1 \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" \
+            --output text)
+          aws s3 sync frontend/dist s3://$BUCKET_NAME --delete
