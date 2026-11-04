@@ -22,14 +22,18 @@ Solicitudes de participación. Registra las solicitudes de los colaboradores que
 
 ## Claves e índices
 
-- **Clave primaria compuesta:** Partición: `proyectoId`, Ordenación: `POSTULACION#colaboradorId`.
-- **GSI1:** Partición: `colaboradorId`, Ordenación: `fechaPostulacion#proyectoId`.
+- **Clave primaria compuesta:**
+  - Partición: `proyectoId`
+  - Ordenación: `postulacionKey` — atributo físico sencillo que guarda el valor compuesto (por ejemplo `POSTULACION#colaboradorId`). Permite consultar por proyecto y colaborador.
+- **GSI1:**
+  - Partición: `colaboradorId`
+  - Ordenación: `colaboradorFechaKey` — atributo físico sencillo que guarda el valor compuesto (por ejemplo `fechaPostulacion#proyectoId`). Permite consultar postulaciones por colaborador.
 
 ## Patrones de consulta
 
 1. `GET /proyectos/{proyectoId}/postulaciones` → Query por clave primaria con `proyectoId = :id`.
 2. `GET /colaboradores/{colaboradorId}/postulaciones` → Query GSI1 con `colaboradorId = :id`.
-3. `GET /postulaciones/{proyectoId}/{colaboradorId}` → Query por clave primaria con `proyectoId` y ordenación `POSTULACION#{colaboradorId}`.
+3. `GET /postulaciones/{proyectoId}/{colaboradorId}` → Query por clave primaria con `proyectoId` y `postulacionKey`.
 
 ## Reglas de negocio
 

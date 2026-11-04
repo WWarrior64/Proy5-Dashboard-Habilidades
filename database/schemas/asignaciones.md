@@ -26,15 +26,21 @@ Vinculación de colaboradores con proyectos. Almacena las asignaciones confirmad
 ## Claves e índices
 
 - **Clave primaria:** `asignacionId` (String, simple).
-- **GSI1:** Partición: `colaboradorId`, Ordenación: `estado#fechaAsignacion`. Permite consultar las asignaciones de un colaborador.
-- **GSI2:** Partición: `proyectoId`, Ordenación: `estado#fechaAsignacion`. Permite consultar las asignaciones de un proyecto.
-- **GSI3:** Partición: `estado`, Ordenación: `fechaAsignacion#asignacionId`. Permite consultar las asignaciones activas globalmente.
+- **GSI1:**
+  - Partición: `colaboradorId`
+  - Ordenación: `colaboradorFechaKey` — atributo físico sencillo que guarda el valor compuesto (por ejemplo `estado#fechaAsignacion`). Permite consultar las asignaciones de un colaborador.
+- **GSI2:**
+  - Partición: `proyectoId`
+  - Ordenación: `proyectoFechaKey` — atributo físico sencillo que guarda el valor compuesto (por ejemplo `estado#fechaAsignacion`). Permite consultar las asignaciones de un proyecto.
+- **GSI3:**
+  - Partición: `estado`
+  - Ordenación: `estadoFechaKey` — atributo físico sencillo que guarda el valor compuesto (por ejemplo `fechaAsignacion#asignacionId`). Permite consultar las asignaciones activas globalmente.
 
 ## Patrones de consulta
 
 1. `GET /asignaciones/{asignacionId}` → Query por clave primaria `asignacionId`.
-2. `GET /colaboradores/{colaboradorId}/asignaciones?estado=ACTIVA` → Query GSI1 con `colaboradorId = :id` y `estado = 'ACTIVA'`.
-3. `GET /proyectos/{proyectoId}/asignaciones?estado=ACTIVA` → Query GSI2 con `proyectoId = :id` y `estado = 'ACTIVA'`.
+2. `GET /colaboradores/{colaboradorId}/asignaciones?estado=ACTIVA` → Query GSI1 con `colaboradorId = :id` y `colaboradorFechaKey` comienza con `ACTIVA#`.
+3. `GET /proyectos/{proyectoId}/asignaciones?estado=ACTIVA` → Query GSI2 con `proyectoId = :id` y `proyectoFechaKey` comienza con `ACTIVA#`.
 4. `GET /asignaciones?estado=ACTIVA` → Query GSI3 con `estado = 'ACTIVA'`.
 
 ## Reglas de negocio
@@ -44,3 +50,4 @@ Vinculación de colaboradores con proyectos. Almacena las asignaciones confirmad
 - Las horas asignadas deben ser mayores que cero.
 - `horasCompletadas` no puede ser negativo ni superar las horas asignadas.
 - Al desvincular a un colaborador, se cambia el estado a `DESVINCULADA` y se registra la fecha de finalización.
+- **Control atómico de dedicación:** Al crear o actualizar una asignación, los repositorios deben usar una operación condicional (TransactWriteItems o UpdateItem con ConditionExpression) que verifique que la suma de `porcentajeDedicacion` de asignaciones `ACTIVA` del colaborador más el nuevo porcentaje no exceda 100.
