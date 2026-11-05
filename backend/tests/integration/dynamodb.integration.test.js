@@ -1,5 +1,6 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DescribeTableCommand } = require('@aws-sdk/client-dynamodb');
+const { tableUsuarios } = require('../../src/config/environment.js');
 
 // Esta prueba de integración requiere credenciales de AWS configuradas.
 // Se salta automáticamente si no hay credenciales disponibles (por ejemplo, en CI sin AWS).
@@ -16,7 +17,7 @@ describe('Integración con DynamoDB (entorno de desarrollo)', () => {
       ...(process.env.DYNAMODB_ENDPOINT && { endpoint: process.env.DYNAMODB_ENDPOINT }),
     });
 
-    const tableName = process.env.TABLE_USUARIOS || 'internal-marketplace-usuarios-dev';
+    const tableName = process.env.TABLE_USUARIOS || tableUsuarios;
 
     const command = new DescribeTableCommand({ TableName: tableName });
     const response = await client.send(command);
