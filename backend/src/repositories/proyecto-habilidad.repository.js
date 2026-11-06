@@ -1,4 +1,12 @@
-const { dynamoDb } = require('../../src/config/dynamodb.js');
+const {
+  dynamoDb,
+  GetCommand,
+  PutCommand,
+  UpdateCommand,
+  DeleteCommand,
+  QueryCommand,
+  ScanCommand,
+} = require('../../src/config/dynamodb.js');
 const { tableProyectoHabilidad } = require('../../src/config/environment.js');
 const { ErrorApp, CODIGOS } = require('../../src/utils/errors.js');
 const cache = require('../../src/services/cache.service.js');
@@ -42,11 +50,13 @@ async function asociarHabilidad(datos) {
   try {
     // La clave compuesta (proyectoId, habilidadId) es única: no se permiten
     // duplicados de la misma habilidad requerida en un proyecto.
-    await dynamoDb.put({
-      TableName: tableProyectoHabilidad,
-      Item: item,
-      ConditionExpression: 'attribute_not_exists(habilidadId)',
-    });
+    await dynamoDb.send(
+      new PutCommand({
+        TableName: tableProyectoHabilidad,
+        Item: item,
+        ConditionExpression: 'attribute_not_exists(habilidadId)',
+      })
+    );
   } catch (e) {
     if (e.name === 'ConditionalCheckFailedException') {
       throw new ErrorApp(
@@ -67,12 +77,14 @@ async function consultarHabilidadesProyecto(proyectoId) {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.query({
-    TableName: tableProyectoHabilidad,
-    KeyConditionExpression: '#p = :p',
-    ExpressionAttributeNames: { '#p': 'proyectoId' },
-    ExpressionAttributeValues: { ':p': proyectoId },
-  });
+  const resultado = await dynamoDb.send(
+    new QueryCommand({
+      TableName: tableProyectoHabilidad,
+      KeyConditionExpression: '#p = :p',
+      ExpressionAttributeNames: { '#p': 'proyectoId' },
+      ExpressionAttributeValues: { ':p': proyectoId },
+    })
+  );
   const items = resultado.Items || [];
 
   cache.guardar(clave, items, CACHE_TTL_MS);
@@ -111,15 +123,17 @@ async function actualizarCampo(proyectoId, habilidadId, cambios) {
   sets.push('#fechaActualizacion = :fechaActualizacion');
 
   try {
-    const resultado = await dynamoDb.update({
-      TableName: tableProyectoHabilidad,
-      Key: { proyectoId, habilidadId },
-      UpdateExpression: `SET ${sets.join(', ')}`,
-      ExpressionAttributeNames: nombresAtributos,
-      ExpressionAttributeValues: valoresAtributos,
-      ConditionExpression: 'attribute_exists(proyectoId) AND attribute_exists(habilidadId)',
-      ReturnValues: 'ALL_NEW',
-    });
+    const resultado = await dynamoDb.send(
+      new UpdateCommand({
+        TableName: tableProyectoHabilidad,
+        Key: { proyectoId, habilidadId },
+        UpdateExpression: `SET ${sets.join(', ')}`,
+        ExpressionAttributeNames: nombresAtributos,
+        ExpressionAttributeValues: valoresAtributos,
+        ConditionExpression: 'attribute_exists(proyectoId) AND attribute_exists(habilidadId)',
+        ReturnValues: 'ALL_NEW',
+      })
+    );
     if (!resultado.Attributes) {
       throw new ErrorApp('Relación proyecto-habilidad no encontrada', 404, CODIGOS.NO_ENCONTRADO);
     }
@@ -133,13 +147,30 @@ async function actualizarCampo(proyectoId, habilidadId, cambios) {
   }
 }
 
+async function actualizarRelacion(proyectoId, habilidadId, data) {
+  const cambios = {};
+  if (data.nivelMinimo !== undefined) { validarNivelMinimo(data.nivelMinimo); cambios.nivelMinimo = data.nivelMinimo; }
+  if (data.esObligatoria !== undefined) {
+    if (typeof data.esObligatoria !== 'boolean') throw new ErrorApp('esObligatoria debe ser booleano', 400, CODIGOS.VALIDACION);
+    cambios.esObligatoria = data.esObligatoria;
+  }
+  if (data.peso !== undefined) {
+    if (!Number.isFinite(data.peso)) throw new ErrorApp('Peso inválido', 400, CODIGOS.VALIDACION);
+    cambios.peso = data.peso;
+  }
+  if (!Object.keys(cambios).length) throw new ErrorApp('No hay campos para actualizar', 400, CODIGOS.VALIDACION);
+  return actualizarCampo(proyectoId, habilidadId, cambios);
+}
+
 async function eliminarRelacion(proyectoId, habilidadId) {
   try {
-    await dynamoDb.delete({
-      TableName: tableProyectoHabilidad,
-      Key: { proyectoId, habilidadId },
-      ConditionExpression: 'attribute_exists(proyectoId) AND attribute_exists(habilidadId)',
-    });
+    await dynamoDb.send(
+      new DeleteCommand({
+        TableName: tableProyectoHabilidad,
+        Key: { proyectoId, habilidadId },
+        ConditionExpression: 'attribute_exists(proyectoId) AND attribute_exists(habilidadId)',
+      })
+    );
   } catch (e) {
     if (e.name === 'ConditionalCheckFailedException') {
       throw new ErrorApp('Relación proyecto-habilidad no encontrada', 404, CODIGOS.NO_ENCONTRADO);
@@ -156,13 +187,15 @@ async function consultarProyectosPorHabilidad(habilidadId) {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.query({
-    TableName: tableProyectoHabilidad,
-    IndexName: 'GSI1',
-    KeyConditionExpression: '#h = :h',
-    ExpressionAttributeNames: { '#h': 'habilidadId' },
-    ExpressionAttributeValues: { ':h': habilidadId },
-  });
+  const resultado = await dynamoDb.send(
+    new QueryCommand({
+      TableName: tableProyectoHabilidad,
+      IndexName: 'GSI1',
+      KeyConditionExpression: '#h = :h',
+      ExpressionAttributeNames: { '#h': 'habilidadId' },
+      ExpressionAttributeValues: { ':h': habilidadId },
+    })
+  );
   const items = resultado.Items || [];
 
   cache.guardar(clave, items, CACHE_TTL_MS);
@@ -170,6 +203,7 @@ async function consultarProyectosPorHabilidad(habilidadId) {
 }
 
 module.exports = {
+  actualizarRelacion,
   asociarHabilidad,
   consultarHabilidadesProyecto,
   modificarNivelMinimo,

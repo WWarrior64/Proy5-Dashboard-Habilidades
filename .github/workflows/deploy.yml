@@ -6,6 +6,7 @@ on:
       - develop
       - main
       - 'feature/**'
+      - 'fix/**'
   pull_request:
     branches:
       - develop
@@ -15,6 +16,9 @@ jobs:
   validate-backend:
     name: Validar Backend (Lint, Tests y SAM)
     runs-on: ubuntu-latest
+    env:
+      RUN_AWS_INTEGRATION: 'false'
+      ESLINT_USE_FLAT_CONFIG: 'true'
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
@@ -30,7 +34,7 @@ jobs:
 
       - name: Ejecutar linter del Backend
         working-directory: backend
-        run: npm run lint || echo "Lint completado sin reglas bloqueantes pendientes"
+        run: npm run lint
 
       - name: Ejecutar pruebas unitarias del Backend
         working-directory: backend
@@ -52,6 +56,9 @@ jobs:
   validate-frontend:
     name: Validar Frontend (Build)
     runs-on: ubuntu-latest
+    env:
+      RUN_AWS_INTEGRATION: 'false'
+      ESLINT_USE_FLAT_CONFIG: 'true'
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
@@ -62,8 +69,7 @@ jobs:
           node-version: 24
           cache: 'npm'
 
-      - name: Instalar dependencias del Frontend
-        working-directory: frontend
+      - name: Instalar dependencias desde el lockfile de workspaces
         run: npm ci
 
       - name: Compilar Frontend (Build)

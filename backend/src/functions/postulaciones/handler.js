@@ -123,6 +123,25 @@ async function retirarPostulacion(event, context) {
   }
 }
 
+const { crearDespachador } = require('../../utils/lambda-dispatcher');
+
+const handler = crearDespachador({
+  'PATCH /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/retirar': retirarPostulacion,
+  'POST /api/v1/postulaciones': crearPostulacion,
+  'GET /api/v1/proyectos/{proyectoId}/postulaciones': consultarPostulacionesProyecto,
+  'GET /api/v1/colaboradores/{colaboradorId}/postulaciones': consultarPostulacionesColaborador,
+  'GET /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}': obtenerPostulacion,
+  'PATCH /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/estado': (event, context) => {
+    // Determinar si es aceptar o rechazar basado en el body o query
+    const body = event.body ? (typeof event.body === 'string' ? JSON.parse(event.body) : event.body) : {};
+    const estado = body.estado;
+    if (estado === 'ACEPTADA') return aceptarPostulacion(event, context);
+    if (estado === 'RETIRADA') return retirarPostulacion(event, context);
+    if (estado === 'RECHAZADA') return rechazarPostulacion(event, context);
+    return error('Estado no válido', 400, CODIGOS.VALIDACION);
+  },
+});
+
 module.exports = {
   crearPostulacion,
   consultarPostulacionesProyecto,
@@ -131,4 +150,5 @@ module.exports = {
   aceptarPostulacion,
   rechazarPostulacion,
   retirarPostulacion,
+  handler,
 };

@@ -1,5 +1,13 @@
 const { v4: uuidv4 } = require('uuid');
-const { dynamoDb } = require('../../src/config/dynamodb.js');
+const {
+  dynamoDb,
+  GetCommand,
+  PutCommand,
+  UpdateCommand,
+  DeleteCommand,
+  QueryCommand,
+  ScanCommand,
+} = require('../../src/config/dynamodb.js');
 const { tableProyectos, tableUsuarios } = require('../../src/config/environment.js');
 const { ErrorApp, CODIGOS } = require('../../src/utils/errors.js');
 const cache = require('../../src/services/cache.service.js');
@@ -39,10 +47,12 @@ function invalidarCachéProyecto(proyectoId) {
 }
 
 async function validarLider(liderId) {
-  const resultado = await dynamoDb.get({
-    TableName: tableUsuarios,
-    Key: { usuarioId: liderId },
-  });
+  const resultado = await dynamoDb.send(
+    new GetCommand({
+      TableName: tableUsuarios,
+      Key: { usuarioId: liderId },
+    })
+  );
   const usuario = resultado.Item;
   if (!usuario) {
     throw new ErrorApp('El líder especificado no existe', 404, CODIGOS.NO_ENCONTRADO);
@@ -84,8 +94,8 @@ function itemBaseProyecto(proyectoId, datos, ahora) {
     ...(fechaFin !== undefined && { fechaFin }),
     // Claves de orden de los GSIs (GSI1: estado / fechaPublicacion#proyectoId;
     // GSI2: liderId / estado#fechaCreacion)
-    sk1: `${fechaPublicacion || ahora}#${proyectoId}`,
-    sk2: `${estado}#${ahora}`,
+    fechaPublicacionKey: `${fechaPublicacion || ahora}#${proyectoId}`,
+    estadoFechaKey: `${estado}#${ahora}`,
   };
 }
 
@@ -117,11 +127,13 @@ async function crearProyecto(datos) {
   const ahora = ahoraISO();
   const item = itemBaseProyecto(proyectoId, { ...datos, estado }, ahora);
 
-  await dynamoDb.put({
-    TableName: tableProyectos,
-    Item: item,
-    ConditionExpression: 'attribute_not_exists(proyectoId)',
-  });
+  await dynamoDb.send(
+    new PutCommand({
+      TableName: tableProyectos,
+      Item: item,
+      ConditionExpression: 'attribute_not_exists(proyectoId)',
+    })
+  );
 
   invalidarCachéProyecto(proyectoId);
   return item;
@@ -132,10 +144,12 @@ async function obtenerProyecto(proyectoId) {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.get({
-    TableName: tableProyectos,
-    Key: { proyectoId },
-  });
+  const resultado = await dynamoDb.send(
+    new GetCommand({
+      TableName: tableProyectos,
+      Key: { proyectoId },
+    })
+  );
   const proyecto = resultado.Item;
   if (!proyecto) {
     throw new ErrorApp('Proyecto no encontrado', 404, CODIGOS.NO_ENCONTRADO);
@@ -179,7 +193,7 @@ async function listarProyectos(filtros = {}) {
     if (condicionesFiltro.length > 0) {
       params.FilterExpression = condicionesFiltro.join(' AND ');
     }
-    const resultado = await dynamoDb.query(params);
+    const resultado = await dynamoDb.send(new QueryCommand(params));
     items = resultado.Items || [];
   } else if (estado) {
     nombresAtributos['#est'] = 'estado';
@@ -196,7 +210,7 @@ async function listarProyectos(filtros = {}) {
       valoresAtributos[':fecha'] = fecha;
       params.FilterExpression = '#fp >= :fecha';
     }
-    const resultado = await dynamoDb.query(params);
+    const resultado = await dynamoDb.send(new QueryCommand(params));
     items = resultado.Items || [];
   } else {
     throw new ErrorApp('Se requiere al menos un filtro: estado o liderId', 400, CODIGOS.VALIDACION);
@@ -252,7 +266,7 @@ async function actualizarProyecto(proyectoId, cambios) {
     nombresAtributos['#est'] = 'estado';
     valoresAtributos[':est'] = estado;
     sets.push('#est = :est');
-    nombresAtributos['#s2'] = 'sk2';
+    nombresAtributos['#s2'] = 'estadoFechaKey';
     valoresAtributos[':s2'] = `${estado}#${ahora}`;
     sets.push('#s2 = :s2');
   }
@@ -266,7 +280,7 @@ async function actualizarProyecto(proyectoId, cambios) {
   }
 
   try {
-    const resultado = await dynamoDb.update({
+    const resultado = await dynamoDb.send(new UpdateCommand({
       TableName: tableProyectos,
       Key: { proyectoId },
       UpdateExpression: `SET ${sets.join(', ')}`,
@@ -274,7 +288,7 @@ async function actualizarProyecto(proyectoId, cambios) {
       ExpressionAttributeValues: valoresAtributos,
       ConditionExpression: 'attribute_exists(proyectoId)',
       ReturnValues: 'ALL_NEW',
-    });
+    }));
     if (!resultado.Attributes) {
       throw new ErrorApp('Proyecto no encontrado', 404, CODIGOS.NO_ENCONTRADO);
     }
@@ -292,11 +306,11 @@ async function cambiarEstado(proyectoId, estado) {
   validarEstado(estado);
   const ahora = ahoraISO();
   try {
-    const resultado = await dynamoDb.update({
+    const resultado = await dynamoDb.send(new UpdateCommand({
       TableName: tableProyectos,
       Key: { proyectoId },
       UpdateExpression: 'SET #est = :est, #s2 = :s2, #ua = :ua',
-      ExpressionAttributeNames: { '#est': 'estado', '#s2': 'sk2', '#ua': 'fechaActualizacion' },
+      ExpressionAttributeNames: { '#est': 'estado', '#s2': 'estadoFechaKey', '#ua': 'fechaActualizacion' },
       ExpressionAttributeValues: {
         ':est': estado,
         ':s2': `${estado}#${ahora}`,
@@ -304,7 +318,7 @@ async function cambiarEstado(proyectoId, estado) {
       },
       ConditionExpression: 'attribute_exists(proyectoId)',
       ReturnValues: 'ALL_NEW',
-    });
+    }));
     invalidarCachéProyecto(proyectoId);
     return resultado.Attributes;
   } catch (e) {
@@ -326,13 +340,15 @@ async function listarProyectosActivos() {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.query({
-    TableName: tableProyectos,
-    IndexName: 'GSI1',
-    KeyConditionExpression: '#est = :est',
-    ExpressionAttributeNames: { '#est': 'estado' },
-    ExpressionAttributeValues: { ':est': 'ACTIVO' },
-  });
+  const resultado = await dynamoDb.send(
+    new QueryCommand({
+      TableName: tableProyectos,
+      IndexName: 'GSI1',
+      KeyConditionExpression: '#est = :est',
+      ExpressionAttributeNames: { '#est': 'estado' },
+      ExpressionAttributeValues: { ':est': 'ACTIVO' },
+    })
+  );
   const items = resultado.Items || [];
 
   cache.guardar(clave, items, CACHE_TTL_MS);

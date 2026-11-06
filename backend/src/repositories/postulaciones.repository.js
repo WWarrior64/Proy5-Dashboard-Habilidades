@@ -1,5 +1,15 @@
+const dedicacion = require('../services/dedicacion.service');
 const { v4: uuidv4 } = require('uuid');
-const { dynamoDb } = require('../../src/config/dynamodb.js');
+const {
+  dynamoDb,
+  GetCommand,
+  PutCommand,
+  UpdateCommand,
+  DeleteCommand,
+  QueryCommand,
+  ScanCommand,
+  TransactWriteCommand,
+} = require('../../src/config/dynamodb.js');
 const {
   tablePostulaciones,
   tableProyectos,
@@ -29,10 +39,12 @@ function validarEstadoPostulacion(estado) {
 }
 
 async function validarColaboradorActivo(colaboradorId) {
-  const resultado = await dynamoDb.get({
-    TableName: tableColaboradores,
-    Key: { colaboradorId },
-  });
+  const resultado = await dynamoDb.send(
+    new GetCommand({
+      TableName: tableColaboradores,
+      Key: { colaboradorId },
+    })
+  );
   const colaborador = resultado.Item;
   if (!colaborador) {
     throw new ErrorApp('El colaborador no existe', 404, CODIGOS.NO_ENCONTRADO);
@@ -44,10 +56,12 @@ async function validarColaboradorActivo(colaboradorId) {
 }
 
 async function validarProyectoActivo(proyectoId) {
-  const resultado = await dynamoDb.get({
-    TableName: tableProyectos,
-    Key: { proyectoId },
-  });
+  const resultado = await dynamoDb.send(
+    new GetCommand({
+      TableName: tableProyectos,
+      Key: { proyectoId },
+    })
+  );
   const proyecto = resultado.Item;
   if (!proyecto) {
     throw new ErrorApp('El proyecto no existe', 404, CODIGOS.NO_ENCONTRADO);
@@ -72,11 +86,12 @@ async function crearPostulacion(datos) {
   const ahora = ahoraISO();
   const item = {
     proyectoId,
-    sk: skPostulacion(colaboradorId),
+    postulacionKey: skPostulacion(colaboradorId),
     postulacionId: id,
     colaboradorId,
     estado: 'PENDIENTE',
     fechaPostulacion: ahora,
+    colaboradorFechaKey: `${ahora}#${proyectoId}`,
     fechaActualizacion: ahora,
     ...(comentario !== undefined && comentario !== null && { comentario }),
   };
@@ -85,11 +100,13 @@ async function crearPostulacion(datos) {
     // Clave primaria compuesta (proyectoId, POSTULACION#colaboradorId): un
     // colaborador no puede tener dos registros de postulación para el mismo
     // proyecto; el historial se conserva con estados ACEPTADA/RECHAZADA/RETIRADA.
-    await dynamoDb.put({
-      TableName: tablePostulaciones,
-      Item: item,
-      ConditionExpression: 'attribute_not_exists(sk)',
-    });
+    await dynamoDb.send(
+      new PutCommand({
+        TableName: tablePostulaciones,
+        Item: item,
+        ConditionExpression: 'attribute_not_exists(postulacionKey)',
+      })
+    );
   } catch (e) {
     if (e.name === 'ConditionalCheckFailedException') {
       throw new ErrorApp(
@@ -105,31 +122,37 @@ async function crearPostulacion(datos) {
 }
 
 async function consultarPostulacionesProyecto(proyectoId) {
-  const resultado = await dynamoDb.query({
-    TableName: tablePostulaciones,
-    KeyConditionExpression: '#p = :p',
-    ExpressionAttributeNames: { '#p': 'proyectoId' },
-    ExpressionAttributeValues: { ':p': proyectoId },
-  });
+  const resultado = await dynamoDb.send(
+    new QueryCommand({
+      TableName: tablePostulaciones,
+      KeyConditionExpression: '#p = :p',
+      ExpressionAttributeNames: { '#p': 'proyectoId' },
+      ExpressionAttributeValues: { ':p': proyectoId },
+    })
+  );
   return resultado.Items || [];
 }
 
 async function consultarPostulacionesColaborador(colaboradorId) {
-  const resultado = await dynamoDb.query({
-    TableName: tablePostulaciones,
-    IndexName: 'GSI1',
-    KeyConditionExpression: '#c = :c',
-    ExpressionAttributeNames: { '#c': 'colaboradorId' },
-    ExpressionAttributeValues: { ':c': colaboradorId },
-  });
+  const resultado = await dynamoDb.send(
+    new QueryCommand({
+      TableName: tablePostulaciones,
+      IndexName: 'GSI1',
+      KeyConditionExpression: '#c = :c',
+      ExpressionAttributeNames: { '#c': 'colaboradorId' },
+      ExpressionAttributeValues: { ':c': colaboradorId },
+    })
+  );
   return resultado.Items || [];
 }
 
 async function obtenerPostulacion(proyectoId, colaboradorId) {
-  const resultado = await dynamoDb.get({
-    TableName: tablePostulaciones,
-    Key: { proyectoId, sk: skPostulacion(colaboradorId) },
-  });
+  const resultado = await dynamoDb.send(
+    new GetCommand({
+      TableName: tablePostulaciones,
+      Key: { proyectoId, postulacionKey: skPostulacion(colaboradorId) },
+    })
+  );
   const postulacion = resultado.Item;
   if (!postulacion) {
     throw new ErrorApp('Postulación no encontrada', 404, CODIGOS.NO_ENCONTRADO);
@@ -175,14 +198,14 @@ async function aceptarPostulacion(proyectoId, colaboradorId, datosRevision) {
     throw new ErrorApp('Las horas asignadas deben ser un número positivo', 400, CODIGOS.VALIDACION);
   }
 
-  const asignacionesActivas = await dynamoDb.query({
+  const asignacionesActivas = await dynamoDb.send(new QueryCommand({
     TableName: tableAsignaciones,
     IndexName: 'GSI1',
     KeyConditionExpression: '#c = :c AND begins_with(#s, :prefijo)',
-    ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'skA1' },
+    ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'colaboradorFechaKey' },
     ExpressionAttributeValues: { ':c': colaboradorId, ':prefijo': 'ACTIVA#' },
     ProjectionExpression: 'porcentajeDedicacion',
-  });
+  }));
   const sumaActual = (asignacionesActivas.Items || []).reduce(
     (acc, item) => acc + (item.porcentajeDedicacion || 0),
     0
@@ -206,23 +229,14 @@ async function aceptarPostulacion(proyectoId, colaboradorId, datosRevision) {
     fechaAsignacion: ahora,
     fechaActualizacion: ahora,
     creadoPor: revisadoPor,
-    skA1: `ACTIVA#${ahora}`,
-    skA2: `ACTIVA#${ahora}`,
-    skA3: `${ahora}#${asignacionId}`,
+    colaboradorFechaKey: `ACTIVA#${ahora}`,
+    proyectoFechaKey: `ACTIVA#${ahora}`,
+    estadoFechaKey: `${ahora}#${asignacionId}`,
   };
 
   try {
-    await dynamoDb.transactWrite({
-      TransactItems: [
-        {
-          ConditionCheck: {
-            TableName: tableColaboradores,
-            Key: { colaboradorId },
-            ConditionExpression: '#est = :activo AND #disp = :disponible',
-            ExpressionAttributeNames: { '#est': 'estado', '#disp': 'disponibilidad' },
-            ExpressionAttributeValues: { ':activo': 'ACTIVO', ':disponible': 'DISPONIBLE' },
-          },
-        },
+    await dedicacion.ejecutar([
+        dedicacion.reserva(colaboradorId, porcentajeDedicacion),
         {
           ConditionCheck: {
             TableName: tableProyectos,
@@ -235,7 +249,7 @@ async function aceptarPostulacion(proyectoId, colaboradorId, datosRevision) {
         {
           Update: {
             TableName: tablePostulaciones,
-            Key: { proyectoId, sk: skPostulacion(colaboradorId) },
+            Key: { proyectoId, postulacionKey: skPostulacion(colaboradorId) },
             ConditionExpression: '#est = :pendiente',
             UpdateExpression:
               'SET #est = :aceptada, fechaRevision = :fecha, revisadoPor = :por, observacionRevision = :obs, fechaActualizacion = :ua',
@@ -245,7 +259,7 @@ async function aceptarPostulacion(proyectoId, colaboradorId, datosRevision) {
               ':aceptada': 'ACEPTADA',
               ':fecha': ahora,
               ':por': revisadoPor,
-              ':obs': observacionRevision,
+              ':obs': observacionRevision || '',
               ':ua': ahora,
             },
           },
@@ -257,8 +271,7 @@ async function aceptarPostulacion(proyectoId, colaboradorId, datosRevision) {
             ConditionExpression: 'attribute_not_exists(asignacionId)',
           },
         },
-      ],
-    });
+      ]);
   } catch (e) {
     if (e.name === 'ConditionalCheckFailedException') {
       throw new ErrorApp(
@@ -290,23 +303,25 @@ async function cambiarEstadoPostulacion(proyectoId, colaboradorId, estado, revis
   }
   const ahora = ahoraISO();
   try {
-    const resultado = await dynamoDb.update({
-      TableName: tablePostulaciones,
-      Key: { proyectoId, sk: skPostulacion(colaboradorId) },
-      UpdateExpression:
-        'SET #est = :estado, fechaRevision = :fecha, revisadoPor = :por, observacionRevision = :obs, fechaActualizacion = :ua',
-      ExpressionAttributeNames: { '#est': 'estado' },
-      ExpressionAttributeValues: {
-        ':estado': estado,
-        ':pendiente': 'PENDIENTE',
-        ':fecha': ahora,
-        ':por': revisadoPor,
-        ':obs': observacionRevision,
-        ':ua': ahora,
-      },
-      ConditionExpression: '#est = :pendiente',
-      ReturnValues: 'ALL_NEW',
-    });
+    const resultado = await dynamoDb.send(
+      new UpdateCommand({
+        TableName: tablePostulaciones,
+        Key: { proyectoId, postulacionKey: skPostulacion(colaboradorId) },
+        UpdateExpression:
+          'SET #est = :estado, fechaRevision = :fecha, revisadoPor = :por, observacionRevision = :obs, fechaActualizacion = :ua',
+        ExpressionAttributeNames: { '#est': 'estado' },
+        ExpressionAttributeValues: {
+          ':estado': estado,
+          ':pendiente': 'PENDIENTE',
+          ':fecha': ahora,
+          ':por': revisadoPor,
+          ':obs': observacionRevision || '',
+          ':ua': ahora,
+        },
+        ConditionExpression: '#est = :pendiente',
+        ReturnValues: 'ALL_NEW',
+      })
+    );
     if (!resultado.Attributes) {
       throw new ErrorApp('Postulación no encontrada', 404, CODIGOS.NO_ENCONTRADO);
     }

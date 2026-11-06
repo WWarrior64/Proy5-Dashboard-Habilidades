@@ -15,7 +15,7 @@ async function autenticar(event, handler) {
   try {
     const requestContext = event.requestContext || {};
     const authorizer = requestContext.authorizer || {};
-    const claims = authorizer.claims || authorizer.jwt || {};
+    const claims = authorizer.claims || authorizer.jwt?.claims || {};
     const cognitoSub = claims.sub || claims.cognito_sub || null;
 
     if (!cognitoSub) {

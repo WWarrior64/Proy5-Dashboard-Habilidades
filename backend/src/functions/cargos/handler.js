@@ -121,10 +121,21 @@ async function cambiarEstadoCargo(event, context) {
   }
 }
 
+const { crearDespachador } = require('../../utils/lambda-dispatcher');
+
+const handler = crearDespachador({
+  'GET /api/v1/cargos': listarCargos,
+  'POST /api/v1/cargos': crearCargo,
+  'GET /api/v1/cargos/{cargoId}': obtenerCargo,
+  'PUT /api/v1/cargos/{cargoId}': actualizarCargo,
+  'PATCH /api/v1/cargos/{cargoId}/estado': cambiarEstadoCargo,
+});
+
 module.exports = {
   crearCargo,
   listarCargos,
   obtenerCargo,
   actualizarCargo,
   cambiarEstadoCargo,
+  handler,
 };
