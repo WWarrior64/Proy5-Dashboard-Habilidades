@@ -102,6 +102,18 @@ async function obtenerResumenDashboard(event, context) {
   }
 }
 
+const { crearDespachador } = require('../../utils/lambda-dispatcher');
+
+const handler = crearDespachador({
+  'GET /api/v1/dashboard/colaboradores': obtenerColaboradoresActivos,
+  'GET /api/v1/dashboard/proyectos': obtenerProyectosPorEstado,
+  'GET /api/v1/dashboard/asignaciones': obtenerAsignacionesActivas,
+  'GET /api/v1/dashboard/habilidades': obtenerDistribucionHabilidades,
+  'GET /api/v1/dashboard/postulaciones': obtenerPostulacionesPorEstado,
+  'GET /api/v1/dashboard/actividad': obtenerActividadReciente,
+  'GET /api/v1/dashboard/resumen': obtenerResumenDashboard,
+});
+
 module.exports = {
   obtenerColaboradoresActivos,
   obtenerProyectosPorEstado,
@@ -110,4 +122,5 @@ module.exports = {
   obtenerPostulacionesPorEstado,
   obtenerActividadReciente,
   obtenerResumenDashboard,
+  handler,
 };

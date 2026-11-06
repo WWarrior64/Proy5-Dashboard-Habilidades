@@ -1,4 +1,12 @@
-const { dynamoDb } = require('../config/dynamodb');
+const {
+  dynamoDb,
+  GetCommand,
+  PutCommand,
+  UpdateCommand,
+  DeleteCommand,
+  QueryCommand,
+  ScanCommand,
+} = require('../config/dynamodb');
 const { tableHabilidades } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
 
@@ -36,11 +44,13 @@ async function crear(data) {
     gsi2sk: SK_METADATA,
   };
 
-  await dynamoDb.put({
-    TableName: tableHabilidades,
-    Item: item,
-    ConditionExpression: 'attribute_not_exists(pk) AND attribute_not_exists(gsi1pk)',
-  });
+  await dynamoDb.send(
+    new PutCommand({
+      TableName: tableHabilidades,
+      Item: item,
+      ConditionExpression: 'attribute_not_exists(pk) AND attribute_not_exists(gsi1pk)',
+    })
+  );
 
   return item;
 }
@@ -81,7 +91,7 @@ async function listar(filtros = {}) {
 
   if (lastKey) params.ExclusiveStartKey = lastKey;
 
-  const result = await dynamoDb.scan(params);
+  const result = await dynamoDb.send(new ScanCommand(params));
   return {
     items: result.Items || [],
     lastKey: result.LastEvaluatedKey || null,
@@ -89,10 +99,12 @@ async function listar(filtros = {}) {
 }
 
 async function obtenerPorId(habilidadId) {
-  const result = await dynamoDb.get({
-    TableName: tableHabilidades,
-    Key: { pk: pk(habilidadId), sk: sk() },
-  });
+  const result = await dynamoDb.send(
+    new GetCommand({
+      TableName: tableHabilidades,
+      Key: { pk: pk(habilidadId), sk: sk() },
+    })
+  );
   return result.Item || null;
 }
 
@@ -139,14 +151,16 @@ async function actualizar(habilidadId, data) {
   expressionAttributeNames['#fechaActualizacion'] = 'fechaActualizacion';
   expressionAttributeValues[':fechaActualizacion'] = new Date().toISOString();
 
-  const result = await dynamoDb.update({
-    TableName: tableHabilidades,
-    Key: { pk: pk(habilidadId), sk: sk() },
-    UpdateExpression: `SET ${updateParts.join(', ')}`,
-    ExpressionAttributeNames: expressionAttributeNames,
-    ExpressionAttributeValues: expressionAttributeValues,
-    ReturnValues: 'ALL_NEW',
-  });
+  const result = await dynamoDb.send(
+    new UpdateCommand({
+      TableName: tableHabilidades,
+      Key: { pk: pk(habilidadId), sk: sk() },
+      UpdateExpression: `SET ${updateParts.join(', ')}`,
+      ExpressionAttributeNames: expressionAttributeNames,
+      ExpressionAttributeValues: expressionAttributeValues,
+      ReturnValues: 'ALL_NEW',
+    })
+  );
 
   return result.Attributes;
 }
@@ -157,15 +171,17 @@ async function cambiarEstado(habilidadId, activo) {
 }
 
 async function obtenerPorNombreNormalizado(nombreNormalizado) {
-  const result = await dynamoDb.query({
-    TableName: tableHabilidades,
-    IndexName: 'GSI1',
-    KeyConditionExpression: 'gsi1pk = :gsi1pk AND begins_with(gsi1sk, :sk)',
-    ExpressionAttributeValues: {
-      ':gsi1pk': `NOMBRE_NORMALIZADO#${nombreNormalizado}`,
-      ':sk': SK_METADATA,
-    },
-  });
+  const result = await dynamoDb.send(
+    new QueryCommand({
+      TableName: tableHabilidades,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'gsi1pk = :gsi1pk AND begins_with(gsi1sk, :sk)',
+      ExpressionAttributeValues: {
+        ':gsi1pk': `NOMBRE_NORMALIZADO#${nombreNormalizado}`,
+        ':sk': SK_METADATA,
+      },
+    })
+  );
   if (!result.Items || result.Items.length === 0) return null;
   return result.Items[0];
 }

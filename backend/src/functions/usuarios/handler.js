@@ -177,6 +177,18 @@ async function cambiarEstado(event, context) {
   }
 }
 
+const { crearDespachador } = require('../../utils/lambda-dispatcher');
+
+const handler = crearDespachador({
+  'GET /api/v1/usuarios': listarUsuarios,
+  'POST /api/v1/usuarios': crearUsuario,
+  'GET /api/v1/usuarios/{usuarioId}': obtenerUsuario,
+  'PUT /api/v1/usuarios/{usuarioId}': actualizarUsuario,
+  'PATCH /api/v1/usuarios/{usuarioId}/rol': cambiarRol,
+  'PATCH /api/v1/usuarios/{usuarioId}/estado': cambiarEstado,
+  'GET /api/v1/usuarios/yo': obtenerPerfil,
+});
+
 module.exports = {
   obtenerUsuario,
   obtenerPerfil,
@@ -185,4 +197,5 @@ module.exports = {
   actualizarUsuario,
   cambiarRol,
   cambiarEstado,
+  handler,
 };

@@ -1,4 +1,12 @@
-const { dynamoDb } = require('../config/dynamodb');
+const {
+  dynamoDb,
+  GetCommand,
+  PutCommand,
+  UpdateCommand,
+  DeleteCommand,
+  QueryCommand,
+  ScanCommand,
+} = require('../config/dynamodb');
 const { tableCargos, tableColaboradores } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
 
@@ -33,11 +41,13 @@ async function crear(data) {
     gsi1sk: SK_METADATA,
   };
 
-  await dynamoDb.put({
-    TableName: tableCargos,
-    Item: item,
-    ConditionExpression: 'attribute_not_exists(pk)',
-  });
+  await dynamoDb.send(
+    new PutCommand({
+      TableName: tableCargos,
+      Item: item,
+      ConditionExpression: 'attribute_not_exists(pk)',
+    })
+  );
 
   return item;
 }
@@ -66,7 +76,7 @@ async function listar(filtros = {}) {
 
   if (lastKey) params.ExclusiveStartKey = lastKey;
 
-  const result = await dynamoDb.query(params);
+  const result = await dynamoDb.send(new QueryCommand(params));
   return {
     items: result.Items || [],
     lastKey: result.LastEvaluatedKey || null,
@@ -79,10 +89,12 @@ async function listar(filtros = {}) {
  * @returns {Promise<Object|null>}
  */
 async function obtenerPorId(cargoId) {
-  const result = await dynamoDb.get({
-    TableName: tableCargos,
-    Key: { pk: pk(cargoId), sk: sk() },
-  });
+  const result = await dynamoDb.send(
+    new GetCommand({
+      TableName: tableCargos,
+      Key: { pk: pk(cargoId), sk: sk() },
+    })
+  );
   return result.Item || null;
 }
 
@@ -122,14 +134,16 @@ async function actualizar(cargoId, data) {
   expressionAttributeNames['#fechaActualizacion'] = 'fechaActualizacion';
   expressionAttributeValues[':fechaActualizacion'] = new Date().toISOString();
 
-  const result = await dynamoDb.update({
-    TableName: tableCargos,
-    Key: { pk: pk(cargoId), sk: sk() },
-    UpdateExpression: `SET ${updateParts.join(', ')}`,
-    ExpressionAttributeNames: expressionAttributeNames,
-    ExpressionAttributeValues: expressionAttributeValues,
-    ReturnValues: 'ALL_NEW',
-  });
+  const result = await dynamoDb.send(
+    new UpdateCommand({
+      TableName: tableCargos,
+      Key: { pk: pk(cargoId), sk: sk() },
+      UpdateExpression: `SET ${updateParts.join(', ')}`,
+      ExpressionAttributeNames: expressionAttributeNames,
+      ExpressionAttributeValues: expressionAttributeValues,
+      ReturnValues: 'ALL_NEW',
+    })
+  );
 
   return result.Attributes;
 }
@@ -152,16 +166,18 @@ async function cambiarEstado(cargoId, activo) {
  * @returns {Promise<boolean>}
  */
 async function tieneColaboradoresAsociados(cargoId) {
-  const result = await dynamoDb.query({
-    TableName: tableColaboradores,
-    IndexName: 'GSI2',
-    KeyConditionExpression: 'gsi2pk = :gsi2pk AND begins_with(gsi2sk, :sk)',
-    ExpressionAttributeValues: {
-      ':gsi2pk': `CARGO#${cargoId}`,
-      ':sk': SK_METADATA,
-    },
-    Limit: 1,
-  });
+  const result = await dynamoDb.send(
+    new QueryCommand({
+      TableName: tableColaboradores,
+      IndexName: 'GSI2',
+      KeyConditionExpression: 'gsi2pk = :gsi2pk AND begins_with(gsi2sk, :sk)',
+      ExpressionAttributeValues: {
+        ':gsi2pk': `CARGO#${cargoId}`,
+        ':sk': SK_METADATA,
+      },
+      Limit: 1,
+    })
+  );
   return (result.Items || []).length > 0;
 }
 

@@ -168,6 +168,15 @@ async function buscarCandidatos(event, context) {
   }
 }
 
+const { crearDespachador } = require('../../utils/lambda-dispatcher');
+
+const handler = crearDespachador({
+  'GET /api/v1/busqueda/colaboradores': buscarCandidatos,
+  'GET /api/v1/busqueda/proyectos': buscarCandidatos,
+  'GET /api/v1/busqueda/habilidades': buscarCandidatos,
+});
+
 module.exports = {
   buscarCandidatos,
+  handler,
 };

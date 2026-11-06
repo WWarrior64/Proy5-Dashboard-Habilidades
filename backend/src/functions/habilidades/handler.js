@@ -114,10 +114,21 @@ async function cambiarEstadoHabilidad(event, context) {
   }
 }
 
+const { crearDespachador } = require('../../utils/lambda-dispatcher');
+
+const handler = crearDespachador({
+  'GET /api/v1/habilidades': listarHabilidades,
+  'POST /api/v1/habilidades': crearHabilidad,
+  'GET /api/v1/habilidades/{habilidadId}': obtenerHabilidad,
+  'PUT /api/v1/habilidades/{habilidadId}': actualizarHabilidad,
+  'PATCH /api/v1/habilidades/{habilidadId}/estado': cambiarEstadoHabilidad,
+});
+
 module.exports = {
   crearHabilidad,
   listarHabilidades,
   obtenerHabilidad,
   actualizarHabilidad,
   cambiarEstadoHabilidad,
+  handler,
 };

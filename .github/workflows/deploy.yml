@@ -30,7 +30,7 @@ jobs:
 
       - name: Ejecutar linter del Backend
         working-directory: backend
-        run: npm run lint || echo "Lint completado sin reglas bloqueantes pendientes"
+        run: npm run lint
 
       - name: Ejecutar pruebas unitarias del Backend
         working-directory: backend

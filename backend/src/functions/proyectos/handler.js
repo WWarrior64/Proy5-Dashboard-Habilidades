@@ -118,6 +118,18 @@ async function cancelarProyecto(event, context) {
   }
 }
 
+const { crearDespachador } = require('../../utils/lambda-dispatcher');
+
+const handler = crearDespachador({
+  'GET /api/v1/proyectos': listarProyectos,
+  'POST /api/v1/proyectos': crearProyecto,
+  'GET /api/v1/proyectos/{proyectoId}': obtenerProyecto,
+  'PUT /api/v1/proyectos/{proyectoId}': actualizarProyecto,
+  'PATCH /api/v1/proyectos/{proyectoId}/estado': cambiarEstadoProyecto,
+  'GET /api/v1/proyectos/activos': listarProyectosActivos,
+  'DELETE /api/v1/proyectos/{proyectoId}': cancelarProyecto,
+});
+
 module.exports = {
   crearProyecto,
   listarProyectos,
@@ -126,4 +138,5 @@ module.exports = {
   cambiarEstadoProyecto,
   listarProyectosActivos,
   cancelarProyecto,
+  handler,
 };

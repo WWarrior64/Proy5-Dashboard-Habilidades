@@ -1,4 +1,5 @@
 const { exito } = require('../../utils/responses');
+const { crearDespachador } = require('../../utils/lambda-dispatcher');
 
 /**
  * Handler de comprobación de funcionamiento (/health).
@@ -28,4 +29,8 @@ async function health(event, context) {
   );
 }
 
-module.exports = { health };
+const handler = crearDespachador({
+  'GET /api/v1/health': health,
+});
+
+module.exports = { health, handler };

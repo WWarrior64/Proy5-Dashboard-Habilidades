@@ -1,4 +1,12 @@
-const { dynamoDb } = require('../config/dynamodb');
+const {
+  dynamoDb,
+  GetCommand,
+  PutCommand,
+  UpdateCommand,
+  DeleteCommand,
+  QueryCommand,
+  ScanCommand,
+} = require('../config/dynamodb');
 const { tableUsuarios } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
 
@@ -19,10 +27,12 @@ function sk() {
  * @returns {Promise<Object|null>}
  */
 async function obtenerPorId(usuarioId) {
-  const result = await dynamoDb.get({
-    TableName: tableUsuarios,
-    Key: { pk: pk(usuarioId), sk: sk() },
-  });
+  const result = await dynamoDb.send(
+    new GetCommand({
+      TableName: tableUsuarios,
+      Key: { pk: pk(usuarioId), sk: sk() },
+    })
+  );
   return result.Item || null;
 }
 
@@ -32,15 +42,17 @@ async function obtenerPorId(usuarioId) {
  * @returns {Promise<Object|null>}
  */
 async function obtenerPorCognitoSub(cognitoSub) {
-  const result = await dynamoDb.query({
-    TableName: tableUsuarios,
-    IndexName: 'GSI1',
-    KeyConditionExpression: 'gsi1pk = :gsi1pk AND begins_with(gsi1sk, :sk)',
-    ExpressionAttributeValues: {
-      ':gsi1pk': `COGNITO#${cognitoSub}`,
-      ':sk': SK_METADATA,
-    },
-  });
+  const result = await dynamoDb.send(
+    new QueryCommand({
+      TableName: tableUsuarios,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'gsi1pk = :gsi1pk AND begins_with(gsi1sk, :sk)',
+      ExpressionAttributeValues: {
+        ':gsi1pk': `COGNITO#${cognitoSub}`,
+        ':sk': SK_METADATA,
+      },
+    })
+  );
   if (!result.Items || result.Items.length === 0) return null;
   return result.Items[0];
 }
@@ -79,21 +91,20 @@ async function listar(filtros = {}) {
 
     if (lastKey) params.ExclusiveStartKey = lastKey;
 
-    const result = await dynamoDb.scan(params);
+    const result = await dynamoDb.send(new ScanCommand(params));
     return {
       items: result.Items || [],
       lastKey: result.LastEvaluatedKey || null,
     };
   }
 
-  // Sin filtros de rol/estado: usar query por GSI2 (ROL) o scan general
   const params = {
     TableName: tableUsuarios,
     Limit: limit,
   };
   if (lastKey) params.ExclusiveStartKey = lastKey;
 
-  const result = await dynamoDb.scan(params);
+  const result = await dynamoDb.send(new ScanCommand(params));
   return {
     items: result.Items || [],
     lastKey: result.LastEvaluatedKey || null,
@@ -123,11 +134,13 @@ async function crear(data) {
     gsi2sk: SK_METADATA,
   };
 
-  await dynamoDb.put({
-    TableName: tableUsuarios,
-    Item: item,
-    ConditionExpression: 'attribute_not_exists(pk)',
-  });
+  await dynamoDb.send(
+    new PutCommand({
+      TableName: tableUsuarios,
+      Item: item,
+      ConditionExpression: 'attribute_not_exists(pk)',
+    })
+  );
 
   return item;
 }
@@ -166,14 +179,16 @@ async function actualizar(usuarioId, data) {
   expressionAttributeNames['#fechaActualizacion'] = 'fechaActualizacion';
   expressionAttributeValues[':fechaActualizacion'] = new Date().toISOString();
 
-  const result = await dynamoDb.update({
-    TableName: tableUsuarios,
-    Key: { pk: pk(usuarioId), sk: sk() },
-    UpdateExpression: `SET ${updateParts.join(', ')}`,
-    ExpressionAttributeNames: expressionAttributeNames,
-    ExpressionAttributeValues: expressionAttributeValues,
-    ReturnValues: 'ALL_NEW',
-  });
+  const result = await dynamoDb.send(
+    new UpdateCommand({
+      TableName: tableUsuarios,
+      Key: { pk: pk(usuarioId), sk: sk() },
+      UpdateExpression: `SET ${updateParts.join(', ')}`,
+      ExpressionAttributeNames: expressionAttributeNames,
+      ExpressionAttributeValues: expressionAttributeValues,
+      ReturnValues: 'ALL_NEW',
+    })
+  );
 
   return result.Attributes;
 }

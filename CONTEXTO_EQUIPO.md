@@ -303,6 +303,114 @@ Nombres de tabla, campos, claves primarias, GSIs, atributos de clave compuesta (
 - `require('./src/config/environment.js')` — ✅ 9 nombres de tabla resueltos correctamente.
 - `backend/npm test` — ✅ 4 suites y 4 tests pasados (sin cambios en tests).
 
+## Registro de Cambios — Corrección Integración Backend AWS (Rama: fix/integracion-backend-aws)
+
+> Registro acumulado. Los cambios descritos no implican una integración AWS terminada. La actualización del 6 de noviembre de 2026 al final de esta sección establece los resultados comprobados y los pendientes actuales; prevalece sobre los resultados históricos anteriores.
+
+### Resumen de cambios realizados
+
+#### Backend — DynamoDB SDK v3 y Repositorios
+- `backend/src/config/dynamodb.js` — Migrado a AWS SDK v3 completo. Exporta `dynamoDb`, `client` y todos los comandos: `GetCommand`, `PutCommand`, `UpdateCommand`, `DeleteCommand`, `QueryCommand`, `ScanCommand`, `TransactWriteCommand`, `TransactGetCommand`. Usa cadena predeterminada de credenciales (no claves hardcodeadas). Endpoint local opcional vía `DYNAMODB_ENDPOINT`.
+- Todos los repositorios migrados de `dynamoDb.get/put/update/delete/query/scan` a `dynamoDb.send(new GetCommand/PutCommand/UpdateCommand/DeleteCommand/QueryCommand/ScanCommand(...))`:
+  - `usuarios.repository.js`, `colaboradores.repository.js`, `cargos.repository.js`, `habilidades.repository.js`, `colaborador-habilidad.repository.js`, `proyectos.repository.js`, `proyecto-habilidad.repository.js`, `postulaciones.repository.js`, `asignaciones.repository.js`, `dashboard.repository.js`
+
+#### Backend — Handlers con Despachador Lambda
+- Creado `backend/src/utils/lambda-dispatcher.js` con función `crearDespachador(routes)` que mapea `METHOD /path` a función handler.
+- Cada `backend/src/functions/*/handler.js` exporta ahora `handler` que usa `crearDespachador` con las rutas específicas:
+  - `health/handler.js` — GET /api/v1/health
+  - `usuarios/handler.js` — GET/POST /usuarios, GET/PUT/PATCH /usuarios/{id}, PATCH /usuarios/{id}/rol|estado, GET /usuarios/yo
+  - `colaboradores/handler.js` — GET/POST /colaboradores, GET/PUT/DELETE /colaboradores/{id}
+  - `cargos/handler.js` — GET/POST /cargos, GET/PUT/PATCH /cargos/{id}
+  - `habilidades/handler.js` — GET/POST /habilidades, GET/PUT/PATCH /habilidades/{id}
+  - `proyectos/handler.js` — GET/POST /proyectos, GET/PUT/DELETE /proyectos/{id}, GET /proyectos/activos
+  - `postulaciones/handler.js` — POST /postulaciones, GET /proyectos/{id}/postulaciones, GET /colaboradores/{id}/postulaciones, GET/PATCH /proyectos/{id}/postulaciones/{colabId}
+  - `asignaciones/handler.js` — GET/POST /asignaciones, GET/PUT/DELETE /asignaciones/{id}, GET /colaboradores/{id}/asignaciones, GET /proyectos/{id}/asignaciones
+  - `dashboard/handler.js` — GET /dashboard/colaboradores, /proyectos, /asignaciones, /habilidades, /postulaciones, /resumen, /actividad
+  - `busqueda/handler.js` — GET /busqueda/colaboradores, /proyectos, /habilidades
+
+#### Infraestructura AWS (template.yaml)
+- Agregado `CognitoUserPool` con autoVerifiedAttributes (email) y schema de email
+- Agregado `CognitoUserPoolClient` con ALLOW_USER_SRP_AUTH y ALLOW_REFRESH_TOKEN_AUTH
+- Agregado `CognitoUserPoolDomain` con dominio dinámico
+- Agregado `CognitoAuthorizer` y referencias en eventos API. El conteo anterior de 38 endpoints y la protección efectiva no están validados. Las referencias `AuthorizerId` deben revisarse frente a la configuración `Auth` soportada por SAM; health debe permanecer público.
+- Outputs agregados: `CognitoUserPoolId`, `CognitoUserPoolClientId`
+
+#### Backend — Variables de Entorno
+- `backend/.env.example` — Plantilla con nombres de ejemplo `internal-marketplace-*-dev` (según especificación del documento)
+- `backend/src/config/environment.js` — Defaults actualizados a `im_*` (nombres reales de tablas creadas en AWS)
+
+#### Pruebas (Tests)
+- `backend/tests/dynamodb-connection.test.js` — Prueba de unidad: inicialización del cliente, región, exportación de módulo
+- `backend/tests/integration/dynamodb.integration.test.js` — Prueba DescribeTable habilitada solo con `RUN_AWS_INTEGRATION=true`; de lo contrario Jest la marca como omitida.
+- `backend/tests/asignaciones.test.js` — Actualizado para usar `dynamoDb.send` en lugar de métodos v2
+- Mocks de asignaciones, proyectos y postulaciones actualizados y validados; detalles en el registro del 6 de noviembre de 2026.
+
+#### CI/CD (GitHub Actions)
+- `.github/workflows/deploy.yml` — Cambiado `npm run lint || echo "..."` a `npm run lint` (sin silenciar errores)
+
+#### Postman
+- `postman/internal-marketplace.postman_environment.json` — Creado con variables: baseUrl, token, usuarioId, colaboradorId, proyectoId, habilidadId, asignacionId, postulacionId
+- `postman/internal-marketplace.postman_collection.json` — Ya existente con rutas para usuarios, colaboradores, cargos, habilidades, proyectos, postulaciones, asignaciones, búsqueda y dashboard
+
+### Archivos NO modificados (según restricciones del documento)
+- `frontend/` — Sin cambios (responsabilidad del Desarrollador 1)
+- `backend/src/routes/` — No creado (no se usa Express para rutas de producción)
+- `backend/src/api.js` — No creado
+- Los prototipos Figma — Sin cambios
+
+### Estado de Validación Local
+- `npm test -- --silent` en backend: 11 suites exitosas y 1 omitida; 122 tests exitosos y 1 omitido. Código de salida 0.
+- `npm run lint` en backend: 0 errores y 83 advertencias. Código de salida 0; no se silenciaron errores.
+- No se ejecutó el build del frontend en esta sesión. Los informes anteriores de pruebas, lint y build no constituyen evidencia de la validación actual.
+
+### Próximos Pasos Pendientes
+1. Reconciliar claves e índices de todos los repositorios con los esquemas documentados, SAM y las tablas reales: persisten referencias a `sk`, `skA1`, `GSI1` y otras convenciones que los mocks no validan contra AWS.
+2. Revisar dispatcher, parámetros de rutas y destinos de búsqueda de proyectos/habilidades; contrastar rutas de handlers, SAM y Postman. Completar autorización y reglas de negocio según el plan original.
+3. Corregir la configuración de autorización SAM y ejecutar `sam validate --lint` y `sam build`; comprobar health público y endpoints protegidos.
+4. Ejecutar explícitamente la integración con AWS y la colección Postman contra la API desplegada, documentando resultados. DescribeTable solo comprueba metadatos, no operaciones CRUD ni flujos de negocio.
+5. Revisar las 83 advertencias de lint, actualizar documentación API y preparar PR hacia `develop` una vez verificadas las tareas restantes.
+
+### Actualización verificada — 6 de noviembre de 2026
+
+Rama confirmada: `fix/integracion-backend-aws`. Destino previsto: `develop`. Se preservaron los cambios previos del árbol de trabajo; no se realizó commit, push, PR ni despliegue en esta sesión.
+
+#### Correcciones de código
+- `backend/src/repositories/postulaciones.repository.js`: eliminado el fragmento inválido `ctoId },` y el cierre sobrante en `consultarPostulacionesProyecto`, conservando la consulta y el retorno `resultado.Items || []`.
+- `backend/src/config/dynamodb.js`: los ocho comandos de documentos se importan ahora desde `@aws-sdk/lib-dynamodb`, junto con el uso de `DynamoDBDocumentClient`; `DynamoDBClient` continúa importándose desde `@aws-sdk/client-dynamodb`.
+- `backend/src/repositories/dashboard.repository.js`: añadidos los imports faltantes `QueryCommand` y `ScanCommand`, detectados por lint.
+- `backend/src/services/cache.service.js`: eliminada la segunda declaración idéntica de `eliminar`; se mantiene su comportamiento y exportación.
+- `backend/src/repositories/colaborador-habilidad.repository.js`: corregidas comillas inconsistentes mediante ESLint, sin cambiar la lógica.
+
+#### Migración y ampliación de pruebas
+- Nuevo `backend/tests/helpers/dynamodb.mock.js`: factoría de mock de `dynamoDb.send` que exige instancias de comandos reales de lib-dynamodb, despacha por tipo y registra `command.input` en mocks específicos. No contacta AWS.
+- `backend/tests/asignaciones.test.js`, `backend/tests/proyectos.test.js` y `backend/tests/postulaciones.test.js`: sustituidos los métodos simulados v2 por `commandMocks` conectados a `send`, manteniendo las aserciones de parámetros y reglas de negocio.
+- En asignaciones se eliminó el `mockResolvedValue({})` que sobrescribía la implementación configurada, se restablecen los mocks entre pruebas y se añadió el rechazo de dedicación acumulada superior al 100 % sin escritura.
+- En postulaciones se añadieron regresiones que comprueban la instancia de `QueryCommand` y su `input` exacto, una respuesta sin `Items`, la propagación de errores y el conflicto por escritura duplicada (`ConditionalCheckFailedException`).
+- `backend/tests/dynamodb-connection.test.js`: ocho casos parametrizados comprueban la identidad de cada constructor exportado frente a lib-dynamodb y que conserva su `input`.
+- Nuevo `backend/tests/cache.test.js`: comprueba que eliminar una clave no afecta otra, retorna true si existía y false si ya no existe; limpia el estado antes y después.
+- `backend/tests/integration/dynamodb.integration.test.js`: reemplazado el retorno temprano que aparentaba éxito por `describe.skip` cuando no se habilita explícitamente. Al habilitarse utiliza la cadena de credenciales del SDK, tiene timeout de 30 segundos y destruye el cliente en `finally`. Un fallo de credenciales o de AWS no se convierte en éxito.
+
+#### Evidencias y límites
+- Tras reparar la sintaxis se ejecutó `node --check` sobre los 44 archivos JavaScript entonces presentes en `src` y `tests`: cero errores. Ese conteo es anterior a los nuevos archivos de pruebas.
+- Primera ejecución tras migrar mocks: 117 tests exitosos y 1 omitido. Lint detectó 10 errores y 83 advertencias; se corrigieron los 10 errores antes de la validación final.
+- Validación final: `npm test -- --silent`, con `RUN_AWS_INTEGRATION=false`: 122 tests exitosos, 1 omitido; 11 suites exitosas, 1 omitida.
+- Validación final: `npm run lint`: cero errores y 83 advertencias pendientes, principalmente variables/imports no usados.
+- `git diff --check`: sin errores de espacios; advertencias de conversión LF/CRLF en archivos del árbol de trabajo.
+- Búsqueda en tests: sin referencias restantes a `dynamoDb.get/put/query/scan/update/delete/transactWrite`.
+- Logs de esta validación: `C:/Users/Galex/AppData/Local/Temp/backend-tests-sdk3.log` y `C:/Users/Galex/AppData/Local/Temp/backend-lint-sdk3.log`. Son archivos temporales locales, no artefactos versionados ni evidencia permanente de CI.
+- No se modificó frontend ni Figma. No se añadieron dependencias. No se ejecutaron operaciones contra AWS real, validación/build SAM ni Postman en esta sesión.
+- Las pruebas locales no demuestran compatibilidad con claves/índices reales, protección Cognito efectiva ni atomicidad de reglas bajo concurrencia. La reparación integral continúa pendiente.
+
+#### Reproducción local (PowerShell)
+```powershell
+Set-Location 'C:/Users/Galex/Documents/Proyecto Final Computo en la Nube/Proy5-Dashboard-Habilidades/backend'
+$env:RUN_AWS_INTEGRATION = 'false'
+npm test -- --silent
+npm run lint
+```
+
+Para ejecutar deliberadamente la prueba real, configurar primero región, tabla y credenciales de desarrollo, establecer `$env:RUN_AWS_INTEGRATION = 'true'` y ejecutar `npm run test:integration`. Al finalizar, volver a establecer la variable en `false`. Esta prueba realiza DescribeTable y no escribe datos.
+
 ## Fin del Documento
 
 Este archivo debe mantenerse actualizado conforme avance el proyecto.

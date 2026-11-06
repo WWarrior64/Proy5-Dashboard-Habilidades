@@ -71,15 +71,6 @@ function guardar(clave, valor, ttlMs) {
 }
 
 /**
- * Elimina una clave específica de la caché.
- * @param {string} clave - Clave a eliminar
- * @returns {boolean} true si se eliminó, false si no existía
- */
-function eliminar(clave) {
-  return cache.delete(clave);
-}
-
-/**
  * Limpia todas las entradas de la caché.
  */
 function limpiar() {

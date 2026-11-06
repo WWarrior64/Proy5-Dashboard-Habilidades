@@ -79,24 +79,28 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/usuarios
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
         UsuariosPost:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/usuarios
             Method: POST
+            AuthorizerId: !Ref CognitoAuthorizer
         UsuariosIdAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/usuarios/{usuarioId}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
         UsuariosSubAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/usuarios/{usuarioId}/{subrecurso}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
 
   ColaboradoresFunction:
     Type: AWS::Serverless::Function
@@ -121,30 +125,35 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/colaboradores
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
         ColaboradoresPost:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/colaboradores
             Method: POST
+            AuthorizerId: !Ref CognitoAuthorizer
         ColaboradoresIdAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/colaboradores/{colaboradorId}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
         ColaboradoresSubAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/colaboradores/{colaboradorId}/{subrecurso}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
         ColaboradoresHabilidadesAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
 
   CargosFunction:
     Type: AWS::Serverless::Function
@@ -165,24 +174,28 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/cargos
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
         CargosPost:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/cargos
             Method: POST
+            AuthorizerId: !Ref CognitoAuthorizer
         CargosIdAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/cargos/{cargoId}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
         CargosSubAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/cargos/{cargoId}/{subrecurso}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
 
   HabilidadesFunction:
     Type: AWS::Serverless::Function
@@ -203,30 +216,35 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/habilidades
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
         HabilidadesPost:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/habilidades
             Method: POST
+            AuthorizerId: !Ref CognitoAuthorizer
         HabilidadesCategorias:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/habilidades/categorias
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
         HabilidadesIdAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/habilidades/{habilidadId}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
         HabilidadesSubAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/habilidades/{habilidadId}/{subrecurso}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
 
   BusquedaFunction:
     Type: AWS::Serverless::Function
@@ -251,18 +269,21 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/busqueda/colaboradores
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
         BusquedaProyectos:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/busqueda/proyectos
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
         BusquedaHabilidades:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/busqueda/habilidades
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
 
   # ----------------------------------------------------------------------------
   # Funciones del Desarrollador 3 (Proyectos, Postulaciones, Asignaciones, Dashboard)
@@ -290,30 +311,35 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/proyectos
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
         ProyectosPost:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/proyectos
             Method: POST
+            AuthorizerId: !Ref CognitoAuthorizer
         ProyectosIdAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/proyectos/{proyectoId}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
         ProyectosSubAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/proyectos/{proyectoId}/{subrecurso}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
         ProyectosHabilidadesAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/proyectos/{proyectoId}/habilidades/{habilidadId}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
 
   PostulacionesFunction:
     Type: AWS::Serverless::Function
@@ -338,30 +364,35 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/postulaciones
             Method: POST
+            AuthorizerId: !Ref CognitoAuthorizer
         PostulacionesProyectoGet:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/proyectos/{proyectoId}/postulaciones
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
         PostulacionesColaboradorGet:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/colaboradores/{colaboradorId}/postulaciones
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
         PostulacionesDetalleAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
         PostulacionesEstadoPatch:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/estado
             Method: PATCH
+            AuthorizerId: !Ref CognitoAuthorizer
 
   AsignacionesFunction:
     Type: AWS::Serverless::Function
@@ -386,30 +417,35 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/asignaciones
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
         AsignacionesPost:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/asignaciones
             Method: POST
+            AuthorizerId: !Ref CognitoAuthorizer
         AsignacionesActivasGet:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/asignaciones/activas
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
         AsignacionesIdAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/asignaciones/{asignacionId}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
         AsignacionesSubAny:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/asignaciones/{asignacionId}/{subrecurso}
             Method: ANY
+            AuthorizerId: !Ref CognitoAuthorizer
 
   DashboardFunction:
     Type: AWS::Serverless::Function
@@ -436,12 +472,14 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/dashboard/resumen
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
         DashboardMetricasGet:
           Type: Api
           Properties:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/dashboard/{tipoMetrica}
             Method: GET
+            AuthorizerId: !Ref CognitoAuthorizer
   # ============================================================================
   # 2. LAS 9 TABLAS DYNAMODB (Contrato de Datos Integrante 4)
   # ============================================================================
@@ -806,6 +844,49 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${FrontendDistribution}
 
+  # ============================================================================
+  # 4. COGNITO USER POOL (Autenticación y Autorización)
+  # ============================================================================
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub internal-marketplace-users-${StageName}
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      ClientName: !Sub internal-marketplace-client-${StageName}
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      GenerateSecret: false
+
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub internal-marketplace-${StageName}-${AWS::AccountId}
+      UserPoolId: !Ref CognitoUserPool
+
+  CognitoAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: CognitoAuthorizer
+      RestApiId: !Ref InternalMarketplaceApi
+      Type: COGNITO_USER_POOLS
+      ProviderARNs:
+        - !GetAtt CognitoUserPool.Arn
+      IdentitySource: method.request.header.Authorization
+
 Outputs:
   ApiGatewayUrl:
     Description: URL base de API Gateway para configurar VITE_API_URL en el Frontend
@@ -816,3 +897,9 @@ Outputs:
   FrontendBucketName:
     Description: Nombre del Bucket S3 donde se subira el build de React
     Value: !Ref BucketFrontend
+  CognitoUserPoolId:
+    Description: ID del User Pool de Cognito
+    Value: !Ref CognitoUserPool
+  CognitoUserPoolClientId:
+    Description: ID del Client de Cognito
+    Value: !Ref CognitoUserPoolClient

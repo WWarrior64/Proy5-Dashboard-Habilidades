@@ -111,10 +111,21 @@ async function darBajaColaborador(event, context) {
   }
 }
 
+const { crearDespachador } = require('../../utils/lambda-dispatcher');
+
+const handler = crearDespachador({
+  'GET /api/v1/colaboradores': listarColaboradores,
+  'POST /api/v1/colaboradores': crearColaborador,
+  'GET /api/v1/colaboradores/{colaboradorId}': obtenerColaborador,
+  'PUT /api/v1/colaboradores/{colaboradorId}': actualizarColaborador,
+  'DELETE /api/v1/colaboradores/{colaboradorId}': darBajaColaborador,
+});
+
 module.exports = {
   crearColaborador,
   listarColaboradores,
   obtenerColaborador,
   actualizarColaborador,
   darBajaColaborador,
+  handler,
 };
