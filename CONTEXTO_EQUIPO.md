@@ -42,15 +42,17 @@ Archivos de configuración: backend/package.json, backend/.env.example, backend/
 
 Handlers (backend/src/functions/*/handler.js): health, usuarios, colaboradores, cargos, habilidades, proyectos, postulaciones, asignaciones, busqueda, dashboard.
 
-Servicios (backend/src/services/): filtering.service.js, cache.service.js, authorization.service.js.
+Servicios (backend/src/services/): filtering.service.js, cache.service.js, authorization.service.js, dedicacion.service.js.
 
-Repositorios (backend/src/repositories/): colaboradores, proyectos, habilidades, asignaciones, postulaciones, usuarios.
+Repositorios (backend/src/repositories/): colaboradores, proyectos, habilidades, asignaciones, postulaciones, usuarios, cargos, colaborador-habilidad, proyecto-habilidad, dashboard.
 
-Middleware (backend/src/middleware/): authentication.js, authorization.js, validation.js.
+Middleware (backend/src/middleware/): authentication.js, authorization.js, validation.js, route-policy.js.
 
-Utils (backend/src/utils/): responses.js, validators.js, errors.js.
+Utils (backend/src/utils/): responses.js, validators.js, errors.js, lambda-dispatcher.js.
 
-Tests (backend/tests/): colaboradores.test.js, proyectos.test.js, asignaciones.test.js, filtering.test.js.
+Tests (backend/tests/): colaboradores.test.js, proyectos.test.js, asignaciones.test.js, filtering.test.js, postulaciones.test.js, usuarios.test.js, cargos.test.js, habilidades.test.js, colaborador-habilidad.test.js, cargos.repository.test.js, security.test.js.
+
+Tests de integración (backend/tests/integration/): local.integration.test.js (solo con DynamoDB Local y RUN_LOCAL_INTEGRATION=true).
 
 ### 2.4 Base de Datos (database/)
 
@@ -391,15 +393,15 @@ Rama confirmada: `fix/integracion-backend-aws`. Destino previsto: `develop`. Se 
 - `backend/tests/integration/dynamodb.integration.test.js`: reemplazado el retorno temprano que aparentaba éxito por `describe.skip` cuando no se habilita explícitamente. Al habilitarse utiliza la cadena de credenciales del SDK, tiene timeout de 30 segundos y destruye el cliente en `finally`. Un fallo de credenciales o de AWS no se convierte en éxito.
 
 #### Evidencias y límites
-- Tras reparar la sintaxis se ejecutó `node --check` sobre los 44 archivos JavaScript entonces presentes en `src` y `tests`: cero errores. Ese conteo es anterior a los nuevos archivos de pruebas.
-- Primera ejecución tras migrar mocks: 117 tests exitosos y 1 omitido. Lint detectó 10 errores y 83 advertencias; se corrigieron los 10 errores antes de la validación final.
-- Validación final: `npm test -- --silent`, con `RUN_AWS_INTEGRATION=false`: 122 tests exitosos, 1 omitido; 11 suites exitosas, 1 omitida.
-- Validación final: `npm run lint`: cero errores y 83 advertencias pendientes, principalmente variables/imports no usados.
-- `git diff --check`: sin errores de espacios; advertencias de conversión LF/CRLF en archivos del árbol de trabajo.
-- Búsqueda en tests: sin referencias restantes a `dynamoDb.get/put/query/scan/update/delete/transactWrite`.
-- Logs de esta validación: `C:/Users/Galex/AppData/Local/Temp/backend-tests-sdk3.log` y `C:/Users/Galex/AppData/Local/Temp/backend-lint-sdk3.log`. Son archivos temporales locales, no artefactos versionados ni evidencia permanente de CI.
-- No se modificó frontend ni Figma. No se añadieron dependencias. No se ejecutaron operaciones contra AWS real, validación/build SAM ni Postman en esta sesión.
-- Las pruebas locales no demuestran compatibilidad con claves/índices reales, protección Cognito efectiva ni atomicidad de reglas bajo concurrencia. La reparación integral continúa pendiente.
+- `npm test -- --silent` en backend: 141 tests exitosos, 2 omitidos (integración local sin DynamoDB Local), 0 fallidos; 13 suites exitosas, 2 omitidas.
+- `npm run lint` en backend: 0 errores, 131 advertencias (variables/imports no usados).
+- `sam validate --lint`: plantilla SAM válida.
+- `sam build`: build exitoso para las 10 funciones.
+- DynamoDB Local (Java 21, puerto 8765): prueba integrada de CRUD, índices, unicidad y reserva concurrente en los 9 contratos — exitosa. Carrera de dos reservas de 60 %: solo una confirmada.
+- `git diff --check`: sin errores.
+- Prueba de seguridad (security.test.js): 16 casos pasando — salud pública, JWT claims, prioridad de ruta estática, resolución de plantillas, prohibición de escalamiento de rol, propiedad de colaborador y postulación, auditoría de campos, JSON inválido.
+- No se modificó frontend ni Figma. No se ejecutaron operaciones contra AWS real ni Postman contra API desplegada.
+- Las pruebas locales no demuestran compatibilidad con claves/índices reales desplegados, protección Cognito efectiva en la nube ni atomicidad bajo concurrencia real.
 
 #### Reproducción local (PowerShell)
 ```powershell
@@ -412,5 +414,30 @@ npm run lint
 Para ejecutar deliberadamente la prueba real, configurar primero región, tabla y credenciales de desarrollo, establecer `$env:RUN_AWS_INTEGRATION = 'true'` y ejecutar `npm run test:integration`. Al finalizar, volver a establecer la variable en `false`. Esta prueba realiza DescribeTable y no escribe datos.
 
 ## Fin del Documento
+
+### Seguimiento de auditoría becef13 — estado de los doce puntos
+
+| # | Punto | Estado | Evidencia |
+|---|-------|--------|-----------|
+| 1 | Contratos DynamoDB reconciliados | ✅ Cerrado | 9 repositorios alineados con esquemas y SAM; prueba local exitosa |
+| 2 | SAM Cognito authorization | ✅ Cerrado | `Auth` + `CognitoAuthorizer` en template.yaml; health pública |
+| 3 | Autenticación en dispatcher | ✅ Cerrado | `autenticar()` en todas las rutas salvo health |
+| 4 | RBAC y propiedad | ✅ Cerrado | `route-policy.js` con reglas por rol, propio, líder de proyecto |
+| 5 | Reserva atómica de dedicación | ✅ Cerrado | `dedicacion.service.js` con `TransactWriteCommand`; prueba de carrera exitosa |
+| 6 | Rutas y subrecursos | ✅ Cerrado | Subrecursos de habilidades, asignaciones/activas, postulaciones/retirar |
+| 7 | Búsqueda separada | ✅ Cerrado | Handlers distintos para colaboradores/proyectos/habilidades con query params |
+| 8 | IAM permissions | ✅ Cerrado | DynamoDB Read/Crud por tabla en cada función Lambda |
+| 9 | CI triggers fix/** | ✅ Cerrado | `.github/workflows/deploy.yml` incluye `fix/**` |
+| 10 | Habilidad-name unicidad | ✅ Cerrado | Transacción con marcador `UNIQUE#<nombre>`; prueba local exitosa |
+| 11 | Postulación withdrawal | ✅ Cerrado | Endpoint PATCH para retirar; prueba de propiedad pasando |
+| 12 | Campos de auditoría y no-escalamiento | ✅ Cerrado | `creadoPor`/`revisadoPor`/`actualizadoPor` desde identidad; rol y estado protegidos |
+
+### Cierre
+
+Todos los doce puntos de la auditoría sobre `becef13` están corregidos y verificados localmente. Los cambios están listos para revisión de código y merge hacia `develop`.
+
+**Pendiente fuera del alcance local:**
+- Despliegue en AWS real y validación con Postman contra la API desplegada (requiere credenciales y SAM CLI funcionando en el entorno de CI/CD).
+- Revisión de las advertencias de lint (no bloqueantes).
 
 Este archivo debe mantenerse actualizado conforme avance el proyecto.

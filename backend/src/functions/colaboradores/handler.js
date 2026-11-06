@@ -113,7 +113,17 @@ async function darBajaColaborador(event, context) {
 
 const { crearDespachador } = require('../../utils/lambda-dispatcher');
 
+const relaciones = require('../../repositories/colaborador-habilidad.repository');
 const handler = crearDespachador({
+  'PATCH /api/v1/colaboradores/{colaboradorId}/estado': async (event) => {
+    const body = obtenerBody(event);
+    if (typeof body.activo !== 'boolean') return error('activo debe ser booleano', 400, CODIGOS.VALIDACION);
+    return exito(await colaboradoresRepository.actualizar(event.pathParameters.colaboradorId, { estado: body.activo ? 'ACTIVO' : 'INACTIVO' }));
+  },
+  'GET /api/v1/colaboradores/{colaboradorId}/habilidades': async (event) => exito(await relaciones.listarPorColaborador(event.pathParameters.colaboradorId)),
+  'POST /api/v1/colaboradores/{colaboradorId}/habilidades': async (event) => creado(await relaciones.asociar({ ...obtenerBody(event), colaboradorId: event.pathParameters.colaboradorId })),
+  'PUT /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}': async (event) => exito(await relaciones.actualizarNivel(event.pathParameters.colaboradorId, event.pathParameters.habilidadId, obtenerBody(event))),
+  'DELETE /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}': async (event) => exito(await relaciones.retirar(event.pathParameters.colaboradorId, event.pathParameters.habilidadId)),
   'GET /api/v1/colaboradores': listarColaboradores,
   'POST /api/v1/colaboradores': crearColaborador,
   'GET /api/v1/colaboradores/{colaboradorId}': obtenerColaborador,

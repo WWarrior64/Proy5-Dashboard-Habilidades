@@ -126,6 +126,7 @@ async function retirarPostulacion(event, context) {
 const { crearDespachador } = require('../../utils/lambda-dispatcher');
 
 const handler = crearDespachador({
+  'PATCH /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/retirar': retirarPostulacion,
   'POST /api/v1/postulaciones': crearPostulacion,
   'GET /api/v1/proyectos/{proyectoId}/postulaciones': consultarPostulacionesProyecto,
   'GET /api/v1/colaboradores/{colaboradorId}/postulaciones': consultarPostulacionesColaborador,
@@ -135,6 +136,7 @@ const handler = crearDespachador({
     const body = event.body ? (typeof event.body === 'string' ? JSON.parse(event.body) : event.body) : {};
     const estado = body.estado;
     if (estado === 'ACEPTADA') return aceptarPostulacion(event, context);
+    if (estado === 'RETIRADA') return retirarPostulacion(event, context);
     if (estado === 'RECHAZADA') return rechazarPostulacion(event, context);
     return error('Estado no válido', 400, CODIGOS.VALIDACION);
   },

@@ -64,11 +64,11 @@ describe('Algoritmo de Búsqueda de Candidatos', () => {
         .mockResolvedValueOnce({ colaboradorId: 'col_2', usuarioId: 'usr_2', estado: 'ACTIVO', cargoId: 'cargo_1', rolProfesional: 'Dev' });
 
       const event = {
-        body: JSON.stringify({
-          habilidades: ['hab_1', 'hab_2'],
+        queryStringParameters: {
+          habilidades: 'hab_1,hab_2',
           nivelMinimo: 'SENIOR',
           tipoCoincidencia: 'todas',
-        }),
+        },
       };
       const result = await busquedaHandler.buscarCandidatos(event, {});
 
@@ -87,11 +87,11 @@ describe('Algoritmo de Búsqueda de Candidatos', () => {
       });
 
       const event = {
-        body: JSON.stringify({
-          habilidades: ['hab_1', 'hab_2'],
+        queryStringParameters: {
+          habilidades: 'hab_1,hab_2',
           nivelMinimo: 'JUNIOR',
           tipoCoincidencia: 'alguna',
-        }),
+        },
       };
       const result = await busquedaHandler.buscarCandidatos(event, {});
 
@@ -108,11 +108,11 @@ describe('Algoritmo de Búsqueda de Candidatos', () => {
       });
 
       const event = {
-        body: JSON.stringify({
-          habilidades: ['hab_1'],
+        queryStringParameters: {
+          habilidades: 'hab_1',
           nivelMinimo: 'SENIOR',
           tipoCoincidencia: 'todas',
-        }),
+        },
       };
       const result = await busquedaHandler.buscarCandidatos(event, {});
 
@@ -131,11 +131,11 @@ describe('Algoritmo de Búsqueda de Candidatos', () => {
       });
 
       const event = {
-        body: JSON.stringify({
-          habilidades: ['hab_1'],
+        queryStringParameters: {
+          habilidades: 'hab_1',
           nivelMinimo: 'JUNIOR',
           tipoCoincidencia: 'todas',
-        }),
+        },
       };
       const result = await busquedaHandler.buscarCandidatos(event, {});
 
@@ -145,7 +145,7 @@ describe('Algoritmo de Búsqueda de Candidatos', () => {
     });
 
     test('debe retornar 400 cuando no se proporcionan habilidades', async () => {
-      const event = { body: JSON.stringify({}) };
+      const event = { queryStringParameters: {} };
       const result = await busquedaHandler.buscarCandidatos(event, {});
       expect(result.statusCode).toBe(400);
     });
@@ -165,11 +165,11 @@ describe('Algoritmo de Búsqueda de Candidatos', () => {
         .mockResolvedValueOnce({ colaboradorId: 'col_2', usuarioId: 'usr_2', estado: 'ACTIVO' });
 
       const event = {
-        body: JSON.stringify({
-          habilidades: ['hab_1', 'hab_2'],
+        queryStringParameters: {
+          habilidades: 'hab_1,hab_2',
           nivelMinimo: 'SENIOR',
           tipoCoincidencia: 'todas',
-        }),
+        },
       };
       const result = await busquedaHandler.buscarCandidatos(event, {});
 

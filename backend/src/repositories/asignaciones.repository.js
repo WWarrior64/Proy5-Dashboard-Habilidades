@@ -1,3 +1,4 @@
+const dedicacion = require('../services/dedicacion.service');
 const { v4: uuidv4 } = require('uuid');
 const {
   dynamoDb,
@@ -87,7 +88,7 @@ async function obtenerSumaDedicacionActiva(colaboradorId, asignacionIdExcluir) {
       TableName: tableAsignaciones,
       IndexName: 'GSI1',
       KeyConditionExpression: '#c = :c AND begins_with(#s, :prefijo)',
-      ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'skA1' },
+      ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'colaboradorFechaKey' },
       ExpressionAttributeValues: { ':c': colaboradorId, ':prefijo': 'ACTIVA#' },
       ProjectionExpression: 'porcentajeDedicacion, asignacionId',
     })
@@ -155,18 +156,19 @@ async function crearAsignacion(datos) {
     fechaAsignacion: ahora,
     fechaActualizacion: ahora,
     creadoPor,
-    skA1: `ACTIVA#${ahora}`,
-    skA2: `ACTIVA#${ahora}`,
-    skA3: `${ahora}#${asignacionId}`,
+    colaboradorFechaKey: `ACTIVA#${ahora}`,
+    proyectoFechaKey: `ACTIVA#${ahora}`,
+    estadoFechaKey: `${ahora}#${asignacionId}`,
   };
 
-  await dynamoDb.send(
-    new PutCommand({
-      TableName: tableAsignaciones,
-      Item: item,
-      ConditionExpression: 'attribute_not_exists(asignacionId)',
-    })
-  );
+  await dedicacion.ejecutar([
+    dedicacion.reserva(colaboradorId, porcentajeDedicacion),
+    { ConditionCheck: { TableName: tableProyectos, Key: { proyectoId },
+      ConditionExpression: '#e = :e', ExpressionAttributeNames: { '#e': 'estado' },
+      ExpressionAttributeValues: { ':e': 'ACTIVO' } } },
+    { Put: { TableName: tableAsignaciones, Item: item,
+      ConditionExpression: 'attribute_not_exists(asignacionId)' } },
+  ]);
 
   invalidarCachéAsignacion(asignacionId, colaboradorId, proyectoId);
   return item;
@@ -202,7 +204,7 @@ async function listarAsignacionesColaborador(colaboradorId) {
       TableName: tableAsignaciones,
       IndexName: 'GSI1',
       KeyConditionExpression: '#c = :c AND begins_with(#s, :prefijo)',
-      ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'skA1' },
+      ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'colaboradorFechaKey' },
       ExpressionAttributeValues: { ':c': colaboradorId, ':prefijo': 'ACTIVA#' },
     })
   );
@@ -222,7 +224,7 @@ async function listarAsignacionesProyecto(proyectoId) {
       TableName: tableAsignaciones,
       IndexName: 'GSI2',
       KeyConditionExpression: '#p = :p AND begins_with(#s, :prefijo)',
-      ExpressionAttributeNames: { '#p': 'proyectoId', '#s': 'skA2' },
+      ExpressionAttributeNames: { '#p': 'proyectoId', '#s': 'proyectoFechaKey' },
       ExpressionAttributeValues: { ':p': proyectoId, ':prefijo': 'ACTIVA#' },
     })
   );
@@ -299,10 +301,10 @@ async function actualizarAsignacion(asignacionId, cambios) {
     nombresAtributos['#pd'] = 'porcentajeDedicacion';
     valoresAtributos[':pd'] = porcentajeDedicacion;
     sets.push('#pd = :pd');
-    nombresAtributos['#s1'] = 'skA1';
+    nombresAtributos['#s1'] = 'colaboradorFechaKey';
     valoresAtributos[':s1'] = `ACTIVA#${ahora}`;
     sets.push('#s1 = :s1');
-    nombresAtributos['#s2'] = 'skA2';
+    nombresAtributos['#s2'] = 'proyectoFechaKey';
     valoresAtributos[':s2'] = `ACTIVA#${ahora}`;
     sets.push('#s2 = :s2');
   }
@@ -332,29 +334,28 @@ async function actualizarAsignacion(asignacionId, cambios) {
     throw new ErrorApp('No hay campos para actualizar', 400, CODIGOS.VALIDACION);
   }
 
-  try {
-    const resultado = await dynamoDb.send(
-      new UpdateCommand({
-        TableName: tableAsignaciones,
-        Key: { asignacionId },
-        UpdateExpression: `SET ${sets.join(', ')}`,
-        ExpressionAttributeNames: { ...nombresAtributos, '#est': 'estado' },
-        ExpressionAttributeValues: { ...valoresAtributos, ':activa': 'ACTIVA' },
-        ConditionExpression: 'attribute_exists(asignacionId) AND #est = :activa',
-        ReturnValues: 'ALL_NEW',
-      })
-    );
-    if (!resultado || !resultado.Attributes) {
-      throw new ErrorApp('Asignación no encontrada o no está activa', 404, CODIGOS.NO_ENCONTRADO);
-    }
-    invalidarCachéAsignacion(asignacionId, existente.colaboradorId, existente.proyectoId);
-    return resultado.Attributes;
-  } catch (e) {
-    if (e.name === 'ConditionalCheckFailedException') {
-      throw new ErrorApp('Asignación no encontrada o no está activa', 404, CODIGOS.NO_ENCONTRADO);
-    }
-    throw e;
+  if (existente.estado !== 'ACTIVA') {
+    throw new ErrorApp('Asignación no activa', 404, CODIGOS.NO_ENCONTRADO);
   }
+  const delta = (porcentajeDedicacion ?? existente.porcentajeDedicacion) - existente.porcentajeDedicacion;
+  await dedicacion.ejecutar([
+    dedicacion.reserva(existente.colaboradorId, delta),
+    { Update: {
+      TableName: tableAsignaciones, Key: { asignacionId },
+      UpdateExpression: `SET ${sets.join(', ')}`,
+      ConditionExpression: '#est = :activa AND porcentajeDedicacion = :anterior AND horasAsignadas = :horasPrevias AND horasCompletadas = :completadasPrevias',
+      ExpressionAttributeNames: { ...nombresAtributos, '#est': 'estado' },
+      ExpressionAttributeValues: { ...valoresAtributos, ':activa': 'ACTIVA',
+        ':anterior': existente.porcentajeDedicacion, ':horasPrevias': existente.horasAsignadas,
+        ':completadasPrevias': existente.horasCompletadas },
+    } },
+  ]);
+  invalidarCachéAsignacion(asignacionId, existente.colaboradorId, existente.proyectoId);
+  const resultado = { ...existente, fechaActualizacion: ahora };
+  if (horasAsignadas !== undefined) resultado.horasAsignadas = horasAsignadas;
+  if (horasCompletadas !== undefined) resultado.horasCompletadas = horasCompletadas;
+  if (porcentajeDedicacion !== undefined) resultado.porcentajeDedicacion = porcentajeDedicacion;
+  return resultado;
 }
 
 async function desvincularAsignacion(asignacionId) {
@@ -363,28 +364,19 @@ async function desvincularAsignacion(asignacionId) {
     throw new ErrorApp('La asignación ya está desvinculada', 409, CODIGOS.CONFLICTO);
   }
   const ahora = ahoraISO();
-  try {
-    const resultado = await dynamoDb.send(new UpdateCommand({
-      TableName: tableAsignaciones,
-      Key: { asignacionId },
-      UpdateExpression: 'SET #est = :estado, fechaFin = :fechaFin, #ua = :ua',
-      ExpressionAttributeNames: { '#est': 'estado', '#ua': 'fechaActualizacion' },
-      ExpressionAttributeValues: {
-        ':estado': 'DESVINCULADA',
-        ':fechaFin': ahora,
-        ':ua': ahora,
-      },
-      ConditionExpression: 'attribute_exists(asignacionId)',
-      ReturnValues: 'ALL_NEW',
-    }));
-    invalidarCachéAsignacion(asignacionId, existente.colaboradorId, existente.proyectoId);
-    return resultado.Attributes;
-  } catch (e) {
-    if (e.name === 'ConditionalCheckFailedException') {
-      throw new ErrorApp('Asignación no encontrada', 404, CODIGOS.NO_ENCONTRADO);
-    }
-    throw e;
-  }
+  await dedicacion.ejecutar([
+    dedicacion.reserva(existente.colaboradorId, -existente.porcentajeDedicacion),
+    { Update: {
+      TableName: tableAsignaciones, Key: { asignacionId },
+      UpdateExpression: 'SET #est = :estado, fechaFin = :fecha, fechaActualizacion = :fecha, colaboradorFechaKey = :key, proyectoFechaKey = :key',
+      ConditionExpression: '#est = :activa AND porcentajeDedicacion = :anterior',
+      ExpressionAttributeNames: { '#est': 'estado' },
+      ExpressionAttributeValues: { ':estado': 'DESVINCULADA', ':activa': 'ACTIVA',
+        ':anterior': existente.porcentajeDedicacion, ':fecha': ahora, ':key': `DESVINCULADA#${ahora}` },
+    } },
+  ]);
+  invalidarCachéAsignacion(asignacionId, existente.colaboradorId, existente.proyectoId);
+  return { ...existente, estado: 'DESVINCULADA', fechaFin: ahora, fechaActualizacion: ahora };
 }
 
 module.exports = {

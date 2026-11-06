@@ -120,7 +120,16 @@ async function cancelarProyecto(event, context) {
 
 const { crearDespachador } = require('../../utils/lambda-dispatcher');
 
+const relaciones = require('../../repositories/proyecto-habilidad.repository');
 const handler = crearDespachador({
+  'GET /api/v1/proyectos/{proyectoId}/habilidades': async (event) => exito(await relaciones.consultarHabilidadesProyecto(event.pathParameters.proyectoId)),
+  'POST /api/v1/proyectos/{proyectoId}/habilidades': async (event) => creado(await relaciones.asociarHabilidad({ ...JSON.parse(event.body), proyectoId: event.pathParameters.proyectoId })),
+  'PUT /api/v1/proyectos/{proyectoId}/habilidades/{habilidadId}': async (event) => {
+    const body = JSON.parse(event.body);
+    const { proyectoId, habilidadId } = event.pathParameters;
+    return exito(await relaciones.actualizarRelacion(proyectoId, habilidadId, body));
+  },
+  'DELETE /api/v1/proyectos/{proyectoId}/habilidades/{habilidadId}': async (event) => exito(await relaciones.eliminarRelacion(event.pathParameters.proyectoId, event.pathParameters.habilidadId)),
   'GET /api/v1/proyectos': listarProyectos,
   'POST /api/v1/proyectos': crearProyecto,
   'GET /api/v1/proyectos/{proyectoId}': obtenerProyecto,

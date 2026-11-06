@@ -3,23 +3,11 @@ const {
   GetCommand,
   PutCommand,
   UpdateCommand,
-  DeleteCommand,
   QueryCommand,
   ScanCommand,
 } = require('../config/dynamodb');
 const { tableCargos, tableColaboradores } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
-
-const PK_PREFIX = 'CARGO';
-const SK_METADATA = 'METADATA';
-
-function pk(cargoId) {
-  return `${PK_PREFIX}#${cargoId}`;
-}
-
-function sk() {
-  return SK_METADATA;
-}
 
 /**
  * Crear un cargo.
@@ -28,8 +16,6 @@ function sk() {
  */
 async function crear(data) {
   const item = {
-    pk: pk(data.cargoId),
-    sk: sk(),
     cargoId: data.cargoId,
     nombre: data.nombre.trim(),
     descripcion: data.descripcion || null,
@@ -37,15 +23,13 @@ async function crear(data) {
     estado: data.estado || 'ACTIVO',
     fechaCreacion: new Date().toISOString(),
     fechaActualizacion: new Date().toISOString(),
-    gsi1pk: `ESTADO#${data.estado || 'ACTIVO'}`,
-    gsi1sk: SK_METADATA,
   };
 
   await dynamoDb.send(
     new PutCommand({
       TableName: tableCargos,
       Item: item,
-      ConditionExpression: 'attribute_not_exists(pk)',
+      ConditionExpression: 'attribute_not_exists(cargoId)',
     })
   );
 
@@ -67,16 +51,16 @@ async function listar(filtros = {}) {
 
   if (estado) {
     params.IndexName = 'GSI1';
-    params.KeyConditionExpression = 'gsi1pk = :gsi1pk AND begins_with(gsi1sk, :sk)';
+    params.KeyConditionExpression = '#estado = :estado';
+    params.ExpressionAttributeNames = { '#estado': 'estado' };
     params.ExpressionAttributeValues = {
-      ':gsi1pk': `ESTADO#${estado}`,
-      ':sk': SK_METADATA,
+      ':estado': estado,
     };
   }
 
   if (lastKey) params.ExclusiveStartKey = lastKey;
 
-  const result = await dynamoDb.send(new QueryCommand(params));
+  const result = await dynamoDb.send(estado ? new QueryCommand(params) : new ScanCommand(params));
   return {
     items: result.Items || [],
     lastKey: result.LastEvaluatedKey || null,
@@ -92,7 +76,7 @@ async function obtenerPorId(cargoId) {
   const result = await dynamoDb.send(
     new GetCommand({
       TableName: tableCargos,
-      Key: { pk: pk(cargoId), sk: sk() },
+      Key: { cargoId },
     })
   );
   return result.Item || null;
@@ -113,6 +97,15 @@ async function actualizar(cargoId, data) {
   const updateParts = [];
   const expressionAttributeValues = {};
   const expressionAttributeNames = {};
+
+  if (data.estado !== undefined) {
+    if (!['ACTIVO', 'INACTIVO'].includes(data.estado)) {
+      throw new ErrorApp('Estado de cargo inválido', 400, CODIGOS.VALIDACION);
+    }
+    updateParts.push('#estado = :estado');
+    expressionAttributeNames['#estado'] = 'estado';
+    expressionAttributeValues[':estado'] = data.estado;
+  }
 
   if (data.nombre !== undefined) {
     updateParts.push('#nombre = :nombre');
@@ -137,7 +130,8 @@ async function actualizar(cargoId, data) {
   const result = await dynamoDb.send(
     new UpdateCommand({
       TableName: tableCargos,
-      Key: { pk: pk(cargoId), sk: sk() },
+      Key: { cargoId },
+      ConditionExpression: 'attribute_exists(cargoId)',
       UpdateExpression: `SET ${updateParts.join(', ')}`,
       ExpressionAttributeNames: expressionAttributeNames,
       ExpressionAttributeValues: expressionAttributeValues,
@@ -166,19 +160,23 @@ async function cambiarEstado(cargoId, activo) {
  * @returns {Promise<boolean>}
  */
 async function tieneColaboradoresAsociados(cargoId) {
-  const result = await dynamoDb.send(
-    new QueryCommand({
+  // No existe un índice por cargoId en el contrato actual de Colaboradores.
+  // Recorrer páginas: una página filtrada vacía no significa ausencia de vínculos.
+  let lastKey;
+  do {
+    const result = await dynamoDb.send(new ScanCommand({
       TableName: tableColaboradores,
-      IndexName: 'GSI2',
-      KeyConditionExpression: 'gsi2pk = :gsi2pk AND begins_with(gsi2sk, :sk)',
-      ExpressionAttributeValues: {
-        ':gsi2pk': `CARGO#${cargoId}`,
-        ':sk': SK_METADATA,
-      },
-      Limit: 1,
-    })
-  );
-  return (result.Items || []).length > 0;
+      FilterExpression: '#cargo = :cargo',
+      ExpressionAttributeNames: { '#cargo': 'cargoId' },
+      ExpressionAttributeValues: { ':cargo': cargoId },
+      ProjectionExpression: 'colaboradorId',
+      ConsistentRead: true,
+      ...(lastKey && { ExclusiveStartKey: lastKey }),
+    }));
+    if ((result.Items || []).length > 0) return true;
+    lastKey = result.LastEvaluatedKey;
+  } while (lastKey);
+  return false;
 }
 
 module.exports = {

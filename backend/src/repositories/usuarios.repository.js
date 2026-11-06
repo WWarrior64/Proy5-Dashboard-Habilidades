@@ -10,17 +10,6 @@ const {
 const { tableUsuarios } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
 
-const PK_PREFIX = 'USUARIO';
-const SK_METADATA = 'METADATA';
-
-function pk(usuarioId) {
-  return `${PK_PREFIX}#${usuarioId}`;
-}
-
-function sk() {
-  return SK_METADATA;
-}
-
 /**
  * Consultar un usuario por su usuarioId.
  * @param {string} usuarioId
@@ -30,7 +19,7 @@ async function obtenerPorId(usuarioId) {
   const result = await dynamoDb.send(
     new GetCommand({
       TableName: tableUsuarios,
-      Key: { pk: pk(usuarioId), sk: sk() },
+      Key: { usuarioId },
     })
   );
   return result.Item || null;
@@ -46,11 +35,9 @@ async function obtenerPorCognitoSub(cognitoSub) {
     new QueryCommand({
       TableName: tableUsuarios,
       IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :gsi1pk AND begins_with(gsi1sk, :sk)',
-      ExpressionAttributeValues: {
-        ':gsi1pk': `COGNITO#${cognitoSub}`,
-        ':sk': SK_METADATA,
-      },
+      KeyConditionExpression: '#identity = :identity',
+      ExpressionAttributeNames: { '#identity': 'cognitoSub' },
+      ExpressionAttributeValues: { ':identity': cognitoSub },
     })
   );
   if (!result.Items || result.Items.length === 0) return null;
@@ -118,27 +105,23 @@ async function listar(filtros = {}) {
  */
 async function crear(data) {
   const item = {
-    pk: pk(data.usuarioId),
-    sk: sk(),
     usuarioId: data.usuarioId,
     cognitoSub: data.cognitoSub,
     nombre: data.nombre,
     email: data.email,
+    correo: (data.correo || data.email).trim().toLowerCase(),
+    nombreCompleto: data.nombreCompleto || data.nombre,
     rol: data.rol || 'EMPLEADO',
     estado: data.estado || 'ACTIVO',
     fechaCreacion: new Date().toISOString(),
     fechaActualizacion: new Date().toISOString(),
-    gsi1pk: `COGNITO#${data.cognitoSub}`,
-    gsi1sk: SK_METADATA,
-    gsi2pk: `ROL#${data.rol}`,
-    gsi2sk: SK_METADATA,
   };
 
   await dynamoDb.send(
     new PutCommand({
       TableName: tableUsuarios,
       Item: item,
-      ConditionExpression: 'attribute_not_exists(pk)',
+      ConditionExpression: 'attribute_not_exists(usuarioId)',
     })
   );
 
@@ -161,7 +144,10 @@ async function actualizar(usuarioId, data) {
   const expressionAttributeValues = {};
   const expressionAttributeNames = {};
 
-  const camposPermitidos = ['nombre', 'email', 'rol', 'estado'];
+  data = { ...data };
+  if (data.email !== undefined) data.correo = data.email.trim().toLowerCase();
+  if (data.nombre !== undefined) data.nombreCompleto = data.nombre;
+  const camposPermitidos = ['nombre', 'email', 'nombreCompleto', 'correo', 'rol', 'estado'];
   camposPermitidos.forEach((campo) => {
     if (data[campo] !== undefined) {
       updateParts.push(`#${campo} = :${campo}`);
@@ -170,10 +156,6 @@ async function actualizar(usuarioId, data) {
     }
   });
 
-  if (data.rol) {
-    expressionAttributeValues[':gsi2pk'] = `ROL#${data.rol}`;
-    updateParts.push('gsi2pk = :gsi2pk');
-  }
 
   updateParts.push('#fechaActualizacion = :fechaActualizacion');
   expressionAttributeNames['#fechaActualizacion'] = 'fechaActualizacion';
@@ -182,7 +164,7 @@ async function actualizar(usuarioId, data) {
   const result = await dynamoDb.send(
     new UpdateCommand({
       TableName: tableUsuarios,
-      Key: { pk: pk(usuarioId), sk: sk() },
+      Key: { usuarioId },
       UpdateExpression: `SET ${updateParts.join(', ')}`,
       ExpressionAttributeNames: expressionAttributeNames,
       ExpressionAttributeValues: expressionAttributeValues,

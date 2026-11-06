@@ -1,5 +1,7 @@
 const { error } = require('./responses');
 const { CODIGOS } = require('./errors');
+const { autenticar } = require('../middleware/authentication');
+const { proteger } = require('../middleware/route-policy');
 
 /**
  * Crea un despachador de rutas para handlers de Lambda (API Gateway).
@@ -10,16 +12,41 @@ function crearDespachador(routes) {
   return async function handler(event, context) {
     try {
       const httpMethod = event.httpMethod || event.requestContext?.http?.method;
-      const path = event.resource || event.path || event.rawPath || '';
-      const key = `${httpMethod} ${path}`;
-
-      const handlerFn = routes[key];
+      const path = (event.path || event.rawPath || event.resource || '').replace(/\{([^}]+)\}/g,
+        (match, key) => event.pathParameters?.[key] || match);
+      const keys = Object.keys(routes).sort((a, b) =>
+        (a.match(/\{/g) || []).length - (b.match(/\{/g) || []).length);
+      let selected;
+      for (const key of keys) {
+        const [method, template] = key.split(' ');
+        if (method !== httpMethod) continue;
+        const parts = template.split('/');
+        const actual = path.split('/');
+        if (parts.length !== actual.length) continue;
+        const params = {};
+        const matches = parts.every((part, i) => {
+          if (!part.startsWith('{')) return part === actual[i];
+          if (!actual[i] || actual[i].startsWith('{')) return false;
+          params[part.slice(1, -1)] = decodeURIComponent(actual[i]);
+          return true;
+        });
+        if (matches) {
+          selected = key;
+          event.pathParameters = { ...event.pathParameters, ...params };
+          break;
+        }
+      }
+      const handlerFn = routes[selected];
 
       if (!handlerFn) {
         return error('Ruta no encontrada', 404, CODIGOS.NO_ENCONTRADO);
       }
 
-      return await handlerFn(event, context);
+      if (selected === 'GET /api/v1/health') return handlerFn(event, context);
+      return await autenticar(event, async (authenticated) => {
+        await proteger(authenticated, selected);
+        return handlerFn(authenticated, context);
+      });
     } catch (err) {
       return error(err.message, err.codigo || 500, err.codigoError || CODIGOS.INTERNO);
     }

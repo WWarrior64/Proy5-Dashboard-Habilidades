@@ -12,17 +12,6 @@ const { ErrorApp, CODIGOS } = require('../utils/errors');
 const usuariosRepository = require('./usuarios.repository');
 const cargosRepository = require('./cargos.repository');
 
-const PK_PREFIX = 'COLABORADOR';
-const SK_METADATA = 'METADATA';
-
-function pk(colaboradorId) {
-  return `${PK_PREFIX}#${colaboradorId}`;
-}
-
-function sk() {
-  return SK_METADATA;
-}
-
 async function validarReglas(data, colaboradorIdExcluir = null) {
   const usuario = await usuariosRepository.obtenerPorId(data.usuarioId);
   if (!usuario) {
@@ -47,30 +36,26 @@ async function crear(data) {
   await validarReglas(data);
 
   const item = {
-    pk: pk(data.colaboradorId),
-    sk: sk(),
     colaboradorId: data.colaboradorId,
     usuarioId: data.usuarioId,
     cargoId: data.cargoId,
     rolProfesional: data.rolProfesional,
+    nombre: data.nombre || data.rolProfesional,
+    'rolProfesional#nombre': `${data.rolProfesional}#${data.nombre || data.rolProfesional}`,
+    dedicacionReservada: 0,
+    disponibilidad: data.disponibilidad || 'DISPONIBLE',
     estado: data.estado || 'ACTIVO',
     fechaAlta: new Date().toISOString(),
     fechaBaja: null,
     fechaActualizacion: new Date().toISOString(),
     observaciones: data.observaciones || null,
-    gsi1pk: `USUARIO#${data.usuarioId}`,
-    gsi1sk: SK_METADATA,
-    gsi2pk: `CARGO#${data.cargoId}`,
-    gsi2sk: SK_METADATA,
-    gsi3pk: `ESTADO#${data.estado || 'ACTIVO'}`,
-    gsi3sk: SK_METADATA,
   };
 
   await dynamoDb.send(
     new PutCommand({
       TableName: tableColaboradores,
       Item: item,
-      ConditionExpression: 'attribute_not_exists(pk)',
+      ConditionExpression: 'attribute_not_exists(colaboradorId)',
     })
   );
 
@@ -124,7 +109,7 @@ async function obtenerPorId(colaboradorId) {
   const result = await dynamoDb.send(
     new GetCommand({
       TableName: tableColaboradores,
-      Key: { pk: pk(colaboradorId), sk: sk() },
+      Key: { colaboradorId },
     })
   );
   return result.Item || null;
@@ -135,11 +120,9 @@ async function obtenerPorUsuarioId(usuarioId) {
     new QueryCommand({
       TableName: tableColaboradores,
       IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :gsi1pk AND begins_with(gsi1sk, :sk)',
-      ExpressionAttributeValues: {
-        ':gsi1pk': `USUARIO#${usuarioId}`,
-        ':sk': SK_METADATA,
-      },
+      KeyConditionExpression: '#identity = :identity',
+      ExpressionAttributeNames: { '#identity': 'usuarioId' },
+      ExpressionAttributeValues: { ':identity': usuarioId },
     })
   );
   if (!result.Items || result.Items.length === 0) return null;
@@ -175,6 +158,12 @@ async function actualizar(colaboradorId, data) {
     }
   });
 
+  if (data.rolProfesional !== undefined) {
+    updateParts.push('#rolNombre = :rolNombre');
+    expressionAttributeNames['#rolNombre'] = 'rolProfesional#nombre';
+    expressionAttributeValues[':rolNombre'] = `${data.rolProfesional}#${existente.nombre || data.rolProfesional}`;
+  }
+
   if (data.estado === 'INACTIVO' && existente.estado !== 'INACTIVO') {
     updateParts.push('#fechaBaja = :fechaBaja');
     expressionAttributeNames['#fechaBaja'] = 'fechaBaja';
@@ -193,7 +182,7 @@ async function actualizar(colaboradorId, data) {
   const result = await dynamoDb.send(
     new UpdateCommand({
       TableName: tableColaboradores,
-      Key: { pk: pk(colaboradorId), sk: sk() },
+      Key: { colaboradorId },
       UpdateExpression: `SET ${updateParts.join(', ')}`,
       ExpressionAttributeNames: expressionAttributeNames,
       ExpressionAttributeValues: expressionAttributeValues,

@@ -21,7 +21,7 @@ const handler = require('../src/functions/postulaciones/handler.js');
 const COLABORADOR = { colaboradorId: 'c1', estado: 'ACTIVO', disponibilidad: 'DISPONIBLE' };
 const PROYECTO = { proyectoId: 'p1', estado: 'ACTIVO' };
 const POSTULACION = {
-  proyectoId: 'p1', sk: 'POSTULACION#c1', postulacionId: 'post1', colaboradorId: 'c1',
+  proyectoId: 'p1', postulacionKey: 'POSTULACION#c1', postulacionId: 'post1', colaboradorId: 'c1',
   estado: 'PENDIENTE', fechaPostulacion: '2026-01-01T00:00:00.000Z', fechaActualizacion: '2026-01-01T00:00:00.000Z',
 };
 
@@ -78,8 +78,8 @@ describe('Repositorio: postulaciones', () => {
     expect(commandMocks.GetCommand).toHaveBeenNthCalledWith(2, { TableName: 'im_proyectos', Key: { proyectoId: 'p1' } });
     expect(commandMocks.PutCommand).toHaveBeenCalledWith(expect.objectContaining({
       TableName: 'im_postulaciones',
-      Item: expect.objectContaining({ estado: 'PENDIENTE', proyectoId: 'p1', colaboradorId: 'c1', sk: 'POSTULACION#c1' }),
-      ConditionExpression: 'attribute_not_exists(sk)',
+      Item: expect.objectContaining({ estado: 'PENDIENTE', proyectoId: 'p1', colaboradorId: 'c1', postulacionKey: 'POSTULACION#c1' }),
+      ConditionExpression: 'attribute_not_exists(postulacionKey)',
     }));
     expect(item.estado).toBe('PENDIENTE');
     expect(item.postulacionId).toBeDefined();
@@ -121,7 +121,7 @@ describe('Repositorio: postulaciones', () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: POSTULACION });
     const resultado = await repo.obtenerPostulacion('p1', 'c1');
     expect(commandMocks.GetCommand).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'im_postulaciones', Key: { proyectoId: 'p1', sk: 'POSTULACION#c1' },
+      TableName: 'im_postulaciones', Key: { proyectoId: 'p1', postulacionKey: 'POSTULACION#c1' },
     }));
     expect(resultado).toEqual(POSTULACION);
     commandMocks.GetCommand.mockResolvedValueOnce({});
@@ -157,7 +157,7 @@ describe('Repositorio: postulaciones', () => {
     expect(commandMocks.UpdateCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         TableName: 'im_postulaciones',
-        Key: { proyectoId: 'p1', sk: 'POSTULACION#c1' }
+        Key: { proyectoId: 'p1', postulacionKey: 'POSTULACION#c1' }
       })
     );
     expect(resultado.estado).toBe('RECHAZADA');

@@ -29,7 +29,8 @@ function obtenerQueryParam(event, nombre) {
  */
 async function buscarCandidatos(event, context) {
   try {
-    const body = obtenerBody(event);
+    const query = event.queryStringParameters || {};
+    const body = { ...query, habilidades: (query.habilidades || '').split(',').map((id) => id.trim()).filter(Boolean), considerarDisponibilidad: query.considerarDisponibilidad !== 'false' };
 
     const habilidadesRequeridas = body.habilidades || [];
     const nivelMinimo = body.nivelMinimo || 'JUNIOR';
@@ -50,6 +51,7 @@ async function buscarCandidatos(event, context) {
       return error('tipoCoincidencia debe ser "todas" o "alguna"', 400, CODIGOS.VALIDACION);
     }
 
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) return error('limit debe estar entre 1 y 100', 400, CODIGOS.VALIDACION);
     const nivelMinimoValor = NIVELES_JERARQUIA[nivelMinimo];
 
     // Paso 1: Para cada habilidad requerida, obtener los colaboradores asociados
@@ -57,8 +59,13 @@ async function buscarCandidatos(event, context) {
     const habilidadesNoEncontradas = [];
 
     for (const habilidadId of habilidadesRequeridas) {
-      const resultado = await colaboradorHabilidadRepository.listarPorHabilidad(habilidadId);
-      const colaboradores = resultado.items;
+      const colaboradores = [];
+      let lastKey;
+      do {
+        const resultado = await colaboradorHabilidadRepository.listarPorHabilidad(habilidadId, { lastKey });
+        colaboradores.push(...resultado.items);
+        lastKey = resultado.lastKey;
+      } while (lastKey);
 
       if (colaboradores.length === 0) {
         habilidadesNoEncontradas.push(habilidadId);
@@ -168,15 +175,32 @@ async function buscarCandidatos(event, context) {
   }
 }
 
+async function buscarProyectos(event) {
+  try {
+    const query = event.queryStringParameters || {};
+    const repo = require('../../repositories/proyectos.repository');
+    const items = await repo.listarProyectos({ estado: query.estado || 'ACTIVO', liderId: query.liderId, fecha: query.fecha });
+    return exito(items.filter((item) => !query.nombre || item.nombre.toLowerCase().includes(query.nombre.toLowerCase())));
+  } catch (err) { return error(err.message, err.codigo || 500, err.codigoError); }
+}
+async function buscarHabilidades(event) {
+  try {
+    const repo = require('../../repositories/habilidades.repository');
+    return exito(await repo.listar(event.queryStringParameters || {}));
+  } catch (err) { return error(err.message, err.codigo || 500, err.codigoError); }
+}
+
 const { crearDespachador } = require('../../utils/lambda-dispatcher');
 
 const handler = crearDespachador({
   'GET /api/v1/busqueda/colaboradores': buscarCandidatos,
-  'GET /api/v1/busqueda/proyectos': buscarCandidatos,
-  'GET /api/v1/busqueda/habilidades': buscarCandidatos,
+  'GET /api/v1/busqueda/proyectos': buscarProyectos,
+  'GET /api/v1/busqueda/habilidades': buscarHabilidades,
 });
 
 module.exports = {
   buscarCandidatos,
+  buscarProyectos,
+  buscarHabilidades,
   handler,
 };

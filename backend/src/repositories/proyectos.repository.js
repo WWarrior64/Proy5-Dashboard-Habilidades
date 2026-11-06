@@ -94,8 +94,8 @@ function itemBaseProyecto(proyectoId, datos, ahora) {
     ...(fechaFin !== undefined && { fechaFin }),
     // Claves de orden de los GSIs (GSI1: estado / fechaPublicacion#proyectoId;
     // GSI2: liderId / estado#fechaCreacion)
-    sk1: `${fechaPublicacion || ahora}#${proyectoId}`,
-    sk2: `${estado}#${ahora}`,
+    fechaPublicacionKey: `${fechaPublicacion || ahora}#${proyectoId}`,
+    estadoFechaKey: `${estado}#${ahora}`,
   };
 }
 
@@ -266,7 +266,7 @@ async function actualizarProyecto(proyectoId, cambios) {
     nombresAtributos['#est'] = 'estado';
     valoresAtributos[':est'] = estado;
     sets.push('#est = :est');
-    nombresAtributos['#s2'] = 'sk2';
+    nombresAtributos['#s2'] = 'estadoFechaKey';
     valoresAtributos[':s2'] = `${estado}#${ahora}`;
     sets.push('#s2 = :s2');
   }
@@ -310,7 +310,7 @@ async function cambiarEstado(proyectoId, estado) {
       TableName: tableProyectos,
       Key: { proyectoId },
       UpdateExpression: 'SET #est = :est, #s2 = :s2, #ua = :ua',
-      ExpressionAttributeNames: { '#est': 'estado', '#s2': 'sk2', '#ua': 'fechaActualizacion' },
+      ExpressionAttributeNames: { '#est': 'estado', '#s2': 'estadoFechaKey', '#ua': 'fechaActualizacion' },
       ExpressionAttributeValues: {
         ':est': estado,
         ':s2': `${estado}#${ahora}`,

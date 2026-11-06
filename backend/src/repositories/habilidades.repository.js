@@ -6,20 +6,10 @@ const {
   DeleteCommand,
   QueryCommand,
   ScanCommand,
+  TransactWriteCommand,
 } = require('../config/dynamodb');
 const { tableHabilidades } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
-
-const PK_PREFIX = 'HABILIDAD';
-const SK_METADATA = 'METADATA';
-
-function pk(habilidadId) {
-  return `${PK_PREFIX}#${habilidadId}`;
-}
-
-function sk() {
-  return SK_METADATA;
-}
 
 function normalizarNombre(nombre) {
   return nombre.trim().toLowerCase();
@@ -29,8 +19,6 @@ async function crear(data) {
   const nombreNormalizado = normalizarNombre(data.nombre);
 
   const item = {
-    pk: pk(data.habilidadId),
-    sk: sk(),
     habilidadId: data.habilidadId,
     nombre: data.nombre.trim(),
     nombreNormalizado,
@@ -38,19 +26,14 @@ async function crear(data) {
     estado: data.estado || 'ACTIVO',
     fechaCreacion: new Date().toISOString(),
     fechaActualizacion: new Date().toISOString(),
-    gsi1pk: `NOMBRE_NORMALIZADO#${nombreNormalizado}`,
-    gsi1sk: SK_METADATA,
-    gsi2pk: `CATEGORIA#${data.categoria || 'GENERAL'}`,
-    gsi2sk: SK_METADATA,
   };
 
-  await dynamoDb.send(
-    new PutCommand({
-      TableName: tableHabilidades,
-      Item: item,
-      ConditionExpression: 'attribute_not_exists(pk) AND attribute_not_exists(gsi1pk)',
-    })
-  );
+  if (data.habilidadId.startsWith('UNIQUE#')) throw new ErrorApp('Identificador reservado', 400, CODIGOS.VALIDACION);
+  await escribir([
+    { Put: { TableName: tableHabilidades, Item: item, ConditionExpression: 'attribute_not_exists(habilidadId)' } },
+    { Put: { TableName: tableHabilidades, Item: { habilidadId: `UNIQUE#${nombreNormalizado}`, propietarioId: item.habilidadId },
+      ConditionExpression: 'attribute_not_exists(habilidadId)' } },
+  ]);
 
   return item;
 }
@@ -58,9 +41,9 @@ async function crear(data) {
 async function listar(filtros = {}) {
   const { categoria, nombre, estado, limit = 25, lastKey } = filtros;
 
-  const filterParts = [];
+  const filterParts = ['attribute_exists(#nombreReal)'];
   const expressionAttributeValues = {};
-  const expressionAttributeNames = {};
+  const expressionAttributeNames = { '#nombreReal': 'nombre' };
 
   if (categoria) {
     filterParts.push('#categoria = :categoria');
@@ -102,7 +85,7 @@ async function obtenerPorId(habilidadId) {
   const result = await dynamoDb.send(
     new GetCommand({
       TableName: tableHabilidades,
-      Key: { pk: pk(habilidadId), sk: sk() },
+      Key: { habilidadId },
     })
   );
   return result.Item || null;
@@ -114,55 +97,32 @@ async function actualizar(habilidadId, data) {
     throw new ErrorApp('Habilidad no encontrada', 404, CODIGOS.NO_ENCONTRADO);
   }
 
-  const updateParts = [];
-  const expressionAttributeValues = {};
-  const expressionAttributeNames = {};
-
-  if (data.nombre !== undefined) {
-    const nombreNormalizado = normalizarNombre(data.nombre);
-    const duplicado = await obtenerPorNombreNormalizado(nombreNormalizado);
-    if (duplicado && duplicado.habilidadId !== habilidadId) {
-      throw new ErrorApp('Ya existe una habilidad con ese nombre normalizado', 409, CODIGOS.CONFLICTO);
-    }
-    updateParts.push('#nombre = :nombre, #nombreNormalizado = :nombreNormalizado');
-    expressionAttributeNames['#nombre'] = 'nombre';
-    expressionAttributeNames['#nombreNormalizado'] = 'nombreNormalizado';
-    expressionAttributeValues[':nombre'] = data.nombre.trim();
-    expressionAttributeValues[':nombreNormalizado'] = nombreNormalizado;
-    updateParts.push('gsi1pk = :gsi1pk');
-    expressionAttributeValues[':gsi1pk'] = `NOMBRE_NORMALIZADO#${nombreNormalizado}`;
+  const siguiente = { ...existente, fechaActualizacion: new Date().toISOString() };
+  for (const campo of ['nombre', 'categoria', 'estado']) {
+    if (data[campo] !== undefined) siguiente[campo] = data[campo];
   }
-
-  if (data.categoria !== undefined) {
-    updateParts.push('#categoria = :categoria');
-    expressionAttributeNames['#categoria'] = 'categoria';
-    expressionAttributeValues[':categoria'] = data.categoria;
-    updateParts.push('gsi2pk = :gsi2pk');
-    expressionAttributeValues[':gsi2pk'] = `CATEGORIA#${data.categoria}`;
+  siguiente.nombreNormalizado = normalizarNombre(siguiente.nombre);
+  const items = [{ Put: { TableName: tableHabilidades, Item: siguiente,
+    ConditionExpression: 'fechaActualizacion = :version',
+    ExpressionAttributeValues: { ':version': existente.fechaActualizacion } } }];
+  if (siguiente.nombreNormalizado !== existente.nombreNormalizado) {
+    items.push({ Delete: { TableName: tableHabilidades,
+      Key: { habilidadId: `UNIQUE#${existente.nombreNormalizado}` },
+      ConditionExpression: 'propietarioId = :id', ExpressionAttributeValues: { ':id': habilidadId } } });
+    items.push({ Put: { TableName: tableHabilidades,
+      Item: { habilidadId: `UNIQUE#${siguiente.nombreNormalizado}`, propietarioId: habilidadId },
+      ConditionExpression: 'attribute_not_exists(habilidadId)' } });
   }
+  await escribir(items);
+  return siguiente;
+}
 
-  if (data.estado !== undefined) {
-    updateParts.push('#estado = :estado');
-    expressionAttributeNames['#estado'] = 'estado';
-    expressionAttributeValues[':estado'] = data.estado;
+async function escribir(items) {
+  try { await dynamoDb.send(new TransactWriteCommand({ TransactItems: items })); }
+  catch (err) {
+    if (err.name === 'TransactionCanceledException') throw new ErrorApp('Nombre duplicado o modificación concurrente', 409, CODIGOS.CONFLICTO);
+    throw err;
   }
-
-  updateParts.push('#fechaActualizacion = :fechaActualizacion');
-  expressionAttributeNames['#fechaActualizacion'] = 'fechaActualizacion';
-  expressionAttributeValues[':fechaActualizacion'] = new Date().toISOString();
-
-  const result = await dynamoDb.send(
-    new UpdateCommand({
-      TableName: tableHabilidades,
-      Key: { pk: pk(habilidadId), sk: sk() },
-      UpdateExpression: `SET ${updateParts.join(', ')}`,
-      ExpressionAttributeNames: expressionAttributeNames,
-      ExpressionAttributeValues: expressionAttributeValues,
-      ReturnValues: 'ALL_NEW',
-    })
-  );
-
-  return result.Attributes;
 }
 
 async function cambiarEstado(habilidadId, activo) {
@@ -171,19 +131,10 @@ async function cambiarEstado(habilidadId, activo) {
 }
 
 async function obtenerPorNombreNormalizado(nombreNormalizado) {
-  const result = await dynamoDb.send(
-    new QueryCommand({
-      TableName: tableHabilidades,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :gsi1pk AND begins_with(gsi1sk, :sk)',
-      ExpressionAttributeValues: {
-        ':gsi1pk': `NOMBRE_NORMALIZADO#${nombreNormalizado}`,
-        ':sk': SK_METADATA,
-      },
-    })
-  );
-  if (!result.Items || result.Items.length === 0) return null;
-  return result.Items[0];
+  const result = await dynamoDb.send(new GetCommand({
+    TableName: tableHabilidades, Key: { habilidadId: `UNIQUE#${normalizarNombre(nombreNormalizado)}` }, ConsistentRead: true,
+  }));
+  return result.Item ? obtenerPorId(result.Item.propietarioId) : null;
 }
 
 module.exports = {

@@ -147,6 +147,21 @@ async function actualizarCampo(proyectoId, habilidadId, cambios) {
   }
 }
 
+async function actualizarRelacion(proyectoId, habilidadId, data) {
+  const cambios = {};
+  if (data.nivelMinimo !== undefined) { validarNivelMinimo(data.nivelMinimo); cambios.nivelMinimo = data.nivelMinimo; }
+  if (data.esObligatoria !== undefined) {
+    if (typeof data.esObligatoria !== 'boolean') throw new ErrorApp('esObligatoria debe ser booleano', 400, CODIGOS.VALIDACION);
+    cambios.esObligatoria = data.esObligatoria;
+  }
+  if (data.peso !== undefined) {
+    if (!Number.isFinite(data.peso)) throw new ErrorApp('Peso inválido', 400, CODIGOS.VALIDACION);
+    cambios.peso = data.peso;
+  }
+  if (!Object.keys(cambios).length) throw new ErrorApp('No hay campos para actualizar', 400, CODIGOS.VALIDACION);
+  return actualizarCampo(proyectoId, habilidadId, cambios);
+}
+
 async function eliminarRelacion(proyectoId, habilidadId) {
   try {
     await dynamoDb.send(
@@ -188,6 +203,7 @@ async function consultarProyectosPorHabilidad(habilidadId) {
 }
 
 module.exports = {
+  actualizarRelacion,
   asociarHabilidad,
   consultarHabilidadesProyecto,
   modificarNivelMinimo,

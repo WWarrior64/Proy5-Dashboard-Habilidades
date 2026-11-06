@@ -116,6 +116,11 @@ async function desvincularAsignacion(event, context) {
 const { crearDespachador } = require('../../utils/lambda-dispatcher');
 
 const handler = crearDespachador({
+  'PATCH /api/v1/asignaciones/{asignacionId}/estado': (event, context) => {
+    if (JSON.parse(event.body).estado !== 'DESVINCULADA') return error('Solo se permite DESVINCULADA', 400, CODIGOS.VALIDACION);
+    return desvincularAsignacion(event, context);
+  },
+  'GET /api/v1/asignaciones/activas': listarAsignacionesActivas,
   'GET /api/v1/asignaciones': listarAsignacionesActivas,
   'POST /api/v1/asignaciones': crearAsignacion,
   'GET /api/v1/asignaciones/{asignacionId}': obtenerAsignacion,
