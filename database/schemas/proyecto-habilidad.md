@@ -25,7 +25,7 @@ Matriz N:M de proyectos y habilidades. Relaciona los proyectos con las habilidad
   - Ordenación: `habilidadId`
 - **GSI1:**
   - Partición: `habilidadId`
-  - Ordenación: `proyectoId`
+  - Ordenación: `proyectoHabilidadKey` — atributo físico sencillo que guarda el valor compuesto (por ejemplo `proyectoId`). Permite consultar proyectos por habilidad.
 
 ## Patrones de consulta
 

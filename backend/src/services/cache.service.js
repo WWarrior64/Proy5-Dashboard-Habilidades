@@ -8,6 +8,41 @@ const cache = new Map();
  */
 
 /**
+ * Construye una clave de caché a partir de sus partes, de modo que cada consulta
+ * disponga de una clave que diferencie sus filtros y parámetros (p. ej.
+ * `proyectos:list:ACTIVO:lider123`).
+ * @param {...string} partes - Segmentos de la clave
+ * @returns {string} Clave compuesta unida con ':'
+ */
+function construirClave(...partes) {
+  return partes.filter((p) => p !== undefined && p !== null && p !== '').join(':');
+}
+
+/**
+ * Elimina una clave específica de la caché.
+ * @param {string} clave - Clave a eliminar
+ * @returns {boolean} true si se eliminó, false si no existía
+ */
+function eliminar(clave) {
+  return cache.delete(clave);
+}
+
+/**
+ * Elimina todas las claves cuya clave comienza con el prefijo dado.
+ * Útil para invalidar listados tras una escritura (crear/modificar/cancelar).
+ * @param {string} prefijo - Prefijo de las claves a eliminar
+ * @returns {number} Cantidad de claves eliminadas
+ */
+function eliminarPorPrefijo(prefijo) {
+  const claves = [];
+  for (const clave of cache.keys()) {
+    if (clave.startsWith(prefijo)) claves.push(clave);
+  }
+  for (const clave of claves) cache.delete(clave);
+  return claves.length;
+}
+
+/**
  * Obtiene un valor de la caché. Si la entrada ha expirado, se elimina y se retorna undefined.
  * @param {string} clave - Clave de caché
  * @returns {any|undefined} Valor almacenado o undefined si no existe o expiró
@@ -101,6 +136,8 @@ module.exports = {
   limpiar,
   limpiarExpirados,
   obtenerEstadisticas,
+  construirClave,
+  eliminarPorPrefijo,
   obtenerClave,
   guardarClave,
 };

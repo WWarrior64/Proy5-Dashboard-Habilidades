@@ -1,14 +1,61 @@
+const NIVELES_VALIDOS = ['JUNIOR', 'MID', 'SENIOR'];
+const NIVELES_VALOR = { JUNIOR: 1, MID: 2, SENIOR: 3 };
+
+/**
+ * Calcula el porcentaje de coincidencia de un colaborador frente a habilidades requeridas.
+ * @param {Object} colaborador - Datos del colaborador con habilidadesCoincidentes y totalRequeridas.
+ * @returns {number} Porcentaje entre 0 y 100.
+ */
+function calcularPuntuacion(colaborador) {
+  const coincidencias = Array.isArray(colaborador.habilidadesCoincidentes)
+    ? colaborador.habilidadesCoincidentes.length
+    : 0;
+  const total = colaborador.totalRequeridas || 1;
+  return Math.round((coincidencias / total) * 100);
+}
+
+/**
+ * Verifica si el nivel de un colaborador cumple con el nivel mínimo requerido.
+ * @param {string} nivelPoseido - Nivel del colaborador (JUNIOR, MID, SENIOR).
+ * @param {string} nivelRequerido - Nivel mínimo requerido.
+ * @returns {boolean}
+ */
+function cumpleNivelMinimo(nivelPoseido, nivelRequerido) {
+  const valorPoseido = NIVELES_VALOR[nivelPoseido] || 0;
+  const valorRequerido = NIVELES_VALOR[nivelRequerido] || 0;
+  return valorPoseido >= valorRequerido;
+}
+
+/**
+ * Filtra candidatos por estado y disponibilidad.
+ * @param {Array} candidatos - Lista de candidatos.
+ * @param {boolean} soloActivos - Si se deben excluir inactivos.
+ * @returns {Array} Candidatos filtrados.
+ */
+function filtrarPorDisponibilidad(candidatos, soloActivos = true) {
+  if (!Array.isArray(candidatos)) return [];
+  if (!soloActivos) return candidatos;
+  return candidatos.filter((c) => c.estado === 'ACTIVO');
+}
+
+/**
+ * Ordena candidatos por puntuación descendente.
+ * @param {Array} candidatos
+ * @returns {Array}
+ */
+function ordenarPorPuntuacion(candidatos) {
+  if (!Array.isArray(candidatos)) return [];
+  return [...candidatos].sort((a, b) => (b.puntuacion || 0) - (a.puntuacion || 0));
+}
+
 /**
  * Filtra elementos por habilidades de forma eficiente usando Set para búsquedas O(1).
- * Al filtrar en memoria con estructuras optimizadas se evitan escaneos innecesarios
- * de DynamoDB (Scan sobre toda la tabla) cuando ya se dispone de los ítems.
- *
- * @param {Array} items - Lista de elementos a filtrar
- * @param {Array} habilidades - Habilidades requeridas
- * @param {Object} [opciones] - Opciones de filtrado
- * @param {string} [opciones.coincidencia='alguna'] - 'alguna' (al menos una) o 'todas' (todas las habilidades)
- * @param {string} [opciones.campoHabilidades='habilidades'] - Campo que contiene las habilidades en cada ítem
- * @returns {Array} Elementos filtrados
+ * @param {Array} items - Lista de elementos a filtrar.
+ * @param {Array} habilidades - Habilidades requeridas.
+ * @param {Object} [opciones] - Opciones de filtrado.
+ * @param {string} [opciones.coincidencia='alguna'] - 'alguna' o 'todas'.
+ * @param {string} [opciones.campoHabilidades='habilidades'] - Campo que contiene las habilidades.
+ * @returns {Array} Elementos filtrados.
  */
 function filtrarPorHabilidades(items, habilidades, opciones = {}) {
   const { coincidencia = 'alguna', campoHabilidades = 'habilidades' } = opciones;
@@ -38,13 +85,10 @@ function filtrarPorHabilidades(items, habilidades, opciones = {}) {
 
 /**
  * Construye la expresión de filtro para DynamoDB Query/Scan basada en habilidades.
- * Permite que los repositorios usen operaciones dirigidas (Query con GSI o FilterExpression
- * acotado) en lugar de un Scan completo de la tabla.
- *
- * @param {Array} habilidades - Habilidades para filtrar
- * @param {Object} [opciones] - Opciones
- * @param {string} [opciones.campoHabilidades='habilidades'] - Nombre del atributo en DynamoDB
- * @param {string} [opciones.coincidencia='alguna'] - 'alguna' (OR) o 'todas' (AND)
+ * @param {Array} habilidades - Habilidades para filtrar.
+ * @param {Object} [opciones] - Opciones.
+ * @param {string} [opciones.campoHabilidades='habilidades'] - Nombre del atributo en DynamoDB.
+ * @param {string} [opciones.coincidencia='alguna'] - 'alguna' (OR) o 'todas' (AND).
  * @returns {Object} { FilterExpression?, ExpressionAttributeNames?, ExpressionAttributeValues? }
  */
 function construirFiltroDynamoDB(habilidades, opciones = {}) {
@@ -76,6 +120,12 @@ function construirFiltroDynamoDB(habilidades, opciones = {}) {
 }
 
 module.exports = {
+  calcularPuntuacion,
+  cumpleNivelMinimo,
+  filtrarPorDisponibilidad,
+  ordenarPorPuntuacion,
   filtrarPorHabilidades,
   construirFiltroDynamoDB,
+  NIVELES_VALIDOS,
+  NIVELES_VALOR,
 };

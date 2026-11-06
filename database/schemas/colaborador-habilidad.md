@@ -25,13 +25,13 @@ Matriz N:M de colaboradores y habilidades. Relaciona los colaboradores con sus h
   - Ordenación: `habilidadId`
 - **GSI1:**
   - Partición: `habilidadId`
-  - Ordenación: `nivel#colaboradorId`
+  - Ordenación: `nivelColaboradorKey` — atributo físico sencillo que guarda el valor compuesto (por ejemplo `nivel#colaboradorId`). Permite buscar colaboradores por habilidad y nivel.
 
 ## Patrones de consulta
 
 1. `GET /colaboradores/{colaboradorId}/habilidades` → Query por clave primaria con `colaboradorId = :id`.
 2. `GET /habilidades/{habilidadId}/colaboradores?nivel=SENIOR` → Query GSI1 con `habilidadId = :id` y filtro sobre `nivel`.
-3. `GET /buscar-colaboradores?habilidadId=X&nivelMinimo=MID` → Query GSI1 con `habilidadId = :id`, ordenación `nivel#colaboradorId` comienza con el nivel requerido.
+3. `GET /buscar-colaboradores?habilidadId=X&nivelMinimo=MID` → Query GSI1 con `habilidadId = :id`, ordenación `nivelColaboradorKey` comienza con el nivel requerido.
 
 ## Reglas de negocio
 
