@@ -3,7 +3,7 @@
 Catálogo de habilidades técnicas. Contiene las tecnologías, herramientas y competencias que pueden asociarse a los colaboradores y a los proyectos.
 
 ## Nombre de tabla
-`im_habilidades`
+`internal-marketplace-habilidades-dev`
 
 ## Campos
 

@@ -56,7 +56,9 @@ Tests de integración (backend/tests/integration/): local.integration.test.js (s
 
 ### 2.4 Base de Datos (database/)
 
-Archivos: database/README.md y database/schemas/ (data-model.md, usuarios.md, colaboradores.md, cargos.md, habilidades.md, colaborador-habilidad.md, proyectos.md, proyecto-habilidad.md, postulaciones.md, asignaciones.md). Todos en Markdown definiendo campos, claves compuestas y GSIs bajo convención `im_*`.
+Archivos: database/README.md y database/schemas/ (data-model.md, usuarios.md, colaboradores.md, cargos.md, habilidades.md, colaborador-habilidad.md, proyectos.md, proyecto-habilidad.md, postulaciones.md, asignaciones.md). Todos en Markdown definiendo campos, claves compuestas y GSIs bajo convención `internal-marketplace-<entidad>-<entorno>`.
+
+> Nota histórica: originalmente las tablas usaban la convención `im_*` (ej. `im_usuarios`, `im_colaboradores`). Fue unificada a `internal-marketplace-*-<entorno>` en el commit `fix/unificar-nombres-dynamodb` para alinearse con los nombres definidos en `infrastructure/template.yaml`.
 
 ### 2.5 Infraestructura (infrastructure/)
 
@@ -339,7 +341,7 @@ Nombres de tabla, campos, claves primarias, GSIs, atributos de clave compuesta (
 
 #### Backend — Variables de Entorno
 - `backend/.env.example` — Plantilla con nombres de ejemplo `internal-marketplace-*-dev` (según especificación del documento)
-- `backend/src/config/environment.js` — Defaults actualizados a `im_*` (nombres reales de tablas creadas en AWS)
+- `backend/src/config/environment.js` — Defaults actualizados a `internal-marketplace-*-dev` (nombres de tablas para desarrollo; producción usa `-prod` vía variables de entorno)
 
 #### Pruebas (Tests)
 - `backend/tests/dynamodb-connection.test.js` — Prueba de unidad: inicialización del cliente, región, exportación de módulo

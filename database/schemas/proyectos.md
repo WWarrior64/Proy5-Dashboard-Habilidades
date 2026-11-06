@@ -3,7 +3,7 @@
 Gestión de proyectos internos. Almacena los requerimientos de los proyectos que necesitan personal técnico.
 
 ## Nombre de tabla
-`im_proyectos`
+`internal-marketplace-proyectos-dev`
 
 ## Campos
 

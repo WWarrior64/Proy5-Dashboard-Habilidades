@@ -1,6 +1,6 @@
 jest.mock('../src/config/dynamodb', () => require('./helpers/dynamodb.mock').crearMockDynamoDb());
 jest.mock('../src/config/environment', () => ({
-  tableCargos: 'im_cargos', tableColaboradores: 'im_colaboradores',
+  tableCargos: 'internal-marketplace-cargos-dev', tableColaboradores: 'internal-marketplace-colaboradores-dev',
 }));
 const { commandMocks } = require('../src/config/dynamodb');
 const repo = require('../src/repositories/cargos.repository');
@@ -18,7 +18,7 @@ test('crear y obtener usan cargoId sin claves sintéticas', async () => {
   }));
   commandMocks.GetCommand.mockResolvedValue({ Item: item });
   await expect(repo.obtenerPorId('c1')).resolves.toEqual(item);
-  expect(commandMocks.GetCommand).toHaveBeenCalledWith({ TableName: 'im_cargos', Key: { cargoId: 'c1' } });
+  expect(commandMocks.GetCommand).toHaveBeenCalledWith({ TableName: 'internal-marketplace-cargos-dev', Key: { cargoId: 'c1' } });
 });
 
 test('listar sin estado usa Scan y conserva paginación', async () => {
@@ -26,7 +26,7 @@ test('listar sin estado usa Scan y conserva paginación', async () => {
   await expect(repo.listar({ limit: 2, lastKey: { cargoId: 'c1' } }))
     .resolves.toEqual({ items: [], lastKey: { cargoId: 'c2' } });
   expect(commandMocks.ScanCommand).toHaveBeenCalledWith({
-    TableName: 'im_cargos', Limit: 2, ExclusiveStartKey: { cargoId: 'c1' },
+    TableName: 'internal-marketplace-cargos-dev', Limit: 2, ExclusiveStartKey: { cargoId: 'c1' },
   });
   expect(commandMocks.QueryCommand).not.toHaveBeenCalled();
 });

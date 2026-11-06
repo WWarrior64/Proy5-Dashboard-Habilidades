@@ -11,7 +11,7 @@ jest.mock('../src/services/cache.service.js', () => ({
 }));
 
 jest.mock('../src/config/environment.js', () => ({
-  tableAsignaciones: 'im_asignaciones', tableColaboradores: 'im_colaboradores', tableProyectos: 'im_proyectos',
+  tableAsignaciones: 'internal-marketplace-asignaciones-dev', tableColaboradores: 'internal-marketplace-colaboradores-dev', tableProyectos: 'internal-marketplace-proyectos-dev',
 }));
 
 const { dynamoDb, commandMocks } = require('../src/config/dynamodb.js');
@@ -33,8 +33,8 @@ beforeEach(() => {
   cache.obtener.mockReturnValue(undefined);
   Object.values(commandMocks).forEach((mock) => mock.mockReset());
   commandMocks.GetCommand.mockImplementation(async (input) => {
-    if (input.TableName === 'im_proyectos') return { Item: PROYECTO };
-    if (input.TableName === 'im_colaboradores') return { Item: COLABORADOR };
+    if (input.TableName === 'internal-marketplace-proyectos-dev') return { Item: PROYECTO };
+    if (input.TableName === 'internal-marketplace-colaboradores-dev') return { Item: COLABORADOR };
     return {};
   });
   commandMocks.QueryCommand.mockResolvedValue({ Items: [] });
@@ -67,23 +67,23 @@ describe('Repositorio: asignaciones', () => {
     });
 
     expect(commandMocks.GetCommand).toHaveBeenNthCalledWith(1, {
-      TableName: 'im_colaboradores',
+      TableName: 'internal-marketplace-colaboradores-dev',
       Key: { colaboradorId: 'c1' },
     });
     expect(commandMocks.GetCommand).toHaveBeenNthCalledWith(2, {
-      TableName: 'im_proyectos',
+      TableName: 'internal-marketplace-proyectos-dev',
       Key: { proyectoId: 'p1' },
     });
     expect(commandMocks.QueryCommand).toHaveBeenCalledWith(
       expect.objectContaining({
-        TableName: 'im_asignaciones',
+        TableName: 'internal-marketplace-asignaciones-dev',
         IndexName: 'GSI1',
         KeyConditionExpression: expect.stringContaining('begins_with'),
       })
     );
     expect(commandMocks.TransactWriteCommand).toHaveBeenCalledWith({ TransactItems: expect.arrayContaining([
-      { Put: expect.objectContaining({ TableName: 'im_asignaciones', Item: expect.objectContaining({ porcentajeDedicacion: 40, estado: 'ACTIVA' }), ConditionExpression: 'attribute_not_exists(asignacionId)' }) },
-      { Update: expect.objectContaining({ TableName: 'im_colaboradores', ExpressionAttributeValues: expect.objectContaining({ ':delta': 40, ':max': 60 }) }) },
+      { Put: expect.objectContaining({ TableName: 'internal-marketplace-asignaciones-dev', Item: expect.objectContaining({ porcentajeDedicacion: 40, estado: 'ACTIVA' }), ConditionExpression: 'attribute_not_exists(asignacionId)' }) },
+      { Update: expect.objectContaining({ TableName: 'internal-marketplace-colaboradores-dev', ExpressionAttributeValues: expect.objectContaining({ ':delta': 40, ':max': 60 }) }) },
     ]) });
     expect(asignacion.asignacionId).toBeDefined();
     expect(cache.eliminar).toHaveBeenCalledWith(expect.stringMatching(/^asignacion:/));
@@ -127,7 +127,7 @@ describe('Repositorio: asignaciones', () => {
     const resultado = await repo.listarAsignacionesActivas();
     expect(commandMocks.QueryCommand).toHaveBeenCalledWith(
       expect.objectContaining({
-        TableName: 'im_asignaciones',
+        TableName: 'internal-marketplace-asignaciones-dev',
         IndexName: 'GSI3',
         KeyConditionExpression: '#est = :est',
         ExpressionAttributeValues: { ':est': 'ACTIVA' },
@@ -201,8 +201,8 @@ describe('Repositorio: asignaciones', () => {
 
     const resultado = await repo.desvincularAsignacion('a1');
     expect(commandMocks.TransactWriteCommand).toHaveBeenCalledWith({ TransactItems: expect.arrayContaining([
-      { Update: expect.objectContaining({ TableName: 'im_asignaciones', Key: { asignacionId: 'a1' }, ExpressionAttributeValues: expect.objectContaining({ ':estado': 'DESVINCULADA' }) }) },
-      { Update: expect.objectContaining({ TableName: 'im_colaboradores', ExpressionAttributeValues: expect.objectContaining({ ':delta': -30 }) }) },
+      { Update: expect.objectContaining({ TableName: 'internal-marketplace-asignaciones-dev', Key: { asignacionId: 'a1' }, ExpressionAttributeValues: expect.objectContaining({ ':estado': 'DESVINCULADA' }) }) },
+      { Update: expect.objectContaining({ TableName: 'internal-marketplace-colaboradores-dev', ExpressionAttributeValues: expect.objectContaining({ ':delta': -30 }) }) },
     ]) });
     expect(resultado.estado).toBe('DESVINCULADA');
     expect(commandMocks.DeleteCommand).not.toHaveBeenCalled();

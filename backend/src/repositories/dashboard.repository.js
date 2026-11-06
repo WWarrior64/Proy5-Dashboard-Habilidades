@@ -56,7 +56,7 @@ async function contarAsignacionesActivas() {
 async function obtenerDistribucionHabilidades() {
   // Distribución de habilidades requeridas por proyecto. Se lee el catálogo
   // de habilidades (tabla de dimensión pequeña) y se cuenta, por habilidad,
-  // las relaciones de im_proyecto_habilidad mediante su GSI1 (habilidadId).
+  // las relaciones de proyecto-habilidad mediante su GSI1 (habilidadId).
   // No se ejecuta un Scan sobre las tablas de hechos del sistema.
   const catalogo = await dynamoDb.send(
     new ScanCommand({
@@ -90,7 +90,7 @@ async function obtenerDistribucionHabilidades() {
 }
 
 async function obtenerPostulacionesPorEstado() {
-  // im_postulaciones no tiene GSI sobre estado, por lo que esta métrica se
+  // la tabla de postulaciones no tiene GSI sobre estado, por lo que esta métrica se
   // obtiene con una operación puntual (filtrada) sobre esa tabla; no se
   // escanean las demás tablas del sistema.
   const resultado = await dynamoDb.send(new ScanCommand({

@@ -60,7 +60,7 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 
 ### 2.2 Modulo 01: Usuarios
 - **Funcion Lambda:** `UsuariosFunction` (`src/functions/usuarios/handler.js`)
-- **Tabla DynamoDB:** `im_usuarios` (PK: `usuarioId`, GSI1: `cognitoSub`, GSI2: `correo`)
+- **Tabla DynamoDB:** `internal-marketplace-usuarios-dev` (PK: `usuarioId`, GSI1: `cognitoSub`, GSI2: `correo`)
 
 - **GET /api/v1/usuarios/yo**
   - Descripcion: Consultar perfil del usuario autenticado (resuelto via cognitoSub).
@@ -88,7 +88,7 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 
 ### 2.3 Modulo 02: Colaboradores
 - **Funcion Lambda:** `ColaboradoresFunction` (`src/functions/colaboradores/handler.js`)
-- **Tablas DynamoDB:** `im_colaboradores`, `im_usuarios`, `im_cargos`, `im_colaborador_habilidad`
+- **Tablas DynamoDB:** `internal-marketplace-colaboradores-dev`, `internal-marketplace-usuarios-dev`, `internal-marketplace-cargos-dev`, `internal-marketplace-colaborador-habilidad-dev`
 
 - **GET /api/v1/colaboradores**
   - Descripcion: Listar plantilla con filtros (estado, cargo, rol).
@@ -113,7 +113,7 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 
 ### 2.4 Modulo 03: Cargos
 - **Funcion Lambda:** `CargosFunction` (`src/functions/cargos/handler.js`)
-- **Tabla DynamoDB:** `im_cargos` (PK: `cargoId`, GSI1: `estado`, `nombre`)
+- **Tabla DynamoDB:** `internal-marketplace-cargos-dev` (PK: `cargoId`, GSI1: `estado`, `nombre`)
 
 - **GET /api/v1/cargos**
   - Descripcion: Listar cargos activos e inactivos.
@@ -130,7 +130,7 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 
 ### 2.5 Modulo 04: Habilidades
 - **Funcion Lambda:** `HabilidadesFunction` (`src/functions/habilidades/handler.js`)
-- **Tabla DynamoDB:** `im_habilidades` (PK: `habilidadId`, GSI1: `categoria`, `nombreNormalizado`)
+- **Tabla DynamoDB:** `internal-marketplace-habilidades-dev` (PK: `habilidadId`, GSI1: `categoria`, `nombreNormalizado`)
 
 - **GET /api/v1/habilidades**
   - Descripcion: Listar catalogo de habilidades con filtros por categoria.
@@ -149,7 +149,7 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 
 ### 2.6 Modulo 05: Proyectos
 - **Funcion Lambda:** `ProyectosFunction` (`src/functions/proyectos/handler.js`)
-- **Tablas DynamoDB:** `im_proyectos`, `im_proyecto_habilidad`, `im_usuarios`, `im_colaboradores`
+- **Tablas DynamoDB:** `internal-marketplace-proyectos-dev`, `internal-marketplace-proyecto-habilidad-dev`, `internal-marketplace-usuarios-dev`, `internal-marketplace-colaboradores-dev`
 
 - **GET /api/v1/proyectos**
   - Descripcion: Listar proyectos por estado o lider.
@@ -174,7 +174,7 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 
 ### 2.7 Modulo 06: Postulaciones
 - **Funcion Lambda:** `PostulacionesFunction` (`src/functions/postulaciones/handler.js`)
-- **Tablas DynamoDB:** `im_postulaciones` (PK: `proyectoId`, SK: `POSTULACION#colaboradorId`), `im_proyectos`, `im_asignaciones`
+- **Tablas DynamoDB:** `internal-marketplace-postulaciones-dev` (PK: `proyectoId`, SK: `POSTULACION#colaboradorId`), `internal-marketplace-proyectos-dev`, `internal-marketplace-asignaciones-dev`
 
 - **POST /api/v1/postulaciones**
   - Descripcion: Registrar postulacion de colaborador a proyecto activo.
@@ -191,7 +191,7 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 
 ### 2.8 Modulo 07: Asignaciones
 - **Funcion Lambda:** `AsignacionesFunction` (`src/functions/asignaciones/handler.js`)
-- **Tablas DynamoDB:** `im_asignaciones` (PK: `asignacionId`, GSIs por colaborador, proyecto y estado)
+- **Tablas DynamoDB:** `internal-marketplace-asignaciones-dev` (PK: `asignacionId`, GSIs por colaborador, proyecto y estado)
 
 - **GET /api/v1/asignaciones**
   - Descripcion: Listado general de asignaciones para control y auditoria.
@@ -210,7 +210,7 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 
 ### 2.9 Modulo 08: Busqueda y Algoritmo de Coincidencia
 - **Funcion Lambda:** `BusquedaFunction` (`src/functions/busqueda/handler.js`)
-- **Tablas DynamoDB:** `im_colaborador_habilidad`, `im_habilidades`, `im_colaboradores`, `im_cargos`
+- **Tablas DynamoDB:** `internal-marketplace-colaborador-habilidad-dev`, `internal-marketplace-habilidades-dev`, `internal-marketplace-colaboradores-dev`, `internal-marketplace-cargos-dev`
 
 - **GET /api/v1/busqueda/colaboradores?habilidadId={id}&nivel={nivel}**
   - Descripcion: Algoritmo de coincidencia de candidatos segun matriz de habilidades y disponibilidad.

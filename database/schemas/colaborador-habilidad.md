@@ -3,7 +3,7 @@
 Matriz N:M de colaboradores y habilidades. Relaciona los colaboradores con sus habilidades y registra el nivel de dominio de cada una.
 
 ## Nombre de tabla
-`im_colaborador_habilidad`
+`internal-marketplace-colaborador-habilidad-dev`
 
 ## Campos
 

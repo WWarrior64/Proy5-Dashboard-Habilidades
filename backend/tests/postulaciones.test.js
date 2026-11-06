@@ -8,8 +8,8 @@ jest.mock('../src/services/cache.service.js', () => ({
 }));
 
 jest.mock('../src/config/environment.js', () => ({
-  tablePostulaciones: 'im_postulaciones', tableProyectos: 'im_proyectos',
-  tableColaboradores: 'im_colaboradores', tableAsignaciones: 'im_asignaciones',
+  tablePostulaciones: 'internal-marketplace-postulaciones-dev', tableProyectos: 'internal-marketplace-proyectos-dev',
+  tableColaboradores: 'internal-marketplace-colaboradores-dev', tableAsignaciones: 'internal-marketplace-asignaciones-dev',
 }));
 
 const { dynamoDb, commandMocks } = require('../src/config/dynamodb.js');
@@ -33,8 +33,8 @@ beforeEach(() => {
   cache.obtener.mockReset(); cache.guardar.mockReset(); cache.eliminar.mockReset(); cache.eliminarPorPrefijo.mockReset();
   cache.obtener.mockReturnValue(undefined);
   commandMocks.GetCommand.mockImplementation(async (params) => {
-    if (params.TableName === 'im_proyectos') return { Item: PROYECTO };
-    if (params.TableName === 'im_colaboradores') return { Item: COLABORADOR };
+    if (params.TableName === 'internal-marketplace-proyectos-dev') return { Item: PROYECTO };
+    if (params.TableName === 'internal-marketplace-colaboradores-dev') return { Item: COLABORADOR };
     return {};
   });
   commandMocks.PutCommand.mockResolvedValue({});
@@ -52,7 +52,7 @@ describe('Repositorio: postulaciones', () => {
     const [command] = dynamoDb.send.mock.calls[0];
     expect(command).toBeInstanceOf(QueryCommand);
     expect(command.input).toEqual({
-      TableName: 'im_postulaciones',
+      TableName: 'internal-marketplace-postulaciones-dev',
       KeyConditionExpression: '#p = :p',
       ExpressionAttributeNames: { '#p': 'proyectoId' },
       ExpressionAttributeValues: { ':p': 'p1' },
@@ -74,10 +74,10 @@ describe('Repositorio: postulaciones', () => {
   });
   test('crearPostulacion registra la postulaci�n de un colaborador a un proyecto activo', async () => {
     const item = await repo.crearPostulacion({ proyectoId: 'p1', colaboradorId: 'c1', comentario: 'Interesado' });
-    expect(commandMocks.GetCommand).toHaveBeenNthCalledWith(1, { TableName: 'im_colaboradores', Key: { colaboradorId: 'c1' } });
-    expect(commandMocks.GetCommand).toHaveBeenNthCalledWith(2, { TableName: 'im_proyectos', Key: { proyectoId: 'p1' } });
+    expect(commandMocks.GetCommand).toHaveBeenNthCalledWith(1, { TableName: 'internal-marketplace-colaboradores-dev', Key: { colaboradorId: 'c1' } });
+    expect(commandMocks.GetCommand).toHaveBeenNthCalledWith(2, { TableName: 'internal-marketplace-proyectos-dev', Key: { proyectoId: 'p1' } });
     expect(commandMocks.PutCommand).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'im_postulaciones',
+      TableName: 'internal-marketplace-postulaciones-dev',
       Item: expect.objectContaining({ estado: 'PENDIENTE', proyectoId: 'p1', colaboradorId: 'c1', postulacionKey: 'POSTULACION#c1' }),
       ConditionExpression: 'attribute_not_exists(postulacionKey)',
     }));
@@ -86,15 +86,15 @@ describe('Repositorio: postulaciones', () => {
   });
 
   test('crearPostulacion rechaza colaborador inexistente o inactivo', async () => {
-    commandMocks.GetCommand.mockImplementation(async (params) => (params.TableName === 'im_proyectos' ? { Item: PROYECTO } : {}));
+    commandMocks.GetCommand.mockImplementation(async (params) => (params.TableName === 'internal-marketplace-proyectos-dev' ? { Item: PROYECTO } : {}));
     await expect(repo.crearPostulacion({ proyectoId: 'p1', colaboradorId: 'c1' })).rejects.toMatchObject({ codigo: 404 });
-    commandMocks.GetCommand.mockImplementation(async (params) => (params.TableName === 'im_proyectos' ? { Item: PROYECTO } : { Item: { colaboradorId: 'c1', estado: 'INACTIVO' } }));
+    commandMocks.GetCommand.mockImplementation(async (params) => (params.TableName === 'internal-marketplace-proyectos-dev' ? { Item: PROYECTO } : { Item: { colaboradorId: 'c1', estado: 'INACTIVO' } }));
     await expect(repo.crearPostulacion({ proyectoId: 'p1', colaboradorId: 'c1' })).rejects.toMatchObject({ codigo: 400 });
     expect(commandMocks.PutCommand).not.toHaveBeenCalled();
   });
 
   test('crearPostulacion rechaza proyecto inexistente o no activo', async () => {
-    commandMocks.GetCommand.mockImplementation(async (params) => (params.TableName === 'im_colaboradores' ? { Item: COLABORADOR } : { Item: { proyectoId: 'p1', estado: 'CANCELADO' } }));
+    commandMocks.GetCommand.mockImplementation(async (params) => (params.TableName === 'internal-marketplace-colaboradores-dev' ? { Item: COLABORADOR } : { Item: { proyectoId: 'p1', estado: 'CANCELADO' } }));
     await expect(repo.crearPostulacion({ proyectoId: 'p1', colaboradorId: 'c1' })).rejects.toMatchObject({ codigo: 400 });
   });
 
@@ -103,7 +103,7 @@ describe('Repositorio: postulaciones', () => {
     commandMocks.QueryCommand.mockResolvedValueOnce({ Items: items });
     const resultado = await repo.consultarPostulacionesProyecto('p1');
     expect(commandMocks.QueryCommand).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'im_postulaciones', KeyConditionExpression: '#p = :p', ExpressionAttributeValues: { ':p': 'p1' },
+      TableName: 'internal-marketplace-postulaciones-dev', KeyConditionExpression: '#p = :p', ExpressionAttributeValues: { ':p': 'p1' },
     }));
     expect(resultado).toEqual(items);
   });
@@ -112,7 +112,7 @@ describe('Repositorio: postulaciones', () => {
     commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [POSTULACION] });
     const resultado = await repo.consultarPostulacionesColaborador('c1');
     expect(commandMocks.QueryCommand).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'im_postulaciones', IndexName: 'GSI1', ExpressionAttributeValues: { ':c': 'c1' },
+      TableName: 'internal-marketplace-postulaciones-dev', IndexName: 'GSI1', ExpressionAttributeValues: { ':c': 'c1' },
     }));
     expect(resultado).toEqual([POSTULACION]);
   });
@@ -121,7 +121,7 @@ describe('Repositorio: postulaciones', () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: POSTULACION });
     const resultado = await repo.obtenerPostulacion('p1', 'c1');
     expect(commandMocks.GetCommand).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'im_postulaciones', Key: { proyectoId: 'p1', postulacionKey: 'POSTULACION#c1' },
+      TableName: 'internal-marketplace-postulaciones-dev', Key: { proyectoId: 'p1', postulacionKey: 'POSTULACION#c1' },
     }));
     expect(resultado).toEqual(POSTULACION);
     commandMocks.GetCommand.mockResolvedValueOnce({});
@@ -156,7 +156,7 @@ describe('Repositorio: postulaciones', () => {
     
     expect(commandMocks.UpdateCommand).toHaveBeenCalledWith(
       expect.objectContaining({
-        TableName: 'im_postulaciones',
+        TableName: 'internal-marketplace-postulaciones-dev',
         Key: { proyectoId: 'p1', postulacionKey: 'POSTULACION#c1' }
       })
     );

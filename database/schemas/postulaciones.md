@@ -3,7 +3,7 @@
 Solicitudes de participación. Registra las solicitudes de los colaboradores que desean participar en proyectos internos.
 
 ## Nombre de tabla
-`im_postulaciones`
+`internal-marketplace-postulaciones-dev`
 
 ## Campos
 

@@ -3,7 +3,7 @@
 Vinculación de colaboradores con proyectos. Almacena las asignaciones confirmadas de colaboradores a proyectos, incluyendo porcentaje de dedicación y horas comprometidas.
 
 ## Nombre de tabla
-`im_asignaciones`
+`internal-marketplace-asignaciones-dev`
 
 ## Campos
 

@@ -3,7 +3,7 @@
 Gestión de talento humano. Almacena los perfiles profesionales de los empleados y desarrolladores registrados.
 
 ## Nombre de tabla
-`im_colaboradores`
+`internal-marketplace-colaboradores-dev`
 
 ## Campos
 
