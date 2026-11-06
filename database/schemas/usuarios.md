@@ -3,7 +3,7 @@
 Autenticación y permisos. Almacena las cuentas de acceso al sistema. La autenticación y las contraseñas serán gestionadas por Amazon Cognito; DynamoDB almacenará la información interna del usuario y sus permisos.
 
 ## Nombre de tabla
-`im_usuarios`
+`internal-marketplace-usuarios-dev`
 
 ## Campos
 

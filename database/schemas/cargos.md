@@ -3,7 +3,7 @@
 Administración de cargos profesionales. Contiene el catálogo de cargos que RR. HH. podrá crear, modificar, consultar, activar y desactivar.
 
 ## Nombre de tabla
-`im_cargos`
+`internal-marketplace-cargos-dev`
 
 ## Campos
 

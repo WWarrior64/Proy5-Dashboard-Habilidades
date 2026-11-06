@@ -76,15 +76,15 @@ La persistencia se implementa sobre 9 tablas diseñadas bajo el modelo NoSQL de 
 
 | Nombre Lógico SAM | Nombre Físico de Tabla | Partition Key (PK) | Sort Key (SK) | Índices Secundarios (GSIs) |
 | :--- | :--- | :--- | :--- | :--- |
-| `UsuariosTable` | `im_usuarios` | `usuarioId` (S) | *Ninguno* | GSI1 (`cognitoSub`), GSI2 (`correo`) |
-| `ColaboradoresTable` | `im_colaboradores` | `colaboradorId` (S) | *Ninguno* | GSI1 (`usuarioId`), GSI2 (`estado`, `rolProfesional#nombre`) |
-| `CargosTable` | `im_cargos` | `cargoId` (S) | *Ninguno* | GSI1 (`estado`, `nombre`) |
-| `HabilidadesTable` | `im_habilidades` | `habilidadId` (S) | *Ninguno* | GSI1 (`categoria`, `nombreNormalizado`) |
-| `ColaboradorHabilidadTable` | `im_colaborador_habilidad` | `colaboradorId` (S) | `habilidadId` (S) | GSI1 (`habilidadId`, `nivel#colaboradorId`) |
-| `ProyectosTable` | `im_proyectos` | `proyectoId` (S) | *Ninguno* | GSI1 (`estado`, `fechaPublicacion#proyectoId`), GSI2 (`liderId`, `estado#fechaCreacion`) |
-| `ProyectoHabilidadTable` | `im_proyecto_habilidad` | `proyectoId` (S) | `habilidadId` (S) | GSI1 (`habilidadId`, `proyectoId`) |
-| `PostulacionesTable` | `im_postulaciones` | `proyectoId` (S) | `POSTULACION#colaboradorId` (S) | GSI1 (`colaboradorId`, `fechaPostulacion#proyectoId`) |
-| `AsignacionesTable` | `im_asignaciones` | `asignacionId` (S) | *Ninguno* | GSI1 (`colaboradorId`, `estado#fechaAsignacion`), GSI2 (`proyectoId`, `estado#fechaAsignacion`), GSI3 (`estado`, `fechaAsignacion#asignacionId`) |
+| `UsuariosTable` | `internal-marketplace-usuarios-dev` | `usuarioId` (S) | *Ninguno* | GSI1 (`cognitoSub`), GSI2 (`correo`) |
+| `ColaboradoresTable` | `internal-marketplace-colaboradores-dev` | `colaboradorId` (S) | *Ninguno* | GSI1 (`usuarioId`), GSI2 (`estado`, `rolProfesional#nombre`) |
+| `CargosTable` | `internal-marketplace-cargos-dev` | `cargoId` (S) | *Ninguno* | GSI1 (`estado`, `nombre`) |
+| `HabilidadesTable` | `internal-marketplace-habilidades-dev` | `habilidadId` (S) | *Ninguno* | GSI1 (`categoria`, `nombreNormalizado`) |
+| `ColaboradorHabilidadTable` | `internal-marketplace-colaborador-habilidad-dev` | `colaboradorId` (S) | `habilidadId` (S) | GSI1 (`habilidadId`, `nivel#colaboradorId`) |
+| `ProyectosTable` | `internal-marketplace-proyectos-dev` | `proyectoId` (S) | *Ninguno* | GSI1 (`estado`, `fechaPublicacion#proyectoId`), GSI2 (`liderId`, `estado#fechaCreacion`) |
+| `ProyectoHabilidadTable` | `internal-marketplace-proyecto-habilidad-dev` | `proyectoId` (S) | `habilidadId` (S) | GSI1 (`habilidadId`, `proyectoId`) |
+| `PostulacionesTable` | `internal-marketplace-postulaciones-dev` | `proyectoId` (S) | `POSTULACION#colaboradorId` (S) | GSI1 (`colaboradorId`, `fechaPostulacion#proyectoId`) |
+| `AsignacionesTable` | `internal-marketplace-asignaciones-dev` | `asignacionId` (S) | *Ninguno* | GSI1 (`colaboradorId`, `estado#fechaAsignacion`), GSI2 (`proyectoId`, `estado#fechaAsignacion`), GSI3 (`estado`, `fechaAsignacion#asignacionId`) |
 
 ### Transacciones Atómicas (TransactWriteItems)
 Para procesos de negocio críticos (como la aceptación de una postulación que crea una asignación e incrementa el porcentaje de dedicación activa del colaborador), se emplea `TransactWriteItems`. Esto evita condiciones de carrera y asegura consistencia estricta en operaciones compuestas.

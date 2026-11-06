@@ -3,7 +3,7 @@
 Matriz N:M de proyectos y habilidades. Relaciona los proyectos con las habilidades técnicas que necesitan para su ejecución.
 
 ## Nombre de tabla
-`im_proyecto_habilidad`
+`internal-marketplace-proyecto-habilidad-dev`
 
 ## Campos
 

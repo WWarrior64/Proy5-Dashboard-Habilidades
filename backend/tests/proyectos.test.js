@@ -11,8 +11,8 @@ jest.mock('../src/services/cache.service.js', () => ({
 }));
 
 jest.mock('../src/config/environment.js', () => ({
-  tableProyectos: 'im_proyectos',
-  tableUsuarios: 'im_usuarios',
+  tableProyectos: 'internal-marketplace-proyectos-dev',
+  tableUsuarios: 'internal-marketplace-usuarios-dev',
 }));
 
 const { dynamoDb, commandMocks } = require('../src/config/dynamodb.js');
@@ -53,12 +53,12 @@ describe('Repositorio: proyectos', () => {
     });
 
     expect(commandMocks.GetCommand).toHaveBeenCalledWith({
-      TableName: 'im_usuarios',
+      TableName: 'internal-marketplace-usuarios-dev',
       Key: { usuarioId: 'u-lider' },
     });
     expect(commandMocks.PutCommand).toHaveBeenCalledWith(
       expect.objectContaining({
-        TableName: 'im_proyectos',
+        TableName: 'internal-marketplace-proyectos-dev',
         Item: expect.objectContaining({
           nombre: 'Sistema de tesis',
           liderId: 'u-lider',
@@ -97,7 +97,7 @@ describe('Repositorio: proyectos', () => {
     const item = { proyectoId: 'p1', nombre: 'Proy', estado: 'ACTIVO' };
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: item });
     const resultado = await repo.obtenerProyecto('p1');
-    expect(commandMocks.GetCommand).toHaveBeenCalledWith({ TableName: 'im_proyectos', Key: { proyectoId: 'p1' } });
+    expect(commandMocks.GetCommand).toHaveBeenCalledWith({ TableName: 'internal-marketplace-proyectos-dev', Key: { proyectoId: 'p1' } });
     expect(resultado).toEqual(item);
     expect(cache.guardar).toHaveBeenCalledWith('proyecto:p1', item, 60000);
   });
@@ -121,7 +121,7 @@ describe('Repositorio: proyectos', () => {
     const resultado = await repo.listarProyectos({ estado: 'ACTIVO' });
     expect(commandMocks.QueryCommand).toHaveBeenCalledWith(
       expect.objectContaining({
-        TableName: 'im_proyectos',
+        TableName: 'internal-marketplace-proyectos-dev',
         IndexName: 'GSI1',
         KeyConditionExpression: '#est = :est',
         ExpressionAttributeValues: { ':est': 'ACTIVO' },
@@ -136,7 +136,7 @@ describe('Repositorio: proyectos', () => {
     await repo.listarProyectos({ liderId: 'u-lider', estado: 'ACTIVO', fecha: '2026-01-01' });
     expect(commandMocks.QueryCommand).toHaveBeenCalledWith(
       expect.objectContaining({
-        TableName: 'im_proyectos',
+        TableName: 'internal-marketplace-proyectos-dev',
         IndexName: 'GSI2',
         KeyConditionExpression: '#lid = :lid',
         ExpressionAttributeValues: { ':lid': 'u-lider', ':est': 'ACTIVO', ':fecha': '2026-01-01' },
@@ -164,7 +164,7 @@ describe('Repositorio: proyectos', () => {
     const resultado = await repo.actualizarProyecto('p1', { nombre: 'Nuevo', horasRequeridas: 200 });
     expect(commandMocks.UpdateCommand).toHaveBeenCalledWith(
       expect.objectContaining({
-        TableName: 'im_proyectos',
+        TableName: 'internal-marketplace-proyectos-dev',
         Key: { proyectoId: 'p1' },
         ConditionExpression: 'attribute_exists(proyectoId)',
         UpdateExpression: expect.stringContaining('SET'),
@@ -190,7 +190,7 @@ describe('Repositorio: proyectos', () => {
     const resultado = await repo.cambiarEstado('p1', 'CANCELADO');
     expect(commandMocks.UpdateCommand).toHaveBeenCalledWith(
       expect.objectContaining({
-        TableName: 'im_proyectos',
+        TableName: 'internal-marketplace-proyectos-dev',
         Key: { proyectoId: 'p1' },
         ExpressionAttributeValues: expect.objectContaining({ ':est': 'CANCELADO' }),
       })
@@ -211,7 +211,7 @@ describe('Repositorio: proyectos', () => {
     commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [{ proyectoId: 'p1', estado: 'ACTIVO' }] });
     const resultado = await repo.listarProyectosActivos();
     expect(commandMocks.QueryCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ TableName: 'im_proyectos', IndexName: 'GSI1', ExpressionAttributeValues: { ':est': 'ACTIVO' } })
+      expect.objectContaining({ TableName: 'internal-marketplace-proyectos-dev', IndexName: 'GSI1', ExpressionAttributeValues: { ':est': 'ACTIVO' } })
     );
     expect(resultado.length).toBe(1);
   });
