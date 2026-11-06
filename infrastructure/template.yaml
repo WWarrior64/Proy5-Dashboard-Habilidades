@@ -13,23 +13,23 @@ Parameters:
 
 Globals:
   Function:
-    Runtime: nodejs20.x
-    Timeout: 10
-    MemorySize: 128
+    Runtime: nodejs24.x
+    Timeout: 15
+    MemorySize: 256
     Architectures:
       - x86_64
     Environment:
       Variables:
         NODE_ENV: !Ref StageName
-        USUARIOS_TABLE: !Ref UsuariosTable
-        COLABORADORES_TABLE: !Ref ColaboradoresTable
-        CARGOS_TABLE: !Ref CargosTable
-        HABILIDADES_TABLE: !Ref HabilidadesTable
-        COLABORADOR_HABILIDAD_TABLE: !Ref ColaboradorHabilidadTable
-        PROYECTOS_TABLE: !Ref ProyectosTable
-        PROYECTO_HABILIDAD_TABLE: !Ref ProyectoHabilidadTable
-        POSTULACIONES_TABLE: !Ref PostulacionesTable
-        ASIGNACIONES_TABLE: !Ref AsignacionesTable
+        TABLE_USUARIOS: !Ref UsuariosTable
+        TABLE_COLABORADORES: !Ref ColaboradoresTable
+        TABLE_CARGOS: !Ref CargosTable
+        TABLE_HABILIDADES: !Ref HabilidadesTable
+        TABLE_COLABORADOR_HABILIDAD: !Ref ColaboradorHabilidadTable
+        TABLE_PROYECTOS: !Ref ProyectosTable
+        TABLE_PROYECTO_HABILIDAD: !Ref ProyectoHabilidadTable
+        TABLE_POSTULACIONES: !Ref PostulacionesTable
+        TABLE_ASIGNACIONES: !Ref AsignacionesTable
 
 Resources:
   # ============================================================================
@@ -59,7 +59,389 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/health
             Method: GET
+# ----------------------------------------------------------------------------
+  # Funciones del Desarrollador 2 (Core, Usuarios, Colaboradores, Cargos, Habilidades, Busqueda)
+  # ----------------------------------------------------------------------------
+  UsuariosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-usuarios-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/usuarios/handler.handler
+      Description: Gestion de usuarios y perfiles
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsuariosTable
+      Events:
+        UsuariosGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/usuarios
+            Method: GET
+        UsuariosPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/usuarios
+            Method: POST
+        UsuariosIdAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/usuarios/{usuarioId}
+            Method: ANY
+        UsuariosSubAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/usuarios/{usuarioId}/{subrecurso}
+            Method: ANY
 
+  ColaboradoresFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-colaboradores-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/colaboradores/handler.handler
+      Description: Gestion de colaboradores de la empresa
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ColaboradoresTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsuariosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref CargosTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ColaboradorHabilidadTable
+      Events:
+        ColaboradoresGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores
+            Method: GET
+        ColaboradoresPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores
+            Method: POST
+        ColaboradoresIdAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}
+            Method: ANY
+        ColaboradoresSubAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/{subrecurso}
+            Method: ANY
+        ColaboradoresHabilidadesAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}
+            Method: ANY
+
+  CargosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-cargos-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/cargos/handler.handler
+      Description: Catalogo de cargos
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CargosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradoresTable
+      Events:
+        CargosGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/cargos
+            Method: GET
+        CargosPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/cargos
+            Method: POST
+        CargosIdAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/cargos/{cargoId}
+            Method: ANY
+        CargosSubAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/cargos/{cargoId}/{subrecurso}
+            Method: ANY
+
+  HabilidadesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-habilidades-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/habilidades/handler.handler
+      Description: Catalogo central de habilidades
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref HabilidadesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradorHabilidadTable
+      Events:
+        HabilidadesGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/habilidades
+            Method: GET
+        HabilidadesPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/habilidades
+            Method: POST
+        HabilidadesCategorias:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/habilidades/categorias
+            Method: GET
+        HabilidadesIdAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/habilidades/{habilidadId}
+            Method: ANY
+        HabilidadesSubAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/habilidades/{habilidadId}/{subrecurso}
+            Method: ANY
+
+  BusquedaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-busqueda-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/busqueda/handler.handler
+      Description: Motor de busqueda y emparejamiento de habilidades
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradorHabilidadTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref HabilidadesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradoresTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref CargosTable
+      Events:
+        BusquedaColaboradores:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/busqueda/colaboradores
+            Method: GET
+        BusquedaProyectos:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/busqueda/proyectos
+            Method: GET
+        BusquedaHabilidades:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/busqueda/habilidades
+            Method: GET
+
+  # ----------------------------------------------------------------------------
+  # Funciones del Desarrollador 3 (Proyectos, Postulaciones, Asignaciones, Dashboard)
+  # ----------------------------------------------------------------------------
+  ProyectosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-proyectos-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/proyectos/handler.handler
+      Description: Gestion de proyectos internos
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProyectosTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProyectoHabilidadTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsuariosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradoresTable
+      Events:
+        ProyectosGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos
+            Method: GET
+        ProyectosPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos
+            Method: POST
+        ProyectosIdAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}
+            Method: ANY
+        ProyectosSubAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/{subrecurso}
+            Method: ANY
+        ProyectosHabilidadesAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/habilidades/{habilidadId}
+            Method: ANY
+
+  PostulacionesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-postulaciones-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/postulaciones/handler.handler
+      Description: Gestion de postulaciones de colaboradores
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PostulacionesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProyectosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradoresTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AsignacionesTable
+      Events:
+        PostulacionesPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/postulaciones
+            Method: POST
+        PostulacionesProyectoGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/postulaciones
+            Method: GET
+        PostulacionesColaboradorGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/postulaciones
+            Method: GET
+        PostulacionesDetalleAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}
+            Method: ANY
+        PostulacionesEstadoPatch:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/estado
+            Method: PATCH
+
+  AsignacionesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-asignaciones-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/asignaciones/handler.handler
+      Description: Gestion de asignaciones y dedicacion de colaboradores
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AsignacionesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProyectosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradoresTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref PostulacionesTable
+      Events:
+        AsignacionesGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/asignaciones
+            Method: GET
+        AsignacionesPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/asignaciones
+            Method: POST
+        AsignacionesActivasGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/asignaciones/activas
+            Method: GET
+        AsignacionesIdAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/asignaciones/{asignacionId}
+            Method: ANY
+        AsignacionesSubAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/asignaciones/{asignacionId}/{subrecurso}
+            Method: ANY
+
+  DashboardFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-dashboard-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/dashboard/handler.handler
+      Description: Consultas y metricas agregadas para el dashboard
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradoresTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProyectosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref AsignacionesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref HabilidadesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref PostulacionesTable
+      Events:
+        DashboardResumenGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/dashboard/resumen
+            Method: GET
+        DashboardMetricasGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/dashboard/{tipoMetrica}
+            Method: GET
   # ============================================================================
   # 2. LAS 9 TABLAS DYNAMODB (Contrato de Datos Integrante 4)
   # ============================================================================
