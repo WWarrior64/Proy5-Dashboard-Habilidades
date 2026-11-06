@@ -38,3 +38,6 @@ Thumbs.db
 
 # Coverage
 coverage/
+.aws-sam/
+
+samconfig.toml
