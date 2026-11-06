@@ -2,11 +2,12 @@ const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient } = require('@aws-sdk/lib-dynamodb');
 
 const client = new DynamoDBClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
+  region: process.env.AWS_REGION || 'us-east-2',
+  ...(process.env.DYNAMODB_ENDPOINT && { endpoint: process.env.DYNAMODB_ENDPOINT }),
+  // Se utiliza la cadena predeterminada de credenciales del SDK v3:
+  // - Localmente: perfil de AWS CLI (AWS_PROFILE) o IAM Identity Center.
+  // - En Lambda: credenciales temporales del rol de ejecución.
+  // No se declaran claves AWS directamente en el código.
 });
 
 const dynamoDb = DynamoDBDocumentClient.from(client, {
@@ -15,4 +16,7 @@ const dynamoDb = DynamoDBDocumentClient.from(client, {
   },
 });
 
-module.exports = { dynamoDb, client };
+module.exports = {
+  dynamoDb,
+  client,
+};

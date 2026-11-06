@@ -235,8 +235,8 @@ Rama: `feature/rendimiento-y-cache`
 
 ## Registro de Cambios — Integrante 4: Modelo de Datos y Conexión DynamoDB
 
-Rama: `feature/modelo-dynamodb`
-Objetivo: Completar el modelo de datos y preparar una conexión reutilizable a las nueve tablas DynamoDB.
+Rama: `feature/modelo-conexion`
+Objetivo: Garantizar que el backend se conecte realmente con DynamoDB y que los repositorios utilicen las nueve tablas, claves e índices de manera consistente.
 
 ### Archivos creados (database/schemas/)
 - `database/schemas/cargos.md` — Nueva entidad Cargos (tabla `im_cargos`).
@@ -248,24 +248,30 @@ Objetivo: Completar el modelo de datos y preparar una conexión reutilizable a l
 - `database/schemas/colaboradores.md` — Actualizado: cargoId en vez de cargo, sin nivelHabilidad, con rolProfesional, disponibilidad, fechaIngreso, GSI2 (estado + rolProfesional#nombre).
 - `database/schemas/habilidades.md` — Actualizado: nombreNormalizado, categoria, estado, GSI1 (categoria + nombreNormalizado).
 - `database/schemas/proyectos.md` — Actualizado: liderId, objetivo, horasRequeridas, estados BORRADOR/ACTIVO/PAUSADO/COMPLETADO/CANCELADO, fechaPublicacion, GSI1 y GSI2.
-- `database/schemas/postulaciones.md` — Actualizado: clave compuesta (proyectoId + POSTULACION#colaboradorId), GSI1 (colaboradorId + fechaPostulacion#proyectoId).
-- `database/schemas/asignaciones.md` — Actualizado: 13 campos, 3 GSIs (colaboradorId, proyectoId, estado).
+- `database/schemas/postulaciones.md` — Actualizado: clave compuesta (proyectoId + postulacionKey), GSI1 (colaboradorId + colaboradorFechaKey).
+- `database/schemas/asignaciones.md` — Actualizado: 13 campos, 3 GSIs (colaboradorId + colaboradorFechaKey, proyectoId + proyectoFechaKey, estado + estadoFechaKey). Control atómico de dedicación.
 - `database/schemas/data-model.md` — Actualizado con resumen de 9 tablas, relaciones y correcciones al modelo anterior.
 - `database/README.md` — Actualizado con lista de 9 esquemas y convención de nombres `im_`.
 
 ### Archivos actualizados (backend/)
-- `backend/.env.example` — Reemplazada `DYNAMODB_TABLE_NAME=talentos-table` por 9 variables `TABLE_*` con nombres `im_*`. Sin credenciales reales (placeholders).
-- `backend/package.json` — Reemplazada `aws-sdk` v2 por `@aws-sdk/client-dynamodb` v3 y `@aws-sdk/lib-dynamodb` v3.
-- `backend/src/config/environment.js` — Reemplazada `dynamoDbTable` por 9 variables `table*`. Agregadas `awsAccessKeyId` y `awsSecretAccessKey`.
-- `backend/src/config/dynamodb.js` — Migrado de AWS SDK v2 (`AWS.DynamoDB.DocumentClient`) a AWS SDK v3 (`DynamoDBClient` + `DynamoDBDocumentClient`). Exporta `dynamoDb` y `client`.
+- `backend/.env.example` — Plantilla sin credenciales reales. Variables: `NODE_ENV`, `AWS_REGION=us-east-2`, `AWS_PROFILE=internal-marketplace-dev`, `CORS_ORIGIN`, 9 variables `TABLE_*` con nombres `internal-marketplace-*-dev`, `DYNAMODB_ENDPOINT` opcional.
+- `backend/package.json` — AWS SDK v3 (`@aws-sdk/client-dynamodb`, `@aws-sdk/lib-dynamodb`), `aws-sdk-client-mock`, `eslint`. Scripts: `lint` (`eslint src/`), `test` (`jest --runInBand`), `test:integration` (`jest --runInBand tests/integration/`).
+- `backend/src/config/environment.js` — Centraliza `NODE_ENV`, `AWS_REGION`, `AWS_PROFILE`, `CORS_ORIGIN`, endpoint local, caché, 9 nombres de tabla.
+- `backend/src/config/dynamodb.js` — AWS SDK v3 con `DynamoDBClient` y `DynamoDBDocumentClient`. Cadena predeterminada de credenciales (no claves hardcodeadas). Endpoint local opcional vía `DYNAMODB_ENDPOINT`. Exporta `dynamoDb` y `client`.
+- `backend/.eslintrc.json` — Configuración básica de ESLint para Node.js.
+- `backend/tests/dynamodb-connection.test.js` — Prueba de unidad: inicialización del cliente, región, exportación de módulo.
+- `backend/tests/integration/dynamodb.integration.test.js` — Prueba de integración: `DescribeTableCommand`, se salta sin credenciales AWS.
 
 ### Archivos NO modificados (según restricción del Integrante 4)
 - `infrastructure/template.yaml` — Sin cambios.
 - `backend/src/functions/*/handler.js` — Sin cambios.
+- `backend/src/repositories/*` — Sin cambios.
+- `backend/src/middleware/*` — Sin cambios.
 - `backend/src/index.js` — Sin cambios.
+- `frontend/` — Sin cambios (responsabilidad del Desarrollador 1).
 
 ### Contrato de datos entregado al equipo
-Nombres de tabla, campos, claves primarias, GSIs y patrones de consulta documentados en cada archivo de `database/schemas/`. Este es el contrato común que todos los integrantes deben usar.
+Nombres de tabla, campos, claves primarias, GSIs, atributos de clave compuesta (sin `#` en nombres de atributo: `postulacionKey`, `colaboradorFechaKey`, `proyectoFechaKey`, `estadoFechaKey`, `nivelColaboradorKey`, `proyectoHabilidadKey`), patrones de consulta y reglas de negocio documentados en cada archivo de `database/schemas/`. Este es el contrato común que todos los integrantes deben usar.
 
 ### Resultado de validación local
 - `node -e "require('@aws-sdk/client-dynamodb')"` — ✅ AWS SDK v3 carga correctamente.

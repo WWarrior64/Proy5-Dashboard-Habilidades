@@ -11,7 +11,7 @@
 | 5 | `im_colaborador_habilidad` | Relación colaborador-habilidad y nivel. | Compuesta (`colaboradorId`, `habilidadId`) |
 | 6 | `im_proyectos` | Requerimientos de proyectos internos. | Simple (`proyectoId`) |
 | 7 | `im_proyecto_habilidad` | Relación proyecto-habilidad requerida. | Compuesta (`proyectoId`, `habilidadId`) |
-| 8 | `im_postulaciones` | Solicitudes de participación en proyectos. | Compuesta (`proyectoId`, `POSTULACION#colaboradorId`) |
+| 8 | `im_postulaciones` | Solicitudes de participación en proyectos. | Compuesta (`proyectoId`, `postulacionKey`) |
 | 9 | `im_asignaciones` | Vinculación efectiva de colaboradores con proyectos. | Simple (`asignacionId`) |
 
 ## Relaciones entre las tablas
