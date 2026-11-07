@@ -5,5 +5,7 @@ export const usuariosService = {
   get: (id) => api.get(`/usuarios/${id}`),
   create: (data) => api.post('/usuarios', data),
   update: (id, data) => api.put(`/usuarios/${id}`, data),
-  remove: (id) => api.delete(`/usuarios/${id}`),
+  changeRole: (id, data) => api.patch(`/usuarios/${id}/rol`, data),
+  changeStatus: (id, data) => api.patch(`/usuarios/${id}/estado`, data),
+  getMe: () => api.get('/usuarios/yo'),
 }

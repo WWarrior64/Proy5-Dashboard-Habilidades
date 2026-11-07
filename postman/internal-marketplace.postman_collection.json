@@ -1,26 +1,930 @@
 {
   "info": {
-    "name": "Internal Marketplace - API Collection",
+    "name": "Internal Marketplace API",
+    "description": "Colección completa de integración y pruebas para Internal Marketplace Serverless API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "Crear Colaborador",
-      "request": {
-        "method": "POST",
-        "url": "{{baseUrl}}/colaboradores",
-        "body": {
-          "mode": "raw",
-          "raw": "{\"nombre\": \"Juan Pérez\", \"rol\": \"EMPLEADO\", \"nivelHabilidad\": \"Mid\"}"
+      "name": "00 - Health",
+      "item": [
+        {
+          "name": "Verificar API",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const res = pm.response.json();",
+                  "pm.test(\"Respuesta exitosa y status ok\", function () {",
+                  "    pm.expect(res.success).to.eql(true);",
+                  "    pm.expect(res.datos.status).to.eql(\"ok\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
         }
-      }
+      ]
     },
     {
-      "name": "Listar Colaboradores",
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/colaboradores"
-      }
+      "name": "01 - Usuarios",
+      "item": [
+        {
+          "name": "Listar usuarios",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/usuarios"
+          }
+        },
+        {
+          "name": "Consultar mi perfil",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/usuarios/yo"
+          }
+        },
+        {
+          "name": "Consultar usuario por ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/usuarios/{{usuarioId}}"
+          }
+        },
+        {
+          "name": "Crear perfil de usuario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 201\", function () { pm.response.to.have.status(201); });",
+                  "const res = pm.response.json();",
+                  "if (res.datos && res.datos.usuarioId) {",
+                  "    pm.environment.set(\"usuarioId\", res.datos.usuarioId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"colaborador@empresa.com\",\n  \"nombre\": \"Diego\",\n  \"apellido\": \"Portillo\",\n  \"rol\": \"EMPLEADO\"\n}"
+            },
+            "url": "{{baseUrl}}/usuarios"
+          }
+        },
+        {
+          "name": "Actualizar usuario",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Diego Ernesto\",\n  \"apellido\": \"Portillo Alfaro\"\n}"
+            },
+            "url": "{{baseUrl}}/usuarios/{{usuarioId}}"
+          }
+        },
+        {
+          "name": "Cambiar rol",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rol\": \"LIDER_PROYECTO\"\n}"
+            },
+            "url": "{{baseUrl}}/usuarios/{{usuarioId}}/rol"
+          }
+        },
+        {
+          "name": "Cambiar estado",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"INACTIVO\"\n}"
+            },
+            "url": "{{baseUrl}}/usuarios/{{usuarioId}}/estado"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Colaboradores",
+      "item": [
+        {
+          "name": "Listar colaboradores",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/colaboradores"
+          }
+        },
+        {
+          "name": "Registrar colaborador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 201\", function () { pm.response.to.have.status(201); });",
+                  "const res = pm.response.json();",
+                  "if (res.datos && res.datos.colaboradorId) {",
+                  "    pm.environment.set(\"colaboradorId\", res.datos.colaboradorId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"cargoId\": \"{{cargoId}}\",\n  \"rolProfesional\": \"Desarrollador Backend\",\n  \"dedicacionDisponible\": 100\n}"
+            },
+            "url": "{{baseUrl}}/colaboradores"
+          }
+        },
+        {
+          "name": "Consultar colaborador",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}"
+          }
+        },
+        {
+          "name": "Actualizar colaborador",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rolProfesional\": \"Desarrollador Cloud Sr\"\n}"
+            },
+            "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}"
+          }
+        },
+        {
+          "name": "Dar de baja colaborador",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"INACTIVO\"\n}"
+            },
+            "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}/estado"
+          }
+        },
+        {
+          "name": "Consultar habilidades",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}/habilidades"
+          }
+        },
+        {
+          "name": "Asociar habilidad",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"habilidadId\": \"{{habilidadId}}\",\n  \"nivel\": \"MID\",\n  \"aniosExperiencia\": 3\n}"
+            },
+            "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}/habilidades"
+          }
+        },
+        {
+          "name": "Actualizar nivel de habilidad",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nivel\": \"SENIOR\",\n  \"aniosExperiencia\": 4\n}"
+            },
+            "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}/habilidades/{{habilidadId}}"
+          }
+        },
+        {
+          "name": "Retirar habilidad",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}/habilidades/{{habilidadId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Cargos",
+      "item": [
+        {
+          "name": "Listar cargos",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/cargos"
+          }
+        },
+        {
+          "name": "Crear cargo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 201\", function () { pm.response.to.have.status(201); });",
+                  "const res = pm.response.json();",
+                  "if (res.datos && res.datos.cargoId) {",
+                  "    pm.environment.set(\"cargoId\", res.datos.cargoId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Desarrollador Backend\",\n  \"descripcion\": \"Desarrollo y mantenimiento de servicios backend\",\n  \"categoria\": \"TECNOLOGIA\"\n}"
+            },
+            "url": "{{baseUrl}}/cargos"
+          }
+        },
+        {
+          "name": "Consultar cargo",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/cargos/{{cargoId}}"
+          }
+        },
+        {
+          "name": "Actualizar cargo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Ingeniero Backend Cloud\",\n  \"descripcion\": \"Desarrollo y arquitectura serverless\"\n}"
+            },
+            "url": "{{baseUrl}}/cargos/{{cargoId}}"
+          }
+        },
+        {
+          "name": "Desactivar cargo",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"INACTIVO\"\n}"
+            },
+            "url": "{{baseUrl}}/cargos/{{cargoId}}/estado"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Habilidades",
+      "item": [
+        {
+          "name": "Listar habilidades",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/habilidades"
+          }
+        },
+        {
+          "name": "Crear habilidad",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"La respuesta es HTTP 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const respuesta = pm.response.json();",
+                  "pm.test(\"El recurso fue creado correctamente\", function () {",
+                  "    pm.expect(respuesta.success).to.eql(true);",
+                  "    pm.expect(respuesta.datos).to.be.an(\"object\");",
+                  "    pm.expect(respuesta.datos.habilidadId).to.be.a(\"string\");",
+                  "});",
+                  "if (respuesta.datos && respuesta.datos.habilidadId) {",
+                  "    pm.environment.set(\"habilidadId\", respuesta.datos.habilidadId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"AWS Lambda\",\n  \"categoria\": \"CLOUD\",\n  \"descripcion\": \"Desarrollo de funciones serverless\"\n}"
+            },
+            "url": "{{baseUrl}}/habilidades"
+          }
+        },
+        {
+          "name": "Consultar habilidad",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"La consulta responde HTTP 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const respuesta = pm.response.json();",
+                  "pm.test(\"Se recupero la habilidad creada\", function () {",
+                  "    pm.expect(respuesta.success).to.eql(true);",
+                  "    pm.expect(respuesta.datos.habilidadId).to.eql(pm.environment.get(\"habilidadId\"));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/habilidades/{{habilidadId}}"
+          }
+        },
+        {
+          "name": "Actualizar habilidad",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"descripcion\": \"Arquitectura y desarrollo con funciones serverless\"\n}"
+            },
+            "url": "{{baseUrl}}/habilidades/{{habilidadId}}"
+          }
+        },
+        {
+          "name": "Desactivar habilidad",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"INACTIVO\"\n}"
+            },
+            "url": "{{baseUrl}}/habilidades/{{habilidadId}}/estado"
+          }
+        },
+        {
+          "name": "Consultar categorias",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/habilidades/categorias"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Proyectos",
+      "item": [
+        {
+          "name": "Listar proyectos",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/proyectos"
+          }
+        },
+        {
+          "name": "Registrar proyecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 201\", function () { pm.response.to.have.status(201); });",
+                  "const res = pm.response.json();",
+                  "if (res.datos && res.datos.proyectoId) {",
+                  "    pm.environment.set(\"proyectoId\", res.datos.proyectoId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Modernización de plataforma\",\n  \"descripcion\": \"Actualización de servicios internos\",\n  \"liderId\": \"{{usuarioId}}\",\n  \"horasRequeridas\": 160,\n  \"estado\": \"BORRADOR\"\n}"
+            },
+            "url": "{{baseUrl}}/proyectos"
+          }
+        },
+        {
+          "name": "Consultar proyecto",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/proyectos/{{proyectoId}}"
+          }
+        },
+        {
+          "name": "Actualizar proyecto",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Modernización de plataforma Cloud\",\n  \"horasRequeridas\": 200\n}"
+            },
+            "url": "{{baseUrl}}/proyectos/{{proyectoId}}"
+          }
+        },
+        {
+          "name": "Cancelar proyecto",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"CANCELADO\"\n}"
+            },
+            "url": "{{baseUrl}}/proyectos/{{proyectoId}}/estado"
+          }
+        },
+        {
+          "name": "Consultar habilidades requeridas",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/proyectos/{{proyectoId}}/habilidades"
+          }
+        },
+        {
+          "name": "Asociar habilidad requerida",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"habilidadId\": \"{{habilidadId}}\",\n  \"nivelMinimo\": \"MID\",\n  \"esObligatoria\": true,\n  \"peso\": 1\n}"
+            },
+            "url": "{{baseUrl}}/proyectos/{{proyectoId}}/habilidades"
+          }
+        },
+        {
+          "name": "Actualizar requerimiento",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nivelMinimo\": \"SENIOR\",\n  \"esObligatoria\": true,\n  \"peso\": 2\n}"
+            },
+            "url": "{{baseUrl}}/proyectos/{{proyectoId}}/habilidades/{{habilidadId}}"
+          }
+        },
+        {
+          "name": "Retirar requerimiento",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/proyectos/{{proyectoId}}/habilidades/{{habilidadId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Postulaciones",
+      "item": [
+        {
+          "name": "Registrar postulación",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 201\", function () { pm.response.to.have.status(201); });",
+                  "const res = pm.response.json();",
+                  "if (res.datos && res.datos.colaboradorId) {",
+                  "    pm.environment.set(\"postulacionColaboradorId\", res.datos.colaboradorId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proyectoId\": \"{{proyectoId}}\",\n  \"colaboradorId\": \"{{colaboradorId}}\",\n  \"mensaje\": \"Postulación para rol de soporte backend\"\n}"
+            },
+            "url": "{{baseUrl}}/postulaciones"
+          }
+        },
+        {
+          "name": "Consultar postulaciones de proyecto",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/proyectos/{{proyectoId}}/postulaciones"
+          }
+        },
+        {
+          "name": "Consultar postulaciones de colaborador",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}/postulaciones"
+          }
+        },
+        {
+          "name": "Consultar detalle postulación",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/proyectos/{{proyectoId}}/postulaciones/{{colaboradorId}}"
+          }
+        },
+        {
+          "name": "Aceptar postulación",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"ACEPTADA\",\n  \"porcentajeDedicacion\": 40,\n  \"horasAsignadas\": 64\n}"
+            },
+            "url": "{{baseUrl}}/proyectos/{{proyectoId}}/postulaciones/{{colaboradorId}}/estado"
+          }
+        },
+        {
+          "name": "Rechazar postulación",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"RECHAZADA\",\n  \"motivo\": \"Perfil no se ajusta a la dedicación\"\n}"
+            },
+            "url": "{{baseUrl}}/proyectos/{{proyectoId}}/postulaciones/{{colaboradorId}}/estado"
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Asignaciones",
+      "item": [
+        {
+          "name": "Listar asignaciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/asignaciones"
+          }
+        },
+        {
+          "name": "Crear asignación",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code es 201\", function () { pm.response.to.have.status(201); });",
+                  "const res = pm.response.json();",
+                  "if (res.datos && res.datos.asignacionId) {",
+                  "    pm.environment.set(\"asignacionId\", res.datos.asignacionId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"colaboradorId\": \"{{colaboradorId}}\",\n  \"proyectoId\": \"{{proyectoId}}\",\n  \"porcentajeDedicacion\": 40,\n  \"horasAsignadas\": 64\n}"
+            },
+            "url": "{{baseUrl}}/asignaciones"
+          }
+        },
+        {
+          "name": "Consultar asignación",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/asignaciones/{{asignacionId}}"
+          }
+        },
+        {
+          "name": "Consultar asignaciones activas",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/asignaciones/activas"
+          }
+        },
+        {
+          "name": "Actualizar horas y dedicación",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"porcentajeDedicacion\": 50,\n  \"horasAsignadas\": 80\n}"
+            },
+            "url": "{{baseUrl}}/asignaciones/{{asignacionId}}"
+          }
+        },
+        {
+          "name": "Desvincular colaborador",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"DESVINCULADA\"\n}"
+            },
+            "url": "{{baseUrl}}/asignaciones/{{asignacionId}}/estado"
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Búsqueda",
+      "item": [
+        {
+          "name": "Buscar colaboradores por habilidad",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/busqueda/colaboradores?habilidadId={{habilidadId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["busqueda", "colaboradores"],
+              "query": [{ "key": "habilidadId", "value": "{{habilidadId}}" }]
+            }
+          }
+        },
+        {
+          "name": "Buscar colaboradores por nivel",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/busqueda/colaboradores?nivel=SENIOR",
+              "host": ["{{baseUrl}}"],
+              "path": ["busqueda", "colaboradores"],
+              "query": [{ "key": "nivel", "value": "SENIOR" }]
+            }
+          }
+        },
+        {
+          "name": "Buscar por coincidencia de habilidades",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/busqueda/proyectos?habilidadId={{habilidadId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["busqueda", "proyectos"],
+              "query": [{ "key": "habilidadId", "value": "{{habilidadId}}" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Dashboard",
+      "item": [
+        {
+          "name": "Consultar resumen",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/dashboard/resumen"
+          }
+        },
+        {
+          "name": "Consultar métricas de colaboradores",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/dashboard/colaboradores"
+          }
+        },
+        {
+          "name": "Consultar métricas de proyectos",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/dashboard/proyectos"
+          }
+        },
+        {
+          "name": "Consultar métricas de asignaciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/dashboard/asignaciones"
+          }
+        },
+        {
+          "name": "Consultar métricas de habilidades",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/dashboard/habilidades"
+          }
+        },
+        {
+          "name": "Consultar métricas de postulaciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/dashboard/postulaciones"
+          }
+        }
+      ]
     }
   ]
 }

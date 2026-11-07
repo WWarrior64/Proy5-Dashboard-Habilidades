@@ -1,128 +1,112 @@
-# Arquitectura de la Solución
+# Arquitectura del Sistema — Internal Marketplace
 
-**Institución:** Universidad Católica de El Salvador  
-**Materia:** Cómputo en la nube – Grupo B  
-**Docente:** Ing. Herberth Contreras  
-**Proyecto:** Dashboard de Gestión de Talento y Habilidades Internas (Internal Marketplace)  
-**Entrega:** Avance (Laboratorio 2) – 07 de noviembre de 2026 | Defensa Final – 21 de noviembre de 2026
-
+**Versión:** 2.0.0  
 ---
 
-## 1. Descripción general
+## 1. Visión General de la Arquitectura
 
-El sistema es una plataforma web administrativa (Dashboard) orientada a la gestión de capital humano. Permite a las empresas mapear las habilidades del personal técnico para asignarlo a proyectos internos según su disponibilidad. La aplicación sigue una arquitectura cliente-servidor con separación clara de capas:
+La plataforma **Internal Marketplace** implementa un modelo 100% Serverless desacoplado en Amazon Web Services (AWS), garantizando alta disponibilidad, escalabilidad automática y cero mantenimiento de servidores dedicados.
 
-- **Frontend:** SPA en React + Vite, consumiendo una API REST.
-- **Backend:** API en Node.js + Express, lista para desplegarse como funciones serverless (AWS Lambda) o en servidor tradicional (EC2).
-- **Base de datos:** Amazon DynamoDB (NoSQL) dentro del AWS Free Tier, o RDS (t2.micro/t3.micro) si se elige la opción IaaS.
-- **Infraestructura:** AWS Free Tier con S3 + CloudFront (frontend estático) y API Gateway + Lambda (backend serverless), siguiendo la Opción A recomendada.
-
----
-
-## 2. Arquitectura seleccionada: Opción A (Serverless)
-
-| Componente | Servicio AWS | Justificación |
-|------------|--------------|---------------|
-| Frontend (estático) | Amazon S3 + Amazon CloudFront | Hosting estático gratuito y caché en el edge para entrega rápida de assets. |
-| API / Backend | Amazon API Gateway + AWS Lambda (Node.js) | Serverless sin costo de servidor siempre encendido; se paga solo por uso dentro del free tier. |
-| Base de datos | Amazon DynamoDB | NoSQL escalable, modelo flexible para la matriz de talentos y relaciones N:M. |
-| Autenticación | Cognito / JWT propio | Manejo de sesiones y control de acceso por roles. |
-| CI/CD | GitHub Actions | Despliegue continuo hacia AWS. |
-
----
-
-## 3. Separación de capas
-
-El código está organizado en tres carpetas principales para garantizar mantenimiento y escalabilidad:
-
-```
-/frontend        → Capa de presentación (React SPA)
-/backend         → Capa de lógica de negocio y API (Node.js + Express)
-/database        → Esquemas y modelo de datos (DynamoDB / RDS)
-```
-
-Además, el backend está dividido por responsabilidades:
-- `src/config/` → configuración de entorno y conexión a DynamoDB.
-- `src/functions/*/handler.js` → controladores por dominio (colaboradores, proyectos, habilidades, asignaciones, postulaciones, usuarios).
-- `src/services/` → lógica de filtrado, caché y autorización.
-- `src/repositories/` → acceso a datos por entidad.
-- `src/middleware/` → autenticación, autorización y validación.
-- `src/utils/` → respuestas, validadores y manejo de errores.
-
----
-
-## 4. Reparto de roles del equipo (5 integrantes)
-
-| Desarrollador | Rol | Responsabilidades principales |
-|---------------|-----|------------------------------|
-| Desarrollador 1 | Frontend SPA | Buscador interactivo de perfiles por habilidades (Tech Stack), filtros y asignación gráfica. |
-| Desarrollador 2 | Backend Filtering Core | Algoritmo de filtrado y búsqueda de candidatos según coincidencia de habilidades. |
-| Desarrollador 3 | Cloud Performance | Estrategia de almacenamiento en caché para acelerar consultas recurrentes. |
-| Desarrollador 4 | Database Modeling | Diseño de la matriz de habilidades (relaciones N:M entre Desarrolladores, Habilidades y Proyectos). |
-| Desarrollador 5 | CI/CD & Repository Manager | Integración continua (GitHub Actions), control de versiones y convenciones de código. |
-
----
-
-## 5. Procesos CRUD detallados
-
-### Colaboradores
-- **Crear:** Dar de alta desarrollador.
-- **Leer:** Listar plantilla con filtros por rol.
-- **Actualizar:** Actualizar nivel de habilidad (Junior/Mid/Senior).
-- **Eliminar:** Eliminar registro de baja.
-
-### Proyectos Internos
-- **Crear:** Registrar requerimiento de proyecto.
-- **Leer:** Consultar proyectos activos.
-- **Actualizar:** Modificar cantidad de horas requeridas.
-- **Eliminar:** Cancelar proyecto.
-
-### Asignaciones
-- **Crear:** Vincular colaborador a proyecto con porcentaje de dedicación.
-- **Leer:** Consultar asignaciones activas.
-- **Actualizar:** Editar horas asignadas.
-- **Eliminar:** Desvincular colaborador de proyecto.
-
----
-
-## 6. Integración en AWS (Free Tier)
-
-- **Amazon CloudFront:** Caché en el Edge para la entrega de assets estáticos del frontend (CSS, JS, imágenes).
-- **Amazon DynamoDB / RDS (t2.micro):** Almacenamiento estructurado de la matriz de talentos.
-- **Seguridad:** Uso de variables de entorno `.env` (sin claves de AWS expuestas), usuarios IAM no-root para desarrollo, y CORS configurado en la API.
-- **Control de gasto:** AWS Budgets con alerta de $0.01 USD para evitar cargos accidentales.
-
----
-
-## 7. Estructura del repositorio
-
-```
-Proy5-Dashboard-Habilidades/
-├── frontend/          # React + Vite (SPA)
-├── backend/           # Node.js + Express (API)
-├── database/          # Esquemas de datos
-├── infrastructure/    # Template AWS (SAM / CloudFormation)
-├── postman/           # Colección de pruebas API
-├── docs/              # Documentación técnica
-├── .github/           # CI/CD (GitHub Actions)
-├── .gitignore
-├── .editorconfig
-├── package.json
-└── README.md
+### Flujo de Datos End-to-End
+```text
+[ Cliente Web / Navegador ]
+            │
+            ▼
+    ┌───────────────────────────────┐
+    │  Amazon CloudFront (CDN)      │ (Distribución global HTTPS con OAC)
+    └───────────────┬───────────────┘
+                    │
+            ┌───────┴───────┐
+            ▼               ▼
+   [ S3 Private Bucket ]  [ Amazon API Gateway ]
+   (React + Vite SPA)     (REST API /api/v1)
+                                   │
+                                   ├──► [ Amazon Cognito ] (Authorizer / JWT)
+                                   │
+                                   ▼
+                       [ 10 Funciones AWS Lambda ]
+                       (Node.js 24 / CommonJS)
+                                   │
+                                   ├──► [ In-Memory Cache (TTL) ]
+                                   │
+                                   ▼
+                       [ Amazon DynamoDB ]
+                       (9 Tablas NoSQL en modo On-Demand)
 ```
 
 ---
 
-## 8. Criterios de evaluación cubiertos
+## 2. Componentes de la Arquitectura
 
-Esta estructura cumple con los requisitos del **Laboratorio 2** y la **Defensa Final**:
+### 2.1 Frontend Hosting y Distribución (S3 + CloudFront con OAC)
+* **Bucket S3 Privado:** Almacena exclusivamente los artefactos estáticos compilados de la aplicación React SPA (`dist/`). Posee bloqueo total de acceso público (`PublicAccessBlockConfiguration`).
+* **Origin Access Control (OAC):** Mecanismo de seguridad de última generación que firma criptográficamente las peticiones mediante SigV4, autorizando únicamente a la distribución de CloudFront a leer los objetos de S3 mediante una política de bucket estricta (`s3:GetObject`).
+* **CloudFront CDN:** Maneja la terminación SSL/TLS (HTTPS), compresión de archivos y caché perimetral, gestionando los errores 403/404 redirigiéndolos a `index.html` (HTTP 200) para soportar el enrutamiento del lado del cliente (React Router).
 
-- ✅ Separación clara entre capas (`/frontend`, `/backend`).
-- ✅ Control de versiones con Git/GitHub, ramas (`main`, `develop`, feature branches).
-- ✅ Linters (ESLint) y convenciones de código.
-- ✅ `.gitignore` configurado (no se suben `node_modules`, entornos virtuales ni credenciales).
-- ✅ Endpoints REST definidos para CRUD.
-- ✅ Script de conexión a base de datos (DynamoDB).
-- ✅ Colección de Postman con operaciones CRUD probadas.
-- ✅ Aprovisionamiento inicial en AWS Free Tier.
-- ✅ Variables de entorno y usuarios IAM no-root.
+### 2.2 Gestión de Identidad y Seguridad (Amazon Cognito)
+* **Cognito User Pool:** Proveedor de identidad centralizado que gestiona credenciales de acceso, cifrado de contraseñas, políticas de seguridad y emisión de tokens JWT (`IdToken`, `AccessToken`, `RefreshToken`).
+* **Cognito Authorizer en API Gateway:** Intercepta cada solicitud entrante a rutas protegidas (`/api/v1/...`), validando la firma y vigencia del JWT antes de invocar cualquier handler de Lambda.
+* **Separación de responsabilidades:** La base de datos DynamoDB no almacena contraseñas ni hashes; únicamente almacena el perfil operativo del usuario correlacionado mediante el identificador único `cognitoSub`.
+
+### 2.3 Capa de API y Cómputo (API Gateway + AWS Lambda)
+* **API Gateway REST API:** Expone los recursos bajo el prefijo unificado `/api/v1/`, con soporte nativo de CORS y enrutamiento estructurado hacia funciones Lambda modulares mediante integración Lambda Proxy.
+* **AWS Lambda (Node.js 24 LTS):** Arquitectura modular de 10 funciones organizadas por dominio de negocio (evitando dispersión de microfunciones CRUD individuales):
+  1. `HealthFunction`: Diagnóstico de salud y uptime (`/health`).
+  2. `UsuariosFunction`: Administración de identidades y roles.
+  3. `ColaboradoresFunction`: Ficha laboral y asignación de habilidades.
+  4. `CargosFunction`: Catálogo de posiciones de la empresa.
+  5. `HabilidadesFunction`: Catálogo corporativo de habilidades técnicas y blandas.
+  6. `ProyectosFunction`: Ciclo de vida y requerimientos de proyectos.
+  7. `PostulacionesFunction`: Solicitudes de participación en proyectos.
+  8. `AsignacionesFunction`: Gestión de dedicación y vinculación formal.
+  9. `BusquedaFunction`: Motor de coincidencia de perfiles y requerimientos.
+  10. `DashboardFunction`: Agregación de indicadores y métricas de plataforma.
+
+### 2.4 Principio de Mínimo Privilegio (IAM Execution Roles)
+Cada función Lambda dispone de un rol de ejecución dedicado en IAM que restringe el acceso exclusivamente a las tablas e índices que necesita para operar:
+* Las funciones operativas no tienen permisos globales (`dynamodb:*`).
+* Se diferencian políticas de solo lectura (`DynamoDBReadPolicy`) de aquellas con capacidad de mutación (`DynamoDBCrudPolicy`).
+* Se garantiza acceso explícito a los índices secundarios globales (GSIs).
+
+---
+
+## 3. Modelo de Datos y Persistencia (Amazon DynamoDB)
+
+La persistencia se implementa sobre 9 tablas diseñadas bajo el modelo NoSQL de clave-valor y documentos, configuradas en modo **On-Demand (PAY_PER_REQUEST)** para optimizar costos dentro del Free Tier:
+
+| Nombre Lógico SAM | Nombre Físico de Tabla | Partition Key (PK) | Sort Key (SK) | Índices Secundarios (GSIs) |
+| :--- | :--- | :--- | :--- | :--- |
+| `UsuariosTable` | `internal-marketplace-usuarios-dev` | `usuarioId` (S) | *Ninguno* | GSI1 (`cognitoSub`), GSI2 (`correo`) |
+| `ColaboradoresTable` | `internal-marketplace-colaboradores-dev` | `colaboradorId` (S) | *Ninguno* | GSI1 (`usuarioId`), GSI2 (`estado`, `rolProfesional#nombre`) |
+| `CargosTable` | `internal-marketplace-cargos-dev` | `cargoId` (S) | *Ninguno* | GSI1 (`estado`, `nombre`) |
+| `HabilidadesTable` | `internal-marketplace-habilidades-dev` | `habilidadId` (S) | *Ninguno* | GSI1 (`categoria`, `nombreNormalizado`) |
+| `ColaboradorHabilidadTable` | `internal-marketplace-colaborador-habilidad-dev` | `colaboradorId` (S) | `habilidadId` (S) | GSI1 (`habilidadId`, `nivel#colaboradorId`) |
+| `ProyectosTable` | `internal-marketplace-proyectos-dev` | `proyectoId` (S) | *Ninguno* | GSI1 (`estado`, `fechaPublicacion#proyectoId`), GSI2 (`liderId`, `estado#fechaCreacion`) |
+| `ProyectoHabilidadTable` | `internal-marketplace-proyecto-habilidad-dev` | `proyectoId` (S) | `habilidadId` (S) | GSI1 (`habilidadId`, `proyectoId`) |
+| `PostulacionesTable` | `internal-marketplace-postulaciones-dev` | `proyectoId` (S) | `POSTULACION#colaboradorId` (S) | GSI1 (`colaboradorId`, `fechaPostulacion#proyectoId`) |
+| `AsignacionesTable` | `internal-marketplace-asignaciones-dev` | `asignacionId` (S) | *Ninguno* | GSI1 (`colaboradorId`, `estado#fechaAsignacion`), GSI2 (`proyectoId`, `estado#fechaAsignacion`), GSI3 (`estado`, `fechaAsignacion#asignacionId`) |
+
+### Transacciones Atómicas (TransactWriteItems)
+Para procesos de negocio críticos (como la aceptación de una postulación que crea una asignación e incrementa el porcentaje de dedicación activa del colaborador), se emplea `TransactWriteItems`. Esto evita condiciones de carrera y asegura consistencia estricta en operaciones compuestas.
+
+---
+
+## 4. Estrategia de Caché y Rendimiento
+
+* **Caché en Memoria (In-Memory Cache):** Implementada en el servicio `cache.service.js` con soporte de Time-To-Live (TTL). Aprovecha la reutilización de contenedores calientes (*warm containers*) en AWS Lambda para responder consultas de catálogos (cargos, habilidades) reduciendo lecturas en DynamoDB.
+* **Invalidación por Evento:** Operaciones de mutación (`POST`, `PUT`, `PATCH`, `DELETE`) limpian selectivamente las claves de caché afectadas para impedir inconsistencias de lectura.
+* **CloudFront Edge Caching:** Configurado con la directiva optimizada de AWS (`Managed-CachingOptimized`) para servir activos estáticos del frontend desde puntos perimetrales con latencia mínima.
+
+---
+
+## 5. Pipeline de CI/CD (GitHub Actions)
+
+El ciclo de integración continua implementado en `.github/workflows/deploy.yml` valida automáticamente cada entrega:
+1. **Entorno de ejecución:** Node.js 24 en runners `ubuntu-latest`.
+2. **Control de Calidad:**
+   * Ejecución de ESLint 9 (Flat Config) en frontend y backend.
+   * Ejecución de pruebas unitarias con Jest (`npm test -- --runInBand`).
+3. **Validación de Infraestructura:**
+   * `sam validate --lint`: Comprobación de sintaxis y buenas prácticas en `infrastructure/template.yaml`.
+   * `sam build`: Compilación y empaquetado de las funciones Lambda y sus dependencias.
+4. **Política de Despliegue:** El despliegue automático está deshabilitado por seguridad de costos; los despliegues hacia AWS se realizan de forma controlada mediante `sam deploy` con perfiles IAM no-root.

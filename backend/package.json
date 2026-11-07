@@ -6,11 +6,14 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node src/index.js",
-    "lint": "echo 'Backend lint skipped - minimal structure'",
-    "test": "jest --runInBand"
+    "lint": "eslint src/",
+    "test": "jest --runInBand",
+    "test:integration": "jest --runInBand tests/integration/"
   },
   "dependencies": {
-    "aws-sdk": "^2.1588.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.1164.0",
+    "@aws-sdk/client-dynamodb": "^3.450.0",
+    "@aws-sdk/lib-dynamodb": "^3.450.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
@@ -18,6 +21,8 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "aws-sdk-client-mock": "^4.1.0",
+    "eslint": "^8.57.0",
     "jest": "^29.7.0",
     "supertest": "^7.0.0"
   }

@@ -11,11 +11,11 @@ export default function MainLayout() {
   if (!user) return null
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--color-bg)' }}>
       <Sidebar user={user} onLogout={() => { logout(); navigate('/login') }} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header user={user} />
-        <main className="flex-1 overflow-y-auto bg-[#f8fafc] p-4 sm:p-6">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6" style={{ backgroundColor: 'var(--color-bg)' }}>
           <Outlet />
         </main>
         <Footer />

@@ -1,22 +1,1042 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Internal Marketplace - AWS Free Tier infrastructure
+Transform: AWS::Serverless-2016-10-31
+Description: Internal Marketplace - Infraestructura Serverless en AWS Free Tier (SAM)
+
+Parameters:
+  StageName:
+    Type: String
+    Default: prod
+    AllowedValues:
+      - dev
+      - prod
+    Description: Entorno de despliegue (dev o prod)
+
+Globals:
+  Function:
+    Runtime: nodejs24.x
+    Timeout: 15
+    MemorySize: 256
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        NODE_ENV: !Ref StageName
+        TABLE_USUARIOS: !Ref UsuariosTable
+        TABLE_COLABORADORES: !Ref ColaboradoresTable
+        TABLE_CARGOS: !Ref CargosTable
+        TABLE_HABILIDADES: !Ref HabilidadesTable
+        TABLE_COLABORADOR_HABILIDAD: !Ref ColaboradorHabilidadTable
+        TABLE_PROYECTOS: !Ref ProyectosTable
+        TABLE_PROYECTO_HABILIDAD: !Ref ProyectoHabilidadTable
+        TABLE_POSTULACIONES: !Ref PostulacionesTable
+        TABLE_ASIGNACIONES: !Ref AsignacionesTable
 
 Resources:
-  TablaTalentos:
+  # ============================================================================
+  # 1. API GATEWAY Y FUNCIONES LAMBDA (Contrato Integrante 1)
+  # ============================================================================
+  InternalMarketplaceApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub internal-marketplace-api-${StageName}
+      StageName: !Ref StageName
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt CognitoUserPool.Arn
+      Cors:
+        AllowMethods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-health-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/health/handler.handler
+      Description: Endpoint de comprobacion de estado del API y Lambda
+      Events:
+        Route1:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/health
+            Method: GET
+            Auth:
+              Authorizer: NONE
+
+
+  UsuariosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-usuarios-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/usuarios/handler.handler
+      Description: Gestion de usuarios y perfiles
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsuariosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradoresTable
+        # La creación de cuentas se hace en la Lambda de Usuarios, no desde React.
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+                - cognito-idp:AdminCreateUser
+              Resource: !GetAtt CognitoUserPool.Arn
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPool
+      Events:
+        Route1:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/usuarios
+            Method: GET
+        Route2:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/usuarios
+            Method: POST
+        Route3:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/usuarios/{usuarioId}
+            Method: GET
+        Route4:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/usuarios/{usuarioId}
+            Method: PUT
+        Route5:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/usuarios/{usuarioId}/rol
+            Method: PATCH
+        Route6:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/usuarios/{usuarioId}/estado
+            Method: PATCH
+        Route7:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/usuarios/yo
+            Method: GET
+
+
+  ColaboradoresFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-colaboradores-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/colaboradores/handler.handler
+      Description: Gestion de colaboradores de la empresa
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ColaboradoresTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsuariosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref CargosTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ColaboradorHabilidadTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref HabilidadesTable
+      Events:
+        Route1:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores
+            Method: GET
+        Route2:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores
+            Method: POST
+        Route3:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}
+            Method: GET
+        Route4:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}
+            Method: PUT
+        Route5:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}
+            Method: DELETE
+        Route6:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/estado
+            Method: PATCH
+        Route7:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/habilidades
+            Method: GET
+        Route8:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/habilidades
+            Method: POST
+        Route9:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}
+            Method: PUT
+        Route10:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}
+            Method: DELETE
+
+
+  CargosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-cargos-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/cargos/handler.handler
+      Description: Catalogo de cargos
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CargosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradoresTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsuariosTable
+      Events:
+        Route1:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/cargos
+            Method: GET
+        Route2:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/cargos
+            Method: POST
+        Route3:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/cargos/{cargoId}
+            Method: GET
+        Route4:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/cargos/{cargoId}
+            Method: PUT
+        Route5:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/cargos/{cargoId}/estado
+            Method: PATCH
+
+
+  HabilidadesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-habilidades-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/habilidades/handler.handler
+      Description: Catalogo central de habilidades
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref HabilidadesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradorHabilidadTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsuariosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradoresTable
+      Events:
+        Route1:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/habilidades
+            Method: GET
+        Route2:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/habilidades
+            Method: POST
+        Route3:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/habilidades/{habilidadId}
+            Method: GET
+        Route4:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/habilidades/{habilidadId}
+            Method: PUT
+        Route5:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/habilidades/{habilidadId}/estado
+            Method: PATCH
+
+
+  BusquedaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-busqueda-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/busqueda/handler.handler
+      Description: Motor de busqueda y emparejamiento de habilidades
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradorHabilidadTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref HabilidadesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradoresTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref CargosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsuariosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProyectosTable
+      Events:
+        Route1:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/busqueda/colaboradores
+            Method: GET
+        Route2:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/busqueda/proyectos
+            Method: GET
+        Route3:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/busqueda/habilidades
+            Method: GET
+
+
+  ProyectosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-proyectos-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/proyectos/handler.handler
+      Description: Gestion de proyectos internos
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProyectosTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProyectoHabilidadTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsuariosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradoresTable
+      Events:
+        Route1:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos
+            Method: GET
+        Route2:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos
+            Method: POST
+        Route3:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}
+            Method: GET
+        Route4:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}
+            Method: PUT
+        Route5:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/estado
+            Method: PATCH
+        Route6:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/activos
+            Method: GET
+        Route7:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}
+            Method: DELETE
+        Route8:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/habilidades
+            Method: GET
+        Route9:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/habilidades
+            Method: POST
+        Route10:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/habilidades/{habilidadId}
+            Method: PUT
+        Route11:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/habilidades/{habilidadId}
+            Method: DELETE
+
+  PostulacionesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-postulaciones-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/postulaciones/handler.handler
+      Description: Gestion de postulaciones de colaboradores
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PostulacionesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProyectosTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ColaboradoresTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AsignacionesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsuariosTable
+      Events:
+        Route1:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/retirar
+            Method: PATCH
+        Route2:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/postulaciones
+            Method: POST
+        Route3:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/postulaciones
+            Method: GET
+        Route4:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/postulaciones
+            Method: GET
+        Route5:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}
+            Method: GET
+        Route6:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/estado
+            Method: PATCH
+
+
+  AsignacionesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-asignaciones-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/asignaciones/handler.handler
+      Description: Gestion de asignaciones y dedicacion de colaboradores
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AsignacionesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProyectosTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ColaboradoresTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref PostulacionesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsuariosTable
+      Events:
+        Route1:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/asignaciones/activas
+            Method: GET
+        Route2:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/asignaciones
+            Method: GET
+        Route3:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/asignaciones
+            Method: POST
+        Route4:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/asignaciones/{asignacionId}
+            Method: GET
+        Route5:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/asignaciones/{asignacionId}
+            Method: PUT
+        Route6:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/asignaciones/{asignacionId}
+            Method: DELETE
+        Route7:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/asignaciones
+            Method: GET
+        Route8:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/asignaciones
+            Method: GET
+
+
+  DashboardFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-dashboard-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/dashboard/handler.handler
+      Description: Consultas y metricas agregadas para el dashboard
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradoresTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProyectosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref AsignacionesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref HabilidadesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref PostulacionesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsuariosTable
+      Events:
+        Route1:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/dashboard/colaboradores
+            Method: GET
+        Route2:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/dashboard/proyectos
+            Method: GET
+        Route3:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/dashboard/asignaciones
+            Method: GET
+        Route4:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/dashboard/habilidades
+            Method: GET
+        Route5:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/dashboard/postulaciones
+            Method: GET
+        Route6:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/dashboard/actividad
+            Method: GET
+        Route7:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/dashboard/resumen
+            Method: GET
+
+
+  UsuariosTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: talentos-table
+      TableName: !Sub internal-marketplace-usuarios-${StageName}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: id
+        - AttributeName: usuarioId
+          AttributeType: S
+        - AttributeName: cognitoSub
+          AttributeType: S
+        - AttributeName: correo
           AttributeType: S
       KeySchema:
-        - AttributeName: id
+        - AttributeName: usuarioId
           KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: cognitoSub
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI2
+          KeySchema:
+            - AttributeName: correo
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
 
+  # 2. Tabla Colaboradores
+  ColaboradoresTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub internal-marketplace-colaboradores-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: colaboradorId
+          AttributeType: S
+        - AttributeName: usuarioId
+          AttributeType: S
+        - AttributeName: estado
+          AttributeType: S
+        - AttributeName: rolProfesional#nombre
+          AttributeType: S
+      KeySchema:
+        - AttributeName: colaboradorId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: usuarioId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI2
+          KeySchema:
+            - AttributeName: estado
+              KeyType: HASH
+            - AttributeName: rolProfesional#nombre
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # 3. Tabla Cargos
+  CargosTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub internal-marketplace-cargos-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: cargoId
+          AttributeType: S
+        - AttributeName: estado
+          AttributeType: S
+        - AttributeName: nombre
+          AttributeType: S
+      KeySchema:
+        - AttributeName: cargoId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: estado
+              KeyType: HASH
+            - AttributeName: nombre
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # 4. Tabla Habilidades
+  HabilidadesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub internal-marketplace-habilidades-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: habilidadId
+          AttributeType: S
+        - AttributeName: categoria
+          AttributeType: S
+        - AttributeName: nombreNormalizado
+          AttributeType: S
+      KeySchema:
+        - AttributeName: habilidadId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: categoria
+              KeyType: HASH
+            - AttributeName: nombreNormalizado
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # 5. Tabla ColaboradorHabilidad (N:M)
+  ColaboradorHabilidadTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub internal-marketplace-colaborador-habilidad-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: colaboradorId
+          AttributeType: S
+        - AttributeName: habilidadId
+          AttributeType: S
+        - AttributeName: nivelColaboradorKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: colaboradorId
+          KeyType: HASH
+        - AttributeName: habilidadId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: habilidadId
+              KeyType: HASH
+            - AttributeName: nivelColaboradorKey
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # 6. Tabla Proyectos
+  ProyectosTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub internal-marketplace-proyectos-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: proyectoId
+          AttributeType: S
+        - AttributeName: estado
+          AttributeType: S
+        - AttributeName: fechaPublicacionKey
+          AttributeType: S
+        - AttributeName: liderId
+          AttributeType: S
+        - AttributeName: estadoFechaKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: proyectoId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: estado
+              KeyType: HASH
+            - AttributeName: fechaPublicacionKey
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI2
+          KeySchema:
+            - AttributeName: liderId
+              KeyType: HASH
+            - AttributeName: estadoFechaKey
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # 7. Tabla ProyectoHabilidad (N:M)
+  ProyectoHabilidadTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub internal-marketplace-proyecto-habilidad-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: proyectoId
+          AttributeType: S
+        - AttributeName: habilidadId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: proyectoId
+          KeyType: HASH
+        - AttributeName: habilidadId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: habilidadId
+              KeyType: HASH
+            - AttributeName: proyectoId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # 8. Tabla Postulaciones
+  PostulacionesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub internal-marketplace-postulaciones-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: proyectoId
+          AttributeType: S
+        - AttributeName: postulacionKey
+          AttributeType: S
+        - AttributeName: colaboradorId
+          AttributeType: S
+        - AttributeName: colaboradorFechaKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: proyectoId
+          KeyType: HASH
+        - AttributeName: postulacionKey
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: colaboradorId
+              KeyType: HASH
+            - AttributeName: colaboradorFechaKey
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # 9. Tabla Asignaciones
+  AsignacionesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub internal-marketplace-asignaciones-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: asignacionId
+          AttributeType: S
+        - AttributeName: colaboradorId
+          AttributeType: S
+        - AttributeName: proyectoId
+          AttributeType: S
+        - AttributeName: estado
+          AttributeType: S
+        - AttributeName: colaboradorFechaKey
+          AttributeType: S
+        - AttributeName: proyectoFechaKey
+          AttributeType: S
+        - AttributeName: estadoFechaKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: asignacionId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: colaboradorId
+              KeyType: HASH
+            - AttributeName: colaboradorFechaKey
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI2
+          KeySchema:
+            - AttributeName: proyectoId
+              KeyType: HASH
+            - AttributeName: proyectoFechaKey
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI3
+          KeySchema:
+            - AttributeName: estado
+              KeyType: HASH
+            - AttributeName: estadoFechaKey
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # ============================================================================
+  # 3. FRONTEND HOSTING: S3 + CLOUDFRONT CDN (Seguridad OAC)
+  # ============================================================================
   BucketFrontend:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: frontend-internal-marketplace
-      WebsiteConfiguration:
-        IndexDocument: index.html
+      BucketName: !Sub frontend-internal-marketplace-${AWS::AccountId}-${StageName}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  FrontendOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub oac-frontend-${AWS::StackName}
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  FrontendDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt BucketFrontend.RegionalDomainName
+            OriginAccessControlId: !GetAtt FrontendOriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          # Managed CachingOptimized Policy ID de AWS
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+
+  BucketFrontendPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BucketFrontend
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipalReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${BucketFrontend.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${FrontendDistribution}
+
+  # ============================================================================
+  # 4. COGNITO USER POOL (Autenticación y Autorización)
+  # ============================================================================
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub internal-marketplace-users-${StageName}
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      ClientName: !Sub internal-marketplace-client-${StageName}
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      GenerateSecret: false
+
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub internal-marketplace-${StageName}-${AWS::AccountId}
+      UserPoolId: !Ref CognitoUserPool
+
+
+Outputs:
+  ApiGatewayUrl:
+    Description: URL base de API Gateway para configurar VITE_API_URL en el Frontend
+    Value: !Sub https://${InternalMarketplaceApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/api/v1
+  CloudFrontUrl:
+    Description: URL publica HTTPS de CloudFront para el Frontend SPA
+    Value: !Sub https://${FrontendDistribution.DomainName}
+  FrontendBucketName:
+    Description: Nombre del Bucket S3 donde se subira el build de React
+    Value: !Ref BucketFrontend
+  CognitoUserPoolId:
+    Description: ID del User Pool de Cognito
+    Value: !Ref CognitoUserPool
+  CognitoUserPoolClientId:
+    Description: ID del Client de Cognito
+    Value: !Ref CognitoUserPoolClient
