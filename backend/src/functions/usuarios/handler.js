@@ -1,6 +1,7 @@
 const { exito, creado, error } = require('../../utils/responses');
 const { CODIGOS } = require('../../utils/errors');
 const usuariosRepository = require('../../repositories/usuarios.repository');
+const { resolverIdentidad } = require('../../services/cognito-admin.service');
 
 const ROLES_VALIDOS = ['EMPLEADO', 'RRHH', 'LIDER_PROYECTO', 'ADMINISTRADOR'];
 
@@ -83,34 +84,38 @@ async function listarUsuarios(event, context) {
 
 async function crearUsuario(event, context) {
   try {
-    const body = obtenerBody(event);
-    const { cognitoSub, nombre, email, rol } = body;
-
-    if (!cognitoSub || !nombre || !email) {
-      return error('cognitoSub, nombre y email son requeridos', 400, CODIGOS.VALIDACION);
+    const cognitoSubSolicitante = obtenerCognitoSub(event);
+    if (!cognitoSubSolicitante) return error('Identidad Cognito no válida', 401, CODIGOS.NO_AUTORIZADO);
+    const administrador = await usuariosRepository.obtenerPorCognitoSub(cognitoSubSolicitante);
+    if (!administrador || administrador.estado !== 'ACTIVO' || administrador.rol !== 'ADMINISTRADOR') {
+      return error('Solo un administrador activo puede registrar usuarios', 403, CODIGOS.PROHIBIDO);
     }
 
-    if (rol && !ROLES_VALIDOS.includes(rol)) {
+    const body = obtenerBody(event);
+    const nombre = typeof body.nombre === 'string' ? body.nombre.trim() : '';
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    const rol = body.rol || 'EMPLEADO';
+    if (!nombre || nombre.length > 150 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+      return error('Nombre y correo electrónico válidos son requeridos', 400, CODIGOS.VALIDACION);
+    }
+    if (!ROLES_VALIDOS.includes(rol)) {
       return error(`Rol inválido. Valores permitidos: ${ROLES_VALIDOS.join(', ')}`, 400, CODIGOS.VALIDACION);
     }
-
-    const usuarioId = body.usuarioId || `usr_${Date.now()}`;
-
-    const usuario = await usuariosRepository.crear({
-      usuarioId,
-      cognitoSub,
-      nombre,
-      email,
-      rol: rol || 'EMPLEADO',
-      estado: 'ACTIVO',
-    });
-
-    return creado(usuario);
-  } catch (err) {
-    if (err.codigoError === 'CONFLICT') {
-      return error('Ya existe un usuario con ese ID', 409, CODIGOS.CONFLICTO);
+    // Nunca se acepta cognitoSub desde el navegador: lo resuelve Cognito en AWS.
+    const { cognitoSub, creadoEnCognito } = await resolverIdentidad({ email, nombre });
+    const usuarioId = `usr_${require('crypto').randomUUID()}`;
+    try {
+      const usuario = await usuariosRepository.crear({ usuarioId, cognitoSub, nombre, email, rol, estado: 'ACTIVO' });
+      return creado({ ...usuario, invitacionEnviada: creadoEnCognito });
+    } catch (e) {
+      if (creadoEnCognito) {
+        // La cuenta en Cognito permanece para permitir reintentar el vínculo sin duplicarla.
+        return error('La cuenta Cognito fue creada, pero no se pudo vincular con DynamoDB. Reintente el registro con el mismo correo. Detalle: ' + (e.codigo === 409 ? e.message : 'error de persistencia'), e.codigo === 409 ? 409 : 500, e.codigoError || CODIGOS.INTERNO);
+      }
+      throw e;
     }
-    return error(err.message, err.codigo || 500, err.codigoError);
+  } catch (err) {
+    return error(err.message || 'No fue posible crear el usuario', err.codigo || 500, err.codigoError || CODIGOS.INTERNO);
   }
 }
 

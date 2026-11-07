@@ -6,4 +6,5 @@ export const colaboradoresService = {
   create: (data) => api.post('/colaboradores', data),
   update: (id, data) => api.put(`/colaboradores/${id}`, data),
   remove: (id) => api.delete(`/colaboradores/${id}`),
+  changeStatus: (id, data) => api.patch(`/colaboradores/${id}/estado`, data),
 }

@@ -81,6 +81,16 @@ Resources:
             TableName: !Ref UsuariosTable
         - DynamoDBReadPolicy:
             TableName: !Ref ColaboradoresTable
+        # La creación de cuentas se hace en la Lambda de Usuarios, no desde React.
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+                - cognito-idp:AdminCreateUser
+              Resource: !GetAtt CognitoUserPool.Arn
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPool
       Events:
         Route1:
           Type: Api

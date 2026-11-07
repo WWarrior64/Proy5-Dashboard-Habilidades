@@ -10,7 +10,7 @@ export function usePermissions() {
     canManage: () => {
       switch (role) {
         case 'ADMINISTRADOR':
-        case 'RECURSOS_HUMANOS':
+        case 'RRHH':
         case 'LIDER_PROYECTO':
           return true
         default:

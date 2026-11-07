@@ -1,7 +1,9 @@
 const usuariosHandler = require('../src/functions/usuarios/handler');
 const usuariosRepository = require('../src/repositories/usuarios.repository');
+const { resolverIdentidad } = require('../src/services/cognito-admin.service');
 
 jest.mock('../src/repositories/usuarios.repository');
+jest.mock('../src/services/cognito-admin.service');
 
 describe('Módulo de Usuarios - Handler', () => {
   beforeEach(() => {
@@ -80,21 +82,56 @@ describe('Módulo de Usuarios - Handler', () => {
   });
 
   describe('crearUsuario', () => {
-    test('debe crear un usuario válido', async () => {
-      usuariosRepository.crear.mockResolvedValue({ usuarioId: 'usr_1', estado: 'ACTIVO' });
-      const event = {
-        body: JSON.stringify({
-          usuarioId: 'usr_1', cognitoSub: 'cognito_123', nombre: 'Juan', email: 'juan@test.com',
-        }),
-      };
-      const result = await usuariosHandler.crearUsuario(event, {});
+    const eventoAdmin = (body) => ({
+      requestContext: { authorizer: { claims: { sub: 'sub_admin' } } },
+      body: JSON.stringify(body),
+    });
+
+    beforeEach(() => {
+      usuariosRepository.obtenerPorCognitoSub.mockResolvedValue({
+        usuarioId: 'usr_admin',
+        cognitoSub: 'sub_admin',
+        rol: 'ADMINISTRADOR',
+        estado: 'ACTIVO',
+      });
+      resolverIdentidad.mockResolvedValue({
+        cognitoSub: 'sub_nuevo',
+        creadoEnCognito: true,
+      });
+    });
+
+    test('debe crear un usuario válido mediante su correo, sin recibir cognitoSub del cliente', async () => {
+      usuariosRepository.crear.mockResolvedValue({
+        usuarioId: 'usr_generado',
+        cognitoSub: 'sub_nuevo',
+        nombre: 'Juan',
+        email: 'juan@test.com',
+        rol: 'EMPLEADO',
+        estado: 'ACTIVO',
+      });
+
+      const result = await usuariosHandler.crearUsuario(
+        eventoAdmin({ nombre: 'Juan', email: 'juan@test.com', rol: 'EMPLEADO' }),
+        {}
+      );
+
       expect(result.statusCode).toBe(201);
+      expect(usuariosRepository.obtenerPorCognitoSub).toHaveBeenCalledWith('sub_admin');
+      expect(resolverIdentidad).toHaveBeenCalledWith({ email: 'juan@test.com', nombre: 'Juan' });
+      expect(usuariosRepository.crear).toHaveBeenCalledWith(expect.objectContaining({
+        cognitoSub: 'sub_nuevo',
+        nombre: 'Juan',
+        email: 'juan@test.com',
+        rol: 'EMPLEADO',
+        estado: 'ACTIVO',
+      }));
     });
 
     test('debe retornar 400 cuando faltan campos requeridos', async () => {
-      const event = { body: JSON.stringify({ nombre: 'Juan' }) };
-      const result = await usuariosHandler.crearUsuario(event, {});
+      const result = await usuariosHandler.crearUsuario(eventoAdmin({ nombre: 'Juan' }), {});
       expect(result.statusCode).toBe(400);
+      expect(resolverIdentidad).not.toHaveBeenCalled();
+      expect(usuariosRepository.crear).not.toHaveBeenCalled();
     });
 
     test('debe retornar 409 cuando ya existe el usuario', async () => {
@@ -102,13 +139,47 @@ describe('Módulo de Usuarios - Handler', () => {
       error.codigo = 409;
       error.codigoError = 'CONFLICT';
       usuariosRepository.crear.mockRejectedValue(error);
-      const event = {
-        body: JSON.stringify({
-          usuarioId: 'usr_1', cognitoSub: 'cognito_123', nombre: 'Juan', email: 'juan@test.com',
-        }),
-      };
-      const result = await usuariosHandler.crearUsuario(event, {});
+
+      const result = await usuariosHandler.crearUsuario(
+        eventoAdmin({ nombre: 'Juan', email: 'juan@test.com' }),
+        {}
+      );
+
       expect(result.statusCode).toBe(409);
+      expect(resolverIdentidad).toHaveBeenCalledTimes(1);
+    });
+
+    test('debe retornar 401 cuando no hay identidad Cognito autenticada', async () => {
+      const result = await usuariosHandler.crearUsuario({
+        body: JSON.stringify({ nombre: 'Juan', email: 'juan@test.com' }),
+      }, {});
+      expect(result.statusCode).toBe(401);
+      expect(resolverIdentidad).not.toHaveBeenCalled();
+    });
+
+    test('debe retornar 403 cuando el solicitante es un empleado', async () => {
+      usuariosRepository.obtenerPorCognitoSub.mockResolvedValue({
+        usuarioId: 'usr_empleado', rol: 'EMPLEADO', estado: 'ACTIVO',
+      });
+      const result = await usuariosHandler.crearUsuario(
+        eventoAdmin({ nombre: 'Juan', email: 'juan@test.com' }),
+        {}
+      );
+      expect(result.statusCode).toBe(403);
+      expect(resolverIdentidad).not.toHaveBeenCalled();
+      expect(usuariosRepository.crear).not.toHaveBeenCalled();
+    });
+
+    test('debe retornar 403 cuando el administrador está inactivo', async () => {
+      usuariosRepository.obtenerPorCognitoSub.mockResolvedValue({
+        usuarioId: 'usr_admin', rol: 'ADMINISTRADOR', estado: 'INACTIVO',
+      });
+      const result = await usuariosHandler.crearUsuario(
+        eventoAdmin({ nombre: 'Juan', email: 'juan@test.com' }),
+        {}
+      );
+      expect(result.statusCode).toBe(403);
+      expect(resolverIdentidad).not.toHaveBeenCalled();
     });
   });
 
