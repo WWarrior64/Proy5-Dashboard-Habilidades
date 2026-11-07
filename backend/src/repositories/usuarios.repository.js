@@ -117,6 +117,23 @@ async function crear(data) {
     fechaActualizacion: new Date().toISOString(),
   };
 
+  // Comprobación de perfiles vinculados; rechaza reutilizar la misma identidad.
+  const yaVinculado = await obtenerPorCognitoSub(item.cognitoSub);
+  if (yaVinculado) {
+    throw new ErrorApp('La cuenta Cognito ya está vinculada a un usuario interno', 409, CODIGOS.CONFLICTO);
+  }
+  const correoEnUso = await dynamoDb.send(new QueryCommand({
+    TableName: tableUsuarios,
+    IndexName: 'GSI2',
+    KeyConditionExpression: '#correo = :correo',
+    ExpressionAttributeNames: { '#correo': 'correo' },
+    ExpressionAttributeValues: { ':correo': item.correo },
+    Limit: 1,
+  }));
+  if (correoEnUso.Items?.length) {
+    throw new ErrorApp('Ya existe un usuario interno con ese correo', 409, CODIGOS.CONFLICTO);
+  }
+
   await dynamoDb.send(
     new PutCommand({
       TableName: tableUsuarios,
