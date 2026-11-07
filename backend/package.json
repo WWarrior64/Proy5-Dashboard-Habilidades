@@ -11,14 +11,14 @@
     "test:integration": "jest --runInBand tests/integration/"
   },
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1164.0",
     "@aws-sdk/client-dynamodb": "^3.450.0",
     "@aws-sdk/lib-dynamodb": "^3.450.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "joi": "^17.13.3",
-    "uuid": "^9.0.1",
-    "@aws-sdk/client-cognito-identity-provider": "^3.450.0"
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "aws-sdk-client-mock": "^4.1.0",
