@@ -39,5 +39,15 @@ Thumbs.db
 # Coverage
 coverage/
 .aws-sam/
+.postman/
+
+# Archivos locales generados por Postman
+/postman/collections/
+/postman/documents/
+/postman/environments/
+/postman/flows/
+/postman/globals/
+/postman/mocks/
+/postman/specs/
 
 samconfig.toml

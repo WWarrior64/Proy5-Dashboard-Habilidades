@@ -18,6 +18,26 @@ function validarNivel(nivel) {
   }
 }
 
+function obtenerAnosExperiencia(data) {
+  const valor = data.anosExperiencia ?? data.aniosExperiencia;
+
+  if (valor === undefined) return undefined;
+
+  if (
+    typeof valor !== 'number' ||
+    !Number.isFinite(valor) ||
+    valor < 0
+  ) {
+    throw new ErrorApp(
+      'Los años de experiencia deben ser un número mayor o igual a 0',
+      400,
+      CODIGOS.VALIDACION
+    );
+  }
+
+  return valor;
+}
+
 async function asociar(data) {
   validarNivel(data.nivel);
 
@@ -45,7 +65,7 @@ async function asociar(data) {
     colaboradorId: data.colaboradorId,
     habilidadId: data.habilidadId,
     nivel: data.nivel,
-    anosExperiencia: data.anosExperiencia || 0,
+    anosExperiencia: obtenerAnosExperiencia(data) ?? 0,
     observaciones: data.observaciones || null,
     fechaCreacion: new Date().toISOString(),
     fechaActualizacion: new Date().toISOString(),
@@ -105,10 +125,12 @@ async function actualizarNivel(colaboradorId, habilidadId, data) {
     updateParts.push('nivelColaboradorKey = :nivelKey');
     expressionAttributeValues[':nivelKey'] = `${data.nivel}#${colaboradorId}`;
   }
-  if (data.anosExperiencia !== undefined) {
+  const anosExperiencia = obtenerAnosExperiencia(data);
+
+  if (anosExperiencia !== undefined) {
     updateParts.push('#anosExperiencia = :anosExperiencia');
     expressionAttributeNames['#anosExperiencia'] = 'anosExperiencia';
-    expressionAttributeValues[':anosExperiencia'] = data.anosExperiencia;
+    expressionAttributeValues[':anosExperiencia'] = anosExperiencia;
   }
   if (data.observaciones !== undefined) {
     updateParts.push('#observaciones = :observaciones');

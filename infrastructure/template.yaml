@@ -175,6 +175,36 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/colaboradores/{colaboradorId}
             Method: DELETE
+        Route6:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/estado
+            Method: PATCH
+        Route7:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/habilidades
+            Method: GET
+        Route8:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/habilidades
+            Method: POST
+        Route9:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}
+            Method: PUT
+        Route10:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}
+            Method: DELETE
 
 
   CargosFunction:
@@ -373,7 +403,30 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/proyectos/{proyectoId}
             Method: DELETE
-
+        Route8:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/habilidades
+            Method: GET
+        Route9:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/habilidades
+            Method: POST
+        Route10:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/habilidades/{habilidadId}
+            Method: PUT
+        Route11:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/proyectos/{proyectoId}/habilidades/{habilidadId}
+            Method: DELETE
 
   PostulacionesFunction:
     Type: AWS::Serverless::Function

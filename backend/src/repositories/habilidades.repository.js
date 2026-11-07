@@ -68,8 +68,11 @@ async function listar(filtros = {}) {
 
   if (filterParts.length > 0) {
     params.FilterExpression = filterParts.join(' AND ');
-    params.ExpressionAttributeValues = expressionAttributeValues;
     params.ExpressionAttributeNames = expressionAttributeNames;
+
+    if (Object.keys(expressionAttributeValues).length > 0) {
+      params.ExpressionAttributeValues = expressionAttributeValues;
+    }
   }
 
   if (lastKey) params.ExclusiveStartKey = lastKey;
