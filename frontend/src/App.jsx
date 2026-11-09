@@ -1,6 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { ProtectedRoute } from './components/layout/ProtectedRoute.jsx'
+import { ROLES, ROUTE_PATHS } from './utils/constants.js'
 
 // Pages
 import Login from './pages/Login.jsx'
@@ -20,6 +21,13 @@ import Perfil from './pages/Perfil.jsx'
 // Layout
 import MainLayout from './components/layout/MainLayout.jsx'
 
+const DASHBOARD_BY_ROLE = {
+  [ROLES_ADMIN.ADMINISTRADOR]: ROUTE_PATHS.DASHBOARD_ADMIN,
+  [ROLES_ADMIN.RRHH]: ROUTE_PATHS.DASHBOARD_RRHH,
+  [ROLES_ADMIN.LIDER_PROYECTO]: ROUTE_PATHS.DASHBOARD_LIDER,
+  [ROLES_ADMIN.EMPLEADO]: ROUTE_PATHS.DASHBOARD_EMPLEADO,
+}
+
 function PublicRoute({ component: Component, ...rest }) {
   return (
     <Routes>
@@ -35,6 +43,20 @@ function PublicRoute({ component: Component, ...rest }) {
   )
 }
 
+function RedirectByRole() {
+  const { user } = useAuth()
+  const location = useLocation()
+
+  if (!user) {
+    return <Navigate to={ROUTE_PATHS.LOGIN} replace />
+  }
+
+  const target = DASHBOARD_BY_ROLE[user.rol] || ROUTE_PATHS.DASHBOARD_EMPLEADO
+  // Evitar redirección infinita si ya estamos en el dashboard correcto
+  if (location.pathname === target) return null
+  return <Navigate to={target} replace />
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -46,6 +68,8 @@ function App() {
       >
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* Redirección inicial según rol */}
+          <Route path="/" element={<RedirectByRole />} />
           <Route
             element={
               <ProtectedRoute>
@@ -53,7 +77,6 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route path="/" element={<Navigate to="/dashboards/empleado" replace />} />
             <Route path="dashboards/empleado" element={<EmpleadoDashboard />} />
             <Route path="dashboards/rrhh" element={<RecursosHumanosDashboard />} />
             <Route path="dashboards/lider" element={<LiderProyectoDashboard />} />
@@ -61,6 +84,8 @@ function App() {
             <Route path="colaboradores" element={<Colaboradores />} />
             <Route path="proyectos" element={<Proyectos />} />
             <Route path="habilidades" element={<Habilidades />} />
+            <Route path="cargos" element={<Navigate to="/dashboards/administrador" replace />} />
+            <Route path="busqueda" element={<Navigate to="/dashboards/lider" replace />} />
             <Route path="asignaciones" element={<Asignaciones />} />
             <Route path="postulaciones" element={<Postulaciones />} />
             <Route path="usuarios" element={<Usuarios />} />
