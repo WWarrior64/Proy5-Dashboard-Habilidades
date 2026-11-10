@@ -9,18 +9,17 @@ const nombreSchema = Joi.string().min(1).max(100).required();
 const emailSchema = Joi.string().email().required();
 const cognitoSubSchema = Joi.string().min(1).max(100).required();
 
+// Contrato de entrada de React: cognitoSub, usuarioId y estado se resuelven
+// exclusivamente en el backend mediante Cognito y la lógica de registro.
 const crearUsuarioSchema = Joi.object({
-  usuarioId: Joi.string().min(1).max(50),
-  cognitoSub: cognitoSubSchema.required(),
-  nombre: nombreSchema,
-  email: emailSchema,
+  nombre: Joi.string().trim().min(1).max(150).required(),
+  email: Joi.string().trim().lowercase().email().max(254).required(),
   rol: Joi.string().valid(...ROLES_VALIDOS).default('EMPLEADO'),
-  estado: Joi.string().valid(...ESTADOS_VALIDOS).default('ACTIVO'),
 });
 
 const actualizarUsuarioSchema = Joi.object({
-  nombre: Joi.string().min(1).max(100),
-  email: emailSchema,
+  nombre: Joi.string().min(1).max(150),
+  email: Joi.string().email().max(254),
   rol: Joi.string().valid(...ROLES_VALIDOS),
   estado: Joi.string().valid(...ESTADOS_VALIDOS),
 });
@@ -34,10 +33,11 @@ const cambiarEstadoSchema = Joi.object({
 });
 
 const crearColaboradorSchema = Joi.object({
-  colaboradorId: Joi.string().min(1).max(50).required(),
+  colaboradorId: Joi.string().min(1).max(50),
   usuarioId: Joi.string().min(1).max(50).required(),
   cargoId: Joi.string().min(1).max(50).required(),
   rolProfesional: Joi.string().min(1).max(100).required(),
+  nombre: Joi.string().min(1).max(100),
   estado: Joi.string().valid(...ESTADOS_VALIDOS).default('ACTIVO'),
   observaciones: Joi.string().max(500),
 });
@@ -50,7 +50,7 @@ const actualizarColaboradorSchema = Joi.object({
 });
 
 const crearCargoSchema = Joi.object({
-  cargoId: Joi.string().min(1).max(50).required(),
+  cargoId: Joi.string().min(1).max(50),
   nombre: Joi.string().min(1).max(100).required(),
   descripcion: Joi.string().max(500),
   categoria: Joi.string().min(1).max(50).default('GENERAL'),
@@ -64,15 +64,17 @@ const actualizarCargoSchema = Joi.object({
 });
 
 const crearHabilidadSchema = Joi.object({
-  habilidadId: Joi.string().min(1).max(50).required(),
+  habilidadId: Joi.string().min(1).max(50),
   nombre: Joi.string().min(1).max(100).required(),
   categoria: Joi.string().min(1).max(50).default('GENERAL'),
+  descripcion: Joi.string().max(500),
   estado: Joi.string().valid(...ESTADOS_VALIDOS).default('ACTIVO'),
 });
 
 const actualizarHabilidadSchema = Joi.object({
   nombre: Joi.string().min(1).max(100),
   categoria: Joi.string().min(1).max(50),
+  descripcion: Joi.string().max(500),
   estado: Joi.string().valid(...ESTADOS_VALIDOS),
 });
 
@@ -112,7 +114,7 @@ function validarUsuario(data) {
 
 function validarColaborador(data) {
   const schema = Joi.object({
-    colaboradorId: idSchema,
+    colaboradorId: Joi.string().min(1).max(50),
     usuarioId: idSchema,
     cargoId: idSchema,
     rolProfesional: nombreSchema,

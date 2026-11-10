@@ -9,6 +9,12 @@ describe('Módulo de Cargos - Handler', () => {
   });
 
   describe('crearCargo', () => {
+    test('rechaza JSON inválido sin crear un cargo', async () => {
+      const result = await cargosHandler.crearCargo({ body: '{invalido' }, {});
+      expect(result.statusCode).toBe(400);
+      expect(cargosRepository.crear).not.toHaveBeenCalled();
+    });
+
     test('debe crear un cargo válido', async () => {
       const cargoMock = {
         cargoId: 'cargo_1',
@@ -27,7 +33,7 @@ describe('Módulo de Cargos - Handler', () => {
     });
 
     test('debe retornar 400 cuando faltan campos requeridos', async () => {
-      const event = { body: JSON.stringify({ nombre: 'Solo nombre' }) };
+      const event = { body: JSON.stringify({ descripcion: 'Sin nombre obligatorio' }) };
       const result = await cargosHandler.crearCargo(event, {});
 
       expect(result.statusCode).toBe(400);

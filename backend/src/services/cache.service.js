@@ -1,4 +1,15 @@
+// Caché efímera disponible solo fuera de AWS Lambda.
+// Las instancias Lambda no comparten memoria; allí se omite la caché para evitar
+// servir datos obsoletos cuando otra función escribe en DynamoDB.
+// Los GSIs de DynamoDB mantienen su propia consistencia eventual.
 const cache = new Map();
+
+// En Lambda no se utiliza una caché de proceso: cada instancia tiene su propio
+// Map y las escrituras de otras Lambdas no pueden invalidarlo. Este modo evita
+// servir entradas caducadas por escrituras externas, sin añadir infraestructura.
+function cacheDisponible() {
+  return !process.env.AWS_LAMBDA_FUNCTION_NAME;
+}
 
 /**
  * Entrada de caché con valor y marca de expiración.
@@ -48,6 +59,7 @@ function eliminarPorPrefijo(prefijo) {
  * @returns {any|undefined} Valor almacenado o undefined si no existe o expiró
  */
 function obtener(clave) {
+  if (!cacheDisponible()) return undefined;
   const entrada = cache.get(clave);
   if (!entrada) return undefined;
 
@@ -66,6 +78,7 @@ function obtener(clave) {
  * @param {number} [ttlMs] - Tiempo de vida en milisegundos. Si se omite, la entrada no expira.
  */
 function guardar(clave, valor, ttlMs) {
+  if (!cacheDisponible()) return;
   const expiraEn = ttlMs ? Date.now() + ttlMs : null;
   cache.set(clave, { valor, expiraEn });
 }

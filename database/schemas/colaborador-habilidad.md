@@ -12,8 +12,7 @@ Matriz N:M de colaboradores y habilidades. Relaciona los colaboradores con sus h
 | colaboradorId | Sí | String (UUID) | Identificador del colaborador. |
 | habilidadId | Sí | String (UUID) | Identificador de la habilidad. |
 | nivel | Sí | String | Nivel de dominio: JUNIOR, MID o SENIOR. |
-| aniosExperiencia | No | Number | Años de experiencia en la habilidad. |
-| fechaUltimoUso | No | String (ISO 8601) | Fecha en que utilizó la habilidad por última vez. |
+| anosExperiencia | Sí | Number | Años de experiencia, por defecto 0; la API admite temporalmente `aniosExperiencia` como alias de entrada. |
 | observaciones | No | String | Comentarios sobre el dominio de la habilidad. |
 | fechaCreacion | Sí | String (ISO 8601) | Fecha en que se agregó la habilidad al perfil. |
 | fechaActualizacion | Sí | String (ISO 8601) | Fecha de última actualización del nivel o experiencia. |
@@ -30,8 +29,8 @@ Matriz N:M de colaboradores y habilidades. Relaciona los colaboradores con sus h
 ## Patrones de consulta
 
 1. `GET /colaboradores/{colaboradorId}/habilidades` → Query por clave primaria con `colaboradorId = :id`.
-2. `GET /habilidades/{habilidadId}/colaboradores?nivel=SENIOR` → Query GSI1 con `habilidadId = :id` y filtro sobre `nivel`.
-3. `GET /buscar-colaboradores?habilidadId=X&nivelMinimo=MID` → Query GSI1 con `habilidadId = :id`, ordenación `nivelColaboradorKey` comienza con el nivel requerido.
+2. `GET /api/v1/busqueda/colaboradores?habilidades=X&nivelMinimo=MID` → Usa el GSI1 de ColaboradorHabilidad y compara los niveles en la lógica de búsqueda.
+3. La consulta interna `listarPorHabilidad(habilidadId)` admite paginación y filtros de nivel; no hay un endpoint público `GET /habilidades/{habilidadId}/colaboradores`.
 
 ## Reglas de negocio
 

@@ -26,14 +26,14 @@ Gestión de proyectos internos. Almacena los requerimientos de los proyectos que
 ## Claves e índices
 
 - **Clave primaria:** `proyectoId` (String, simple).
-- **GSI1:** Partición: `estado`, Ordenación: `fechaPublicacion#proyectoId`. Permite consultar proyectos activos.
-- **GSI2:** Partición: `liderId`, Ordenación: `estado#fechaCreacion`. Permite consultar los proyectos de un líder según su estado.
+- **GSI1:** Partición `estado`, ordenación física `fechaPublicacionKey` (`fechaPublicacion#proyectoId`).
+- **GSI2:** Partición `liderId`, ordenación física `estadoFechaKey` (`estado#fechaCreacion` inicialmente).
 
 ## Patrones de consulta
 
-1. `GET /proyectos/{proyectoId}` → Query por clave primaria `proyectoId`.
-2. `GET /proyectos?estado=ACTIVO` → Query GSI1 con `estado = 'ACTIVO'`.
-3. `GET /proyectos?liderId=X&estado=ACTIVO` → Query GSI2 con `liderId = :id` y `estado = 'ACTIVO'`.
+1. `GET /proyectos/{proyectoId}` → GetItem por `proyectoId`.
+2. `GET /proyectos?estado=ACTIVO` → Query GSI1 por estado con lectura paginada.
+3. `GET /proyectos?liderId=X&estado=ACTIVO` → Query GSI2 por líder con filtro adicional de estado; la API exige `estado` o `liderId`.
 
 ## Reglas de negocio
 
