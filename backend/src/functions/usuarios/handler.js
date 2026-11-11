@@ -126,15 +126,57 @@ async function actualizarUsuario(event, context) {
       return error('usuarioId es requerido', 400, CODIGOS.VALIDACION);
     }
 
+    const cognitoSubSolicitante = obtenerCognitoSub(event);
+    if (!cognitoSubSolicitante) {
+      return error('Identidad Cognito no válida', 401, CODIGOS.NO_AUTORIZADO);
+    }
+
+    const solicitante = await usuariosRepository.obtenerPorCognitoSub(cognitoSubSolicitante);
+    if (!solicitante || solicitante.estado !== 'ACTIVO') {
+      return error('Usuario solicitante inactivo o no registrado', 403, CODIGOS.PROHIBIDO);
+    }
+
+    // Solo el propio usuario o un ADMINISTRADOR puede modificar el perfil
+    const esPropioPerfil = solicitante.usuarioId === usuarioId;
+    const esAdmin = solicitante.rol === 'ADMINISTRADOR';
+    if (!esPropioPerfil && !esAdmin) {
+      return error('No tiene autorización para modificar este usuario', 403, CODIGOS.PROHIBIDO);
+    }
+
     const body = obtenerBody(event);
-    const camposPermitidos = ['nombre', 'email', 'rol', 'estado'];
+
+    // Política de seguridad: el correo se gestiona en Cognito para evitar desincronizaciones
+    if (body.email !== undefined && body.email !== solicitante.email) {
+      return error(
+        'El correo electrónico no puede modificarse directamente en el perfil; debe actualizarse mediante el flujo de identidad de Cognito',
+        400,
+        CODIGOS.VALIDACION
+      );
+    }
+
+    // rol y estado tienen sus endpoints PATCH dedicados con sus propias validaciones
+    if (body.rol !== undefined || body.estado !== undefined) {
+      return error(
+        'Para cambiar rol o estado use los endpoints PATCH correspondientes',
+        400,
+        CODIGOS.VALIDACION
+      );
+    }
+
+    const camposPermitidos = ['nombre'];
     const data = {};
     camposPermitidos.forEach((campo) => {
-      if (body[campo] !== undefined) data[campo] = body[campo];
+      if (body[campo] !== undefined) {
+        data[campo] = typeof body[campo] === 'string' ? body[campo].trim() : body[campo];
+      }
     });
 
-    if (data.rol && !ROLES_VALIDOS.includes(data.rol)) {
-      return error(`Rol inválido. Valores permitidos: ${ROLES_VALIDOS.join(', ')}`, 400, CODIGOS.VALIDACION);
+    if (data.nombre !== undefined && (!data.nombre || data.nombre.length > 150)) {
+      return error('El nombre proporcionado no es válido', 400, CODIGOS.VALIDACION);
+    }
+
+    if (Object.keys(data).length === 0) {
+      return error('No se proporcionaron campos modificables válidos (ej. nombre)', 400, CODIGOS.VALIDACION);
     }
 
     const usuario = await usuariosRepository.actualizar(usuarioId, data);
