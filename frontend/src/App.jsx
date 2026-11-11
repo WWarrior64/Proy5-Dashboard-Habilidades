@@ -4,6 +4,7 @@ import { ProtectedRoute } from './components/layout/ProtectedRoute.jsx'
 
 // Pages
 import Login from './pages/Login.jsx'
+import ForgotPassword from './pages/ForgotPassword.jsx'
 import NotFound from './pages/NotFound.jsx'
 import EmpleadoDashboard from './pages/dashboards/EmpleadoDashboard.jsx'
 import RecursosHumanosDashboard from './pages/dashboards/RecursosHumanosDashboard.jsx'
@@ -46,6 +47,7 @@ function App() {
       >
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route
             element={
               <ProtectedRoute>
@@ -53,8 +55,7 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route path="/" element={<Navigate to="/dashboards/empleado" replace />} />
-            <Route path="dashboards/empleado" element={<EmpleadoDashboard />} />
+            <Route path="/" element={<Login />} />
             <Route path="dashboards/rrhh" element={<RecursosHumanosDashboard />} />
             <Route path="dashboards/lider" element={<LiderProyectoDashboard />} />
             <Route path="dashboards/administrador" element={<AdministradorDashboard />} />
@@ -66,6 +67,11 @@ function App() {
             <Route path="usuarios" element={<Usuarios />} />
             <Route path="perfil" element={<Perfil />} />
           </Route>
+          <Route path="/dashboards/empleado" element={
+            <ProtectedRoute>
+              <EmpleadoDashboard />
+            </ProtectedRoute>
+          } />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
