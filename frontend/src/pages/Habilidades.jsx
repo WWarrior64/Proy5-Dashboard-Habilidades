@@ -67,7 +67,7 @@ export default function Habilidades() {
           <h1 className="emp-header-title">Mis habilidades</h1>
           <div className="emp-header-right">
             <input className="emp-search" aria-label="Buscar en encabezado" placeholder="Buscar..." value={headerSearch} onChange={e => setHeaderSearch(e.target.value)} />
-            <div className="emp-user-icon" aria-label="Perfil"><UserRound size={22} /></div>
+            <NavLink to="/perfil" className="emp-user-icon" aria-label="Abrir mi perfil" title="Mi perfil"><UserRound size={22} /></NavLink>
           </div>
         </header>
         <div className="emp-content skills-content">

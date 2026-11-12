@@ -1,0 +1,394 @@
+/* RRHH / Habilidades: proporciones, tipografía y paleta compartidas con Empleado y Colaboradores. */
+.rrhh-habilidades-page { width: 100%; }
+
+.rrhh-habilidades-page .emp-content.rrhh-habilidades-content {
+  overflow-y: auto;
+  padding: 16px 24px 24px;
+}
+
+.rrhh-habilidades-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rrhh-habilidades-heading h2 {
+  margin: 0;
+  color: #16255a;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.rrhh-habilidades-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border-radius: 6px;
+  color: #fff;
+  background: var(--color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rrhh-habilidades-add:hover { background: var(--color-primary-dark); }
+.rrhh-habilidades-add:disabled { opacity: .55; cursor: wait; }
+
+.rrhh-habilidades-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.rrhh-habilidades-page .rrhh-habilidades-metrics .emp-card {
+  width: auto;
+  min-width: 0;
+  height: 90px;
+  padding: 13px 15px;
+  flex-shrink: 1;
+}
+
+.rrhh-habilidades-page .rrhh-habilidades-metrics .emp-card-value { font-size: 30px; }
+
+.rrhh-habilidades-panel {
+  min-height: 340px;
+  background: #eef2f8;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.rrhh-habilidades-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px;
+}
+
+.rrhh-habilidades-panel-header h3 {
+  margin: 0;
+  color: #16255a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.rrhh-habilidades-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rrhh-habilidades-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 205px;
+  min-width: 0;
+  height: 35px;
+  padding: 0 10px;
+  color: #64748b;
+  background: #eef2f8;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+}
+
+.rrhh-habilidades-search:focus-within { border-color: var(--color-primary); }
+
+.rrhh-habilidades-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  color: #333;
+  background: transparent;
+  font-size: 12px;
+}
+
+.rrhh-habilidades-search input::placeholder { color: #94a3b8; }
+
+.rrhh-habilidades-filters select {
+  width: 158px;
+  min-width: 0;
+  height: 35px;
+  padding: 0 9px;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  color: #333;
+  background: #eef2f8;
+  font-size: 12px;
+}
+
+.rrhh-habilidades-filters select:last-child { width: 125px; }
+.rrhh-habilidades-filters select:focus { outline-color: var(--color-primary); }
+
+.rrhh-habilidades-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.rrhh-habilidades-table {
+  width: 100%;
+  min-width: 790px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.rrhh-habilidades-table th {
+  height: 36px;
+  padding: 10px 12px;
+  color: #16255a;
+  background: #cfddec;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+  text-transform: none;
+}
+
+.rrhh-habilidades-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #c9d4e0;
+  color: #333;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.rrhh-habilidades-table tbody tr:last-child td { border-bottom: 0; }
+.rrhh-habilidades-table th:nth-child(1) { width: 12%; }
+.rrhh-habilidades-table th:nth-child(2) { width: 15%; }
+.rrhh-habilidades-table th:nth-child(3) { width: 26%; }
+.rrhh-habilidades-table th:nth-child(4) { width: 13%; }
+.rrhh-habilidades-table th:nth-child(5) { width: 11%; }
+.rrhh-habilidades-table th:nth-child(6) { width: 10%; }
+.rrhh-habilidades-table th:nth-child(7) { width: 13%; }
+
+.rrhh-habilidades-nombre { font-weight: 600; color: #16255a !important; }
+.rrhh-habilidades-descripcion { color: #64748b !important; }
+
+.rrhh-habilidades-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  padding: 4px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rrhh-habilidades-status.activa {
+  color: #fff;
+  background: #16255a;
+}
+
+.rrhh-habilidades-status.inactiva {
+  color: #64748b;
+  background: #e2e8f0;
+}
+
+.rrhh-habilidades-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rrhh-habilidades-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  color: #2563eb;
+}
+
+.rrhh-habilidades-actions button:hover { background: #dbeafe; }
+.rrhh-habilidades-actions button:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Interruptor compacto: gris/inactivo a la izquierda, azul/activo a la derecha. */
+.rrhh-habilidades-actions .rrhh-habilidades-switch {
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+  justify-content: flex-start;
+  padding: 3px;
+  border: 1px solid #b6c4d4;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background-color .2s ease, border-color .2s ease;
+}
+
+.rrhh-habilidades-actions .rrhh-habilidades-switch.is-active {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.rrhh-habilidades-switch-thumb {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(15 23 42 / .22);
+  transition: transform .2s ease;
+}
+
+.rrhh-habilidades-switch.is-active .rrhh-habilidades-switch-thumb {
+  transform: translateX(18px);
+}
+
+.rrhh-habilidades-actions .rrhh-habilidades-switch:hover {
+  filter: brightness(.96);
+}
+.rrhh-habilidades-actions button:focus-visible,
+.rrhh-habilidades-add:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+.rrhh-habilidades-count {
+  margin: 0;
+  padding: 14px 8px;
+  color: #8b939f;
+  font-size: 12px;
+  text-align: center;
+}
+
+.rrhh-habilidades-feedback {
+  padding: 26px 12px;
+  color: #64748b;
+  font-size: 13px;
+  text-align: center;
+}
+
+.rrhh-habilidades-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 14px;
+  color: #b91c1c;
+  background: #fee2e2;
+  font-size: 12px;
+}
+
+.rrhh-habilidades-error button { color: #1d4ed8; font-weight: 600; }
+.rrhh-habilidades-preview { padding: 8px 14px; color: #64748b; font-size: 11px; }
+
+.rrhh-habilidades-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(16 27 54 / .66);
+}
+
+.rrhh-habilidades-modal {
+  display: grid;
+  gap: 14px;
+  width: min(460px, 100%);
+  max-height: 95vh;
+  padding: 24px;
+  overflow-y: auto;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 30px #0003;
+}
+
+.rrhh-habilidades-modal-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rrhh-habilidades-modal-heading h2 { margin: 0; color: #16255a; font-size: 20px; }
+.rrhh-habilidades-modal-heading button { color: #64748b; }
+.rrhh-habilidades-modal label { display: grid; gap: 6px; color: #16255a; font-size: 13px; }
+
+.rrhh-habilidades-modal input,
+.rrhh-habilidades-modal select,
+.rrhh-habilidades-modal textarea {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  color: #333;
+  background: #eef2f8;
+  font-size: 13px;
+}
+
+.rrhh-habilidades-modal textarea { resize: vertical; }
+.rrhh-habilidades-modal :is(input, select, textarea):focus { outline-color: #2563eb; }
+
+.rrhh-habilidades-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.rrhh-habilidades-cancel {
+  padding: 9px 15px;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  color: #16255a;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rrhh-habilidades-cancel:hover { background: #eef2f8; }
+
+@media (max-width: 1100px) {
+  .rrhh-habilidades-panel-header { align-items: flex-start; }
+  .rrhh-habilidades-filters { flex-wrap: wrap; }
+}
+
+@media (max-width: 900px) {
+  .rrhh-habilidades-page .emp-content.rrhh-habilidades-content { padding: 14px; }
+  .rrhh-habilidades-filters { width: 100%; }
+  .rrhh-habilidades-search { flex: 1 1 200px; }
+}
+
+@media (max-width: 620px) {
+  .rrhh-habilidades-page .emp-sidebar { width: 145px; }
+  .rrhh-habilidades-page .emp-sidebar-top { padding-left: 12px; }
+  .rrhh-habilidades-page .emp-sidebar-brand { font-size: 14px; width: 120px; }
+  .rrhh-habilidades-page .emp-sidebar-divider { width: 115px; }
+  .rrhh-habilidades-page .emp-sidebar-menu { padding-left: 0; }
+  .rrhh-habilidades-page .emp-sidebar-item,
+  .rrhh-habilidades-page .emp-sidebar-item.active {
+    width: 125px;
+    padding-left: 5px;
+    font-size: 11px;
+    white-space: normal;
+  }
+  .rrhh-habilidades-page .emp-sidebar-bottom { padding-left: 12px; }
+  .rrhh-habilidades-page .emp-header-right { gap: 8px; }
+  .rrhh-habilidades-page .emp-user-icon { margin-right: 0; }
+  .rrhh-habilidades-heading { flex-wrap: wrap; }
+  .rrhh-habilidades-add { padding: 8px 10px; font-size: 11px; }
+  .rrhh-habilidades-metrics { gap: 6px; }
+  .rrhh-habilidades-page .rrhh-habilidades-metrics .emp-card { height: 78px; padding: 8px; }
+  .rrhh-habilidades-page .emp-card-label { font-size: 10px; line-height: 1.2; }
+  .rrhh-habilidades-page .rrhh-habilidades-metrics .emp-card-value { font-size: 20px; }
+  .rrhh-habilidades-filters select, .rrhh-habilidades-filters select:last-child { flex: 1 1 125px; width: auto; }
+}
+
+@media (max-width: 430px) {
+  .rrhh-habilidades-metrics { grid-template-columns: minmax(0, 1fr); }
+}

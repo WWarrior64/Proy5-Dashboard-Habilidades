@@ -23,6 +23,7 @@ async function crear(data) {
     nombre: data.nombre.trim(),
     nombreNormalizado,
     categoria: data.categoria || 'GENERAL',
+    descripcion: data.descripcion || '',
     estado: data.estado || 'ACTIVO',
     fechaCreacion: new Date().toISOString(),
     fechaActualizacion: new Date().toISOString(),
@@ -101,7 +102,7 @@ async function actualizar(habilidadId, data) {
   }
 
   const siguiente = { ...existente, fechaActualizacion: new Date().toISOString() };
-  for (const campo of ['nombre', 'categoria', 'estado']) {
+  for (const campo of ['nombre', 'categoria', 'descripcion', 'estado']) {
     if (data[campo] !== undefined) siguiente[campo] = data[campo];
   }
   siguiente.nombreNormalizado = normalizarNombre(siguiente.nombre);

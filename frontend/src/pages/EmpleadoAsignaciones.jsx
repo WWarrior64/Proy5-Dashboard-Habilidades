@@ -101,9 +101,9 @@ export default function EmpleadoAsignaciones() {
               value={busquedaSuperior}
               onChange={evento => setBusquedaSuperior(evento.target.value)}
             />
-            <div className="emp-user-icon" aria-label="Perfil de empleado">
+            <NavLink to="/perfil" className="emp-user-icon" aria-label="Abrir mi perfil" title="Mi perfil">
               <UserRound size={22} aria-hidden="true" />
-            </div>
+            </NavLink>
           </div>
         </header>
 

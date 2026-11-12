@@ -1,25 +1,36 @@
 import { useMemo, useState } from 'react'
-import { NavLink } from 'react-router-dom'
-import { Search, UserRound } from 'lucide-react'
+import { Link, NavLink } from 'react-router-dom'
+import { BriefcaseBusiness, CheckCircle2, Clock3, UserRound, UsersRound } from 'lucide-react'
 import EmpleadoLogoutButton from '../../components/layout/EmpleadoLogoutButton.jsx'
 import './recursos-humanos-dashboard.css'
 
-// Información de ejemplo para diseñar la vista; sustituir por datos del backend.
-const colaboradores = [
-  { id: 1, nombre: 'Ana López', area: 'Desarrollo frontend', habilidad: 'React', disponible: true },
-  { id: 2, nombre: 'Carlos Ruiz', area: 'Desarrollo backend', habilidad: 'Node.js', disponible: true },
-  { id: 3, nombre: 'Sofía Gómez', area: 'Diseño UX/UI', habilidad: 'Figma', disponible: true },
-  { id: 4, nombre: 'Luis Pérez', area: 'Análisis de datos', habilidad: 'SQL', disponible: false },
-  { id: 5, nombre: 'María Torres', area: 'Cloud', habilidad: 'AWS', disponible: true },
-  { id: 6, nombre: 'Diego Ramírez', area: 'Calidad de software', habilidad: 'Pruebas', disponible: true },
-  { id: 7, nombre: 'Valeria Morales', area: 'Desarrollo frontend', habilidad: 'JavaScript', disponible: true },
-  { id: 8, nombre: 'Andrés Vega', area: 'Desarrollo móvil', habilidad: 'Flutter', disponible: false },
-  { id: 9, nombre: 'Lucía Hernández', area: 'Seguridad', habilidad: 'OAuth', disponible: true },
-  { id: 10, nombre: 'Martín Castro', area: 'DevOps', habilidad: 'Docker', disponible: true },
+// Resumen de demostración: los valores sirven para revisar el diseño del dashboard.
+// No representan estadísticas verificadas del backend.
+const resumenEjemplo = {
+  colaboradores: 35,
+  disponibles: 13,
+  proyectosActivos: 8,
+  asignaciones: 22,
+}
+
+const colaboradoresRecientes = [
+  { id: 1, nombre: 'Valeria Cruz', cargo: 'Ingeniera Cloud', ingreso: '02/11/2026', disponibilidad: 'Disponible', clase: 'disponible' },
+  { id: 2, nombre: 'Diego Rivas', cargo: 'Desarrollador Móvil', ingreso: '28/10/2026', disponibilidad: 'Parcial', clase: 'parcial' },
+  { id: 3, nombre: 'Camila Ortiz', cargo: 'Analista de datos', ingreso: '15/10/2026', disponibilidad: 'No disponible', clase: 'no-disponible' },
 ]
 
-// Estas cifras son únicamente ilustrativas hasta disponer de los endpoints de resumen.
-const resumenEjemplo = { proyectosActivos: 10, asignaciones: 10 }
+const talentoPorCargo = [
+  { id: 1, nombre: 'Desarrollo Backend', colaboradores: 12 },
+  { id: 2, nombre: 'Frontend', colaboradores: 9 },
+  { id: 3, nombre: 'Cloud', colaboradores: 6 },
+  { id: 4, nombre: 'Otros cargos', colaboradores: 8 },
+]
+
+const habilidadesMasUsadas = [
+  { id: 1, nombre: 'SQL', categoria: 'Bases de datos', colaboradores: 14 },
+  { id: 2, nombre: 'React', categoria: 'Frontend', colaboradores: 12 },
+  { id: 3, nombre: 'Node.js', categoria: 'Backend', colaboradores: 10 },
+]
 
 const menu = [
   ['Dashboard', '/dashboards/rrhh'],
@@ -31,19 +42,18 @@ const menu = [
 
 export default function RecursosHumanosDashboard() {
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
-  const [busquedaTabla, setBusquedaTabla] = useState('')
-  const [filtroDisponibilidad, setFiltroDisponibilidad] = useState('Todos')
+  const [avisoCargos, setAvisoCargos] = useState(false)
 
-  const visibles = useMemo(() => {
-    const terminos = [busquedaSuperior, busquedaTabla].map(valor => valor.trim().toLocaleLowerCase('es'))
-    return colaboradores.filter(colaborador => {
-      const contenido = [colaborador.nombre, colaborador.area, colaborador.habilidad].join(' ').toLocaleLowerCase('es')
-      return terminos.every(termino => contenido.includes(termino)) &&
-        (filtroDisponibilidad === 'Todos' || (filtroDisponibilidad === 'Disponibles' ? colaborador.disponible : !colaborador.disponible))
-    })
-  }, [busquedaSuperior, busquedaTabla, filtroDisponibilidad])
-
-  const disponibles = colaboradores.filter(colaborador => colaborador.disponible).length
+  const termino = busquedaSuperior.trim().toLocaleLowerCase('es')
+  const recientesVisibles = useMemo(() => colaboradoresRecientes.filter(item =>
+    [item.nombre, item.cargo, item.disponibilidad].join(' ').toLocaleLowerCase('es').includes(termino)
+  ), [termino])
+  const cargosVisibles = useMemo(() => talentoPorCargo.filter(item =>
+    item.nombre.toLocaleLowerCase('es').includes(termino)
+  ), [termino])
+  const habilidadesVisibles = useMemo(() => habilidadesMasUsadas.filter(item =>
+    [item.nombre, item.categoria].join(' ').toLocaleLowerCase('es').includes(termino)
+  ), [termino])
 
   return (
     <div className="emp-dashboard rrhh-dashboard">
@@ -82,93 +92,127 @@ export default function RecursosHumanosDashboard() {
               value={busquedaSuperior}
               onChange={evento => setBusquedaSuperior(evento.target.value)}
             />
-            <div className="emp-user-icon" aria-label="Perfil de RRHH">
+            <NavLink to="/perfil" className="emp-user-icon" aria-label="Abrir mi perfil" title="Mi perfil">
               <UserRound size={22} aria-hidden="true" />
-            </div>
+            </NavLink>
           </div>
         </header>
 
         <section className="emp-content rrhh-dashboard-content" aria-labelledby="rrhh-dashboard-title">
-          <h2 id="rrhh-dashboard-title" className="rrhh-dashboard-section-title">Resumen general</h2>
+          <div className="rrhh-dashboard-intro">
+            <h2 id="rrhh-dashboard-title" className="rrhh-dashboard-section-title">Resumen general</h2>
+            <span className="rrhh-dashboard-preview">Datos de ejemplo</span>
+          </div>
+
           <div className="rrhh-dashboard-metrics">
-            <div className="emp-card">
-              <p className="emp-card-label">Colaboradores</p>
-              <p className="emp-card-value">{colaboradores.length}</p>
+            <div className="emp-card rrhh-dashboard-metric">
+              <div className="rrhh-dashboard-metric-text">
+                <p className="emp-card-label">Colaboradores</p>
+                <p className="emp-card-value">{resumenEjemplo.colaboradores}</p>
+                <p className="rrhh-dashboard-metric-note">Plantilla registrada</p>
+              </div>
+              <span className="rrhh-dashboard-metric-icon"><UsersRound size={19} aria-hidden="true" /></span>
             </div>
-            <div className="emp-card">
-              <p className="emp-card-label">Disponibles</p>
-              <p className="emp-card-value">{disponibles}</p>
+            <div className="emp-card rrhh-dashboard-metric">
+              <div className="rrhh-dashboard-metric-text">
+                <p className="emp-card-label">Disponibles</p>
+                <p className="emp-card-value">{resumenEjemplo.disponibles}</p>
+                <p className="rrhh-dashboard-metric-note">Con capacidad</p>
+              </div>
+              <span className="rrhh-dashboard-metric-icon"><CheckCircle2 size={19} aria-hidden="true" /></span>
             </div>
-            <div className="emp-card">
-              <p className="emp-card-label">Proyectos activos</p>
-              <p className="emp-card-value">{resumenEjemplo.proyectosActivos}</p>
+            <div className="emp-card rrhh-dashboard-metric">
+              <div className="rrhh-dashboard-metric-text">
+                <p className="emp-card-label">Proyectos activos</p>
+                <p className="emp-card-value">{resumenEjemplo.proyectosActivos}</p>
+                <p className="rrhh-dashboard-metric-note">En ejecución</p>
+              </div>
+              <span className="rrhh-dashboard-metric-icon"><BriefcaseBusiness size={19} aria-hidden="true" /></span>
             </div>
-            <div className="emp-card">
-              <p className="emp-card-label">Asignaciones</p>
-              <p className="emp-card-value">{resumenEjemplo.asignaciones}</p>
+            <div className="emp-card rrhh-dashboard-metric">
+              <div className="rrhh-dashboard-metric-text">
+                <p className="emp-card-label">Asignaciones</p>
+                <p className="emp-card-value">{resumenEjemplo.asignaciones}</p>
+                <p className="rrhh-dashboard-metric-note">Vigentes</p>
+              </div>
+              <span className="rrhh-dashboard-metric-icon"><Clock3 size={19} aria-hidden="true" /></span>
             </div>
           </div>
 
-          <section className="rrhh-talent-panel" aria-labelledby="rrhh-talent-title">
-            <div className="rrhh-talent-heading">
-              <h3 id="rrhh-talent-title">Resumen de talento</h3>
-              <div className="rrhh-talent-actions">
-                <label className="rrhh-talent-search">
-                  <Search size={15} aria-hidden="true" />
-                  <input
-                    type="search"
-                    placeholder="Buscar..."
-                    aria-label="Buscar en resumen de talento"
-                    value={busquedaTabla}
-                    onChange={evento => setBusquedaTabla(evento.target.value)}
-                  />
-                </label>
-                <select
-                  className="rrhh-talent-filter-select"
-                  aria-label="Filtrar colaboradores por disponibilidad"
-                  value={filtroDisponibilidad}
-                  onChange={evento => setFiltroDisponibilidad(evento.target.value)}
-                >
-                  <option value="Todos">Todos</option>
-                  <option value="Disponibles">Disponibles</option>
-                  <option value="No disponibles">No disponibles</option>
-                </select>
+          <div className="rrhh-dashboard-panels">
+            <section className="rrhh-dashboard-panel" aria-labelledby="rrhh-recientes-titulo">
+              <h2 id="rrhh-recientes-titulo">Colaboradores recientes</h2>
+              <div className="rrhh-dashboard-panel-list">
+                {recientesVisibles.map(item => (
+                  <Link to="/colaboradores" className="rrhh-dashboard-row rrhh-dashboard-person" key={item.id}>
+                    <div className="rrhh-dashboard-row-copy">
+                      <strong>{item.nombre}</strong>
+                      <p>{item.cargo} · Ingreso {item.ingreso}</p>
+                    </div>
+                    <span className={'rrhh-dashboard-status ' + item.clase}>{item.disponibilidad}</span>
+                  </Link>
+                ))}
+                {!recientesVisibles.length && <p className="rrhh-dashboard-empty">No hay colaboradores que coincidan con la búsqueda.</p>}
               </div>
-            </div>
+            </section>
 
-            <div className="rrhh-talent-scroll">
-              <table className="rrhh-talent-table">
-                <thead>
-                  <tr>
-                    <th>Área / Rol</th>
-                    <th>Colaboradores</th>
-                    <th>Habilidad</th>
-                    <th>Disponibilidad</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibles.map(colaborador => (
-                    <tr key={colaborador.id}>
-                      <td>{colaborador.area}</td>
-                      <td>{colaborador.nombre}</td>
-                      <td>{colaborador.habilidad}</td>
-                      <td>
-                        <span className={'rrhh-talent-status ' + (colaborador.disponible ? 'available' : 'unavailable')}>
-                          {colaborador.disponible ? 'Disponible' : 'No disponible'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {visibles.length === 0 && (
-                <p className="rrhh-talent-empty">No se encontraron colaboradores con esos filtros.</p>
+            <section className="rrhh-dashboard-panel" aria-labelledby="rrhh-cargos-titulo">
+              <h2 id="rrhh-cargos-titulo">Talento por cargo</h2>
+              <div className="rrhh-dashboard-panel-list">
+                {cargosVisibles.map(item => {
+                  const porcentaje = Math.round(item.colaboradores / resumenEjemplo.colaboradores * 100)
+                  return (
+                    <div className="rrhh-dashboard-row rrhh-dashboard-cargo" key={item.id}>
+                      <div className="rrhh-dashboard-row-copy">
+                        <strong>{item.nombre}</strong>
+                        <p>{item.colaboradores} colaboradores</p>
+                      </div>
+                      <div className="rrhh-dashboard-progress-column">
+                        <div className="rrhh-dashboard-progress" role="progressbar"
+                          aria-label={'Porcentaje de ' + item.nombre} aria-valuemin={0} aria-valuemax={100}
+                          aria-valuenow={porcentaje}>
+                          <span style={{ width: porcentaje + '%' }} />
+                        </div>
+                        <span>{porcentaje} %</span>
+                      </div>
+                    </div>
+                  )
+                })}
+                {!cargosVisibles.length && <p className="rrhh-dashboard-empty">No hay cargos que coincidan con la búsqueda.</p>}
+              </div>
+            </section>
+
+            <section className="rrhh-dashboard-panel rrhh-dashboard-actions-panel" aria-labelledby="rrhh-acciones-titulo">
+              <h2 id="rrhh-acciones-titulo">Acciones rápidas</h2>
+              <div className="rrhh-dashboard-quick-actions">
+                <Link to="/colaboradores">Gestionar colaboradores</Link>
+                <button type="button" onClick={() => setAvisoCargos(true)}>Gestionar cargos</button>
+                <Link to="/habilidades">Gestionar habilidades</Link>
+              </div>
+              {avisoCargos && (
+                <p className="rrhh-dashboard-action-note" role="status">
+                  La gestión de cargos aún no tiene una pantalla propia. Puedes consultar los cargos desde Colaboradores.
+                  <button type="button" onClick={() => setAvisoCargos(false)} aria-label="Cerrar aviso">×</button>
+                </p>
               )}
-            </div>
-            <p className="rrhh-talent-count">
-              Mostrando {visibles.length} de {colaboradores.length} colaboradores
-            </p>
-          </section>
+            </section>
+
+            <section className="rrhh-dashboard-panel" aria-labelledby="rrhh-habilidades-titulo">
+              <h2 id="rrhh-habilidades-titulo">Habilidades más usadas</h2>
+              <div className="rrhh-dashboard-panel-list">
+                {habilidadesVisibles.map(item => (
+                  <Link to="/habilidades" className="rrhh-dashboard-row rrhh-dashboard-skill" key={item.id}>
+                    <div className="rrhh-dashboard-row-copy">
+                      <strong>{item.nombre}</strong>
+                      <p>{item.categoria}</p>
+                    </div>
+                    <span className="rrhh-dashboard-skill-count">{item.colaboradores} colaboradores</span>
+                  </Link>
+                ))}
+                {!habilidadesVisibles.length && <p className="rrhh-dashboard-empty">No hay habilidades que coincidan con la búsqueda.</p>}
+              </div>
+            </section>
+          </div>
         </section>
       </main>
     </div>

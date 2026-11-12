@@ -21,7 +21,7 @@ function obtenerPathParam(event, nombre) {
 async function crearHabilidad(event, context) {
   try {
     const body = obtenerBody(event);
-    const { habilidadId, nombre, categoria, estado } = body;
+    const { habilidadId, nombre, categoria, descripcion, estado } = body;
 
     if (!habilidadId || !nombre) {
       return error('habilidadId y nombre son requeridos', 400, CODIGOS.VALIDACION);
@@ -31,6 +31,7 @@ async function crearHabilidad(event, context) {
       habilidadId,
       nombre,
       categoria,
+      descripcion,
       estado,
     });
 
@@ -82,7 +83,7 @@ async function actualizarHabilidad(event, context) {
     }
 
     const body = obtenerBody(event);
-    const camposPermitidos = ['nombre', 'categoria', 'estado'];
+    const camposPermitidos = ['nombre', 'categoria', 'descripcion', 'estado'];
     const data = {};
     camposPermitidos.forEach((campo) => {
       if (body[campo] !== undefined) data[campo] = body[campo];
