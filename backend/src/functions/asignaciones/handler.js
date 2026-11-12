@@ -6,10 +6,17 @@ function obtenerBody(event) {
   if (!event.body) return {};
   if (typeof event.body === 'string') {
     try {
-      return JSON.parse(event.body);
+      const body = JSON.parse(event.body);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        throw new ErrorApp('Se requiere un objeto JSON', 400, CODIGOS.VALIDACION);
+      }
+      return body;
     } catch (_) {
-      return {};
+      throw new ErrorApp('JSON inválido', 400, CODIGOS.VALIDACION);
     }
+  }
+  if (typeof event.body !== 'object' || Array.isArray(event.body) || event.body === null) {
+    throw new ErrorApp('Se requiere un objeto JSON', 400, CODIGOS.VALIDACION);
   }
   return event.body;
 }
@@ -117,7 +124,13 @@ const { crearDespachador } = require('../../utils/lambda-dispatcher');
 
 const handler = crearDespachador({
   'PATCH /api/v1/asignaciones/{asignacionId}/estado': (event, context) => {
-    if (JSON.parse(event.body).estado !== 'DESVINCULADA') return error('Solo se permite DESVINCULADA', 400, CODIGOS.VALIDACION);
+    let body;
+    try {
+      body = obtenerBody(event);
+    } catch (_) {
+      return error('JSON inválido', 400, CODIGOS.VALIDACION);
+    }
+    if (body?.estado !== 'DESVINCULADA') return error('Solo se permite DESVINCULADA', 400, CODIGOS.VALIDACION);
     return desvincularAsignacion(event, context);
   },
   'GET /api/v1/asignaciones/activas': listarAsignacionesActivas,

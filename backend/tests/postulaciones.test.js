@@ -44,6 +44,12 @@ beforeEach(() => {
 });
 
 describe('Repositorio: postulaciones', () => {
+  test('handler rechaza JSON inválido sin registrar una postulación', async () => {
+    const respuesta = await handler.crearPostulacion({ body: '{invalido' }, {});
+    expect(respuesta.statusCode).toBe(400);
+    expect(commandMocks.PutCommand).not.toHaveBeenCalled();
+  });
+
   test('consulta envía QueryCommand real y devuelve [] si no hay Items', async () => {
     commandMocks.QueryCommand.mockResolvedValueOnce({});
     await expect(repo.consultarPostulacionesProyecto('p1')).resolves.toEqual([]);

@@ -8,6 +8,7 @@ const {
 } = require('../config/dynamodb');
 const { tableCargos, tableColaboradores } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
+const { randomUUID } = require('node:crypto');
 
 /**
  * Crear un cargo.
@@ -15,8 +16,14 @@ const { ErrorApp, CODIGOS } = require('../utils/errors');
  * @returns {Promise<Object>}
  */
 async function crear(data) {
+  if (typeof data.nombre !== 'string' || !data.nombre.trim()) {
+    throw new ErrorApp('nombre de cargo obligatorio', 400, CODIGOS.VALIDACION);
+  }
+  if (data.estado !== undefined && !['ACTIVO', 'INACTIVO'].includes(data.estado)) {
+    throw new ErrorApp('Estado de cargo inválido', 400, CODIGOS.VALIDACION);
+  }
   const item = {
-    cargoId: data.cargoId,
+    cargoId: data.cargoId || randomUUID(),
     nombre: data.nombre.trim(),
     descripcion: data.descripcion || null,
     categoria: data.categoria || 'GENERAL',
@@ -25,14 +32,18 @@ async function crear(data) {
     fechaActualizacion: new Date().toISOString(),
   };
 
-  await dynamoDb.send(
-    new PutCommand({
+  try {
+    await dynamoDb.send(new PutCommand({
       TableName: tableCargos,
       Item: item,
       ConditionExpression: 'attribute_not_exists(cargoId)',
-    })
-  );
-
+    }));
+  } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') {
+      throw new ErrorApp('Ya existe un cargo con ese identificador', 409, CODIGOS.CONFLICTO);
+    }
+    throw err;
+  }
   return item;
 }
 
@@ -108,6 +119,9 @@ async function actualizar(cargoId, data) {
   }
 
   if (data.nombre !== undefined) {
+    if (typeof data.nombre !== 'string' || !data.nombre.trim()) {
+      throw new ErrorApp('nombre de cargo obligatorio', 400, CODIGOS.VALIDACION);
+    }
     updateParts.push('#nombre = :nombre');
     expressionAttributeNames['#nombre'] = 'nombre';
     expressionAttributeValues[':nombre'] = data.nombre.trim();

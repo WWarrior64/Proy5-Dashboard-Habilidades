@@ -5,7 +5,8 @@
 **Base URL (produccion / API Gateway):** `https://{api-id}.execute-api.us-east-2.amazonaws.com/prod/api/v1`  
 **Base URL (SAM Local):** `http://127.0.0.1:3000/api/v1`  
 **Arquitectura:** AWS Serverless (API Gateway REST API + AWS Lambda con Node.js 24 + DynamoDB)  
-**Formato de datos:** `application/json`
+**Formato de datos:** `application/json`  
+**Nombres de tablas en ejemplos:** el sufijo `-dev` corresponde a desarrollo; la plantilla usa `-prod` cuando `StageName=prod`. 
 
 ---
 
@@ -72,8 +73,8 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
   - Descripcion: Consultar usuario por identificador.
   - Roles permitidos: ADMINISTRADOR, RRHH.
 - **POST /api/v1/usuarios**
-  - Descripcion: Crear registro interno de usuario vinculado a Cognito.
-  - Roles permitidos: Todos.
+  - Descripcion: Crear registro interno de usuario vinculado a Cognito. El cuerpo acepta `nombre`, `email` y `rol` opcional; `usuarioId`, `cognitoSub` y `estado` se resuelven en el backend y no deben enviarse desde React.
+  - Roles permitidos: ADMINISTRADOR activo, según las comprobaciones del handler.
 - **PUT /api/v1/usuarios/{usuarioId}**
   - Descripcion: Actualizar datos permitidos del usuario.
   - Roles permitidos: Propio usuario, ADMINISTRADOR.
@@ -91,11 +92,14 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **Tablas DynamoDB:** `internal-marketplace-colaboradores-dev`, `internal-marketplace-usuarios-dev`, `internal-marketplace-cargos-dev`, `internal-marketplace-colaborador-habilidad-dev`
 
 - **GET /api/v1/colaboradores**
-  - Descripcion: Listar plantilla con filtros (estado, cargo, rol).
+  - Descripcion: Listar plantilla con filtros `estado`, `cargoId` y `rolProfesional`.
+  - Paginacion: `limit` (entero entre 1 y 100, predeterminado 25) y `cursor` (token opaco `base64url` recibido como `datos.nextCursor` en la respuesta anterior). La respuesta conserva `datos.items` y `datos.lastKey` por compatibilidad y agrega `datos.nextCursor`, que es `null` al terminar. Un cursor inválido devuelve 400. No deben fabricarse cursores manualmente. DynamoDB filtra después de leer la página: puede devolver menos de `limit`, incluso cero elementos, y todavía proporcionar `nextCursor`; debe continuarse mientras no sea `null`.
 - **POST /api/v1/colaboradores**
-  - Descripcion: Dar de alta un colaborador. Requiere usuarioId y cargoId activos.
+  - Descripcion: Dar de alta un colaborador. Requiere `usuarioId`, `cargoId` y `rolProfesional`; `colaboradorId` es opcional (UUID automático). La creación reserva `USUARIO#<usuarioId>` en la misma transacción para impedir duplicados concurrentes.
 - **GET /api/v1/colaboradores/{colaboradorId}**
   - Descripcion: Consultar detalle de colaborador por PK.
+- **GET /api/v1/colaboradores/yo**
+  - Descripcion: Consultar el perfil de colaborador asociado a la identidad Cognito autenticada; retorna 404 si no existe.
 - **PUT /api/v1/colaboradores/{colaboradorId}**
   - Descripcion: Actualizar informacion profesional.
 - **PATCH /api/v1/colaboradores/{colaboradorId}/estado**
@@ -118,7 +122,7 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **GET /api/v1/cargos**
   - Descripcion: Listar cargos activos e inactivos.
 - **POST /api/v1/cargos**
-  - Descripcion: Crear un cargo nuevo en el catalogo.
+  - Descripcion: Crear un cargo nuevo en el catalogo. `cargoId` es opcional y se genera automáticamente si falta.
 - **GET /api/v1/cargos/{cargoId}**
   - Descripcion: Consultar cargo por identificador.
 - **PUT /api/v1/cargos/{cargoId}**
@@ -135,9 +139,9 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **GET /api/v1/habilidades**
   - Descripcion: Listar catalogo de habilidades con filtros por categoria.
 - **POST /api/v1/habilidades**
-  - Descripcion: Crear nueva habilidad (valida nombre normalizado unico).
+  - Descripcion: Crear nueva habilidad (`habilidadId` opcional; UUID automático). El nombre normalizado se reserva transaccionalmente para impedir duplicados exactos.
 - **GET /api/v1/habilidades/categorias**
-  - Descripcion: Listar categorias disponibles de habilidades.
+  - Descripcion: Listar categorias disponibles, recorriendo las paginas del catalogo de habilidades y excluyendo los marcadores internos de unicidad. Devuelve un arreglo de nombres ordenados.
 - **GET /api/v1/habilidades/{habilidadId}**
   - Descripcion: Consultar habilidad por identificador.
 - **PUT /api/v1/habilidades/{habilidadId}**
@@ -186,6 +190,8 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
   - Descripcion: Consultar detalle de postulacion mediante clave compuesta.
 - **PATCH /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/estado**
   - Descripcion: Aceptar o rechazar postulacion. La aceptacion ejecuta TransactWriteItems para generar la asignacion.
+- **PATCH /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/retirar**
+  - Descripcion: Retirar una postulacion segun los permisos del colaborador autenticado.
 
 ---
 
@@ -194,17 +200,23 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **Tablas DynamoDB:** `internal-marketplace-asignaciones-dev` (PK: `asignacionId`, GSIs por colaborador, proyecto y estado)
 
 - **GET /api/v1/asignaciones**
-  - Descripcion: Listado general de asignaciones para control y auditoria.
+  - Descripcion: Alias del listado de asignaciones activas; no consulta historicos desvinculados.
 - **POST /api/v1/asignaciones**
   - Descripcion: Crear asignacion directa comprobando que la dedicacion total no supere el 100%.
 - **GET /api/v1/asignaciones/activas**
-  - Descripcion: Consultar asignaciones activas (filtro por GSI3).
+  - Descripcion: Consultar asignaciones activas mediante GSI3. Las lecturas de GSI son eventualmente consistentes y no reemplazan la condición transaccional sobre `dedicacionReservada`.
 - **GET /api/v1/asignaciones/{asignacionId}**
   - Descripcion: Consultar asignacion por identificador unico.
 - **PUT /api/v1/asignaciones/{asignacionId}**
   - Descripcion: Modificar horas o porcentaje de dedicacion activa.
 - **PATCH /api/v1/asignaciones/{asignacionId}/estado**
-  - Descripcion: Desvincular colaborador (estado DESVINCULADA y registro de fecha).
+  - Descripcion: Desvincular colaborador enviando `{ "estado": "DESVINCULADA" }` (registro de fecha y liberacion de dedicacion).
+- **DELETE /api/v1/asignaciones/{asignacionId}**
+  - Descripcion: Desvincular logicamente una asignacion; conserva el registro historico.
+- **GET /api/v1/colaboradores/{colaboradorId}/asignaciones**
+  - Descripcion: Consultar asignaciones activas del colaborador.
+- **GET /api/v1/proyectos/{proyectoId}/asignaciones**
+  - Descripcion: Consultar asignaciones activas del proyecto.
 
 ---
 
@@ -212,18 +224,19 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **Funcion Lambda:** `BusquedaFunction` (`src/functions/busqueda/handler.js`)
 - **Tablas DynamoDB:** `internal-marketplace-colaborador-habilidad-dev`, `internal-marketplace-habilidades-dev`, `internal-marketplace-colaboradores-dev`, `internal-marketplace-cargos-dev`
 
-- **GET /api/v1/busqueda/colaboradores?habilidadId={id}&nivel={nivel}**
-  - Descripcion: Algoritmo de coincidencia de candidatos segun matriz de habilidades y disponibilidad.
-- **GET /api/v1/busqueda/proyectos?habilidadId={id}**
-  - Descripcion: Busqueda de proyectos que demanden una habilidad tecnica especifica.
-- **GET /api/v1/busqueda/habilidades?q={termino}**
-  - Descripcion: Busqueda en catalogo por texto normalizado.
+- **GET /api/v1/busqueda/colaboradores?habilidades={id1,id2}&nivelMinimo=MID&tipoCoincidencia=todas&considerarDisponibilidad=true&limit=50**
+  - Descripcion: Buscar candidatos activos por habilidades y nivel. La disponibilidad se determina con `100 - dedicacionReservada`, y los registros sin dedicación válida no se consideran disponibles. La respuesta incluye `total` de coincidencias antes del límite, `devueltos`, `candidatos`, puntuaciones y habilidades faltantes.
+  - Parametros: `habilidades` obligatorio; `nivelMinimo` (`JUNIOR`, `MID`, `SENIOR`); `tipoCoincidencia` (`todas`, `alguna`); `considerarDisponibilidad` (`true`, `false`); `limit` entero de 1 a 100.
+- **GET /api/v1/busqueda/proyectos?estado=ACTIVO&nombre={termino}**
+  - Descripcion: Buscar proyectos por estado y texto del nombre. Tambien admite `liderId` y `fecha`; no filtra proyectos por `habilidadId`.
+- **GET /api/v1/busqueda/habilidades?nombre={termino}**
+  - Descripcion: Consultar habilidades mediante los filtros admitidos por el repositorio (`nombre`, `categoria`, `estado`).
 
 ---
 
 ### 2.10 Modulo 09: Dashboard y Metricas
 - **Funcion Lambda:** `DashboardFunction` (`src/functions/dashboard/handler.js`)
-- **Acceso:** Consultas agregadas sin Scan masivo sobre tablas operativas.
+- **Acceso:** Consultas agregadas mediante GSIs y lecturas paginadas; la distribución de habilidades y el conteo de postulaciones realizan scans limitados a sus tablas correspondientes.
 
 - **GET /api/v1/dashboard/resumen**
   - Descripcion: Metricas consolidadas (colaboradores activos, proyectos por estado, asignaciones).

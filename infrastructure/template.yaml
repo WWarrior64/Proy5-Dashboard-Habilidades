@@ -215,6 +215,12 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}
             Method: DELETE
+        Route11:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/yo
+            Method: GET
 
 
   CargosFunction:
@@ -311,6 +317,12 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/habilidades/{habilidadId}/estado
             Method: PATCH
+        Route6:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/habilidades/categorias
+            Method: GET
 
 
   BusquedaFunction:
@@ -370,6 +382,8 @@ Resources:
             TableName: !Ref UsuariosTable
         - DynamoDBReadPolicy:
             TableName: !Ref ColaboradoresTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref HabilidadesTable
       Events:
         Route1:
           Type: Api
@@ -562,6 +576,12 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/proyectos/{proyectoId}/asignaciones
             Method: GET
+        Route9:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/asignaciones/{asignacionId}/estado
+            Method: PATCH
 
 
   DashboardFunction:
@@ -928,6 +948,10 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
 
   FrontendOriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
@@ -980,6 +1004,16 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt BucketFrontend.Arn
+              - !Sub ${BucketFrontend.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: false
           - Sid: AllowCloudFrontServicePrincipalReadOnly
             Effect: Allow
             Principal:

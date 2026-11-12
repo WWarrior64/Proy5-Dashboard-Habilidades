@@ -5,9 +5,8 @@ const {
   UpdateCommand,
   DeleteCommand,
   QueryCommand,
-  ScanCommand,
 } = require('../../src/config/dynamodb.js');
-const { tableProyectoHabilidad } = require('../../src/config/environment.js');
+const { tableProyectoHabilidad, tableProyectos, tableHabilidades } = require('../../src/config/environment.js');
 const { ErrorApp, CODIGOS } = require('../../src/utils/errors.js');
 const cache = require('../../src/services/cache.service.js');
 
@@ -22,6 +21,17 @@ function claveHabilidadesProyecto(proyectoId) {
   return `proyecto-habilidad:proyecto:${proyectoId}`;
 }
 
+async function comprobarProyectoEditable(proyectoId) {
+  const resultado = await dynamoDb.send(new GetCommand({
+    TableName: tableProyectos,
+    Key: { proyectoId },
+  }));
+  if (!resultado.Item) throw new ErrorApp('Proyecto no encontrado', 404, CODIGOS.NO_ENCONTRADO);
+  if (['CANCELADO', 'COMPLETADO'].includes(resultado.Item.estado)) {
+    throw new ErrorApp('No se pueden modificar requisitos de un proyecto finalizado', 409, CODIGOS.CONFLICTO);
+  }
+}
+
 async function asociarHabilidad(datos) {
   const { proyectoId, habilidadId, nivelMinimo, esObligatoria, peso, observaciones } = datos;
 
@@ -32,15 +42,31 @@ async function asociarHabilidad(datos) {
     throw new ErrorApp('nivelMinimo es obligatorio', 400, CODIGOS.VALIDACION);
   }
   validarNivelMinimo(nivelMinimo);
-  if (esObligatoria === undefined || esObligatoria === null) {
-    throw new ErrorApp('esObligatoria es obligatorio', 400, CODIGOS.VALIDACION);
+  if (typeof esObligatoria !== 'boolean') {
+    throw new ErrorApp('esObligatoria debe ser booleano', 400, CODIGOS.VALIDACION);
+  }
+  if (peso !== undefined && (!Number.isFinite(peso) || peso < 0)) {
+    throw new ErrorApp('peso debe ser un número mayor o igual a 0', 400, CODIGOS.VALIDACION);
+  }
+
+  const [proyecto, habilidad] = await Promise.all([
+    dynamoDb.send(new GetCommand({ TableName: tableProyectos, Key: { proyectoId } })),
+    dynamoDb.send(new GetCommand({ TableName: tableHabilidades, Key: { habilidadId } })),
+  ]);
+  if (!proyecto.Item) throw new ErrorApp('Proyecto no encontrado', 404, CODIGOS.NO_ENCONTRADO);
+  if (['CANCELADO', 'COMPLETADO'].includes(proyecto.Item.estado)) {
+    throw new ErrorApp('No se pueden modificar requisitos de un proyecto finalizado', 409, CODIGOS.CONFLICTO);
+  }
+  if (!habilidad.Item) throw new ErrorApp('Habilidad no encontrada', 404, CODIGOS.NO_ENCONTRADO);
+  if (habilidad.Item.estado !== 'ACTIVO') {
+    throw new ErrorApp('La habilidad debe estar activa', 400, CODIGOS.VALIDACION);
   }
 
   const item = {
     proyectoId,
     habilidadId,
     nivelMinimo,
-    esObligatoria: Boolean(esObligatoria),
+    esObligatoria,
     fechaCreacion: ahoraISO(),
     fechaActualizacion: ahoraISO(),
     ...(peso !== undefined && peso !== null && { peso }),
@@ -77,15 +103,19 @@ async function consultarHabilidadesProyecto(proyectoId) {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.send(
-    new QueryCommand({
+  const items = [];
+  let lastKey;
+  do {
+    const pagina = await dynamoDb.send(new QueryCommand({
       TableName: tableProyectoHabilidad,
       KeyConditionExpression: '#p = :p',
       ExpressionAttributeNames: { '#p': 'proyectoId' },
       ExpressionAttributeValues: { ':p': proyectoId },
-    })
-  );
-  const items = resultado.Items || [];
+      ...(lastKey && { ExclusiveStartKey: lastKey }),
+    }));
+    items.push(...(pagina.Items || []));
+    lastKey = pagina.LastEvaluatedKey;
+  } while (lastKey);
 
   cache.guardar(clave, items, CACHE_TTL_MS);
   return items;
@@ -97,7 +127,10 @@ async function modificarNivelMinimo(proyectoId, habilidadId, nivelMinimo) {
 }
 
 async function cambiarObligatoria(proyectoId, habilidadId, esObligatoria) {
-  return actualizarCampo(proyectoId, habilidadId, { esObligatoria: Boolean(esObligatoria) });
+  if (typeof esObligatoria !== 'boolean') {
+    throw new ErrorApp('esObligatoria debe ser booleano', 400, CODIGOS.VALIDACION);
+  }
+  return actualizarCampo(proyectoId, habilidadId, { esObligatoria });
 }
 
 async function actualizarPeso(proyectoId, habilidadId, peso) {
@@ -108,6 +141,7 @@ async function actualizarPeso(proyectoId, habilidadId, peso) {
 }
 
 async function actualizarCampo(proyectoId, habilidadId, cambios) {
+  await comprobarProyectoEditable(proyectoId);
   const sets = [];
   const nombresAtributos = {};
   const valoresAtributos = {};
@@ -155,7 +189,9 @@ async function actualizarRelacion(proyectoId, habilidadId, data) {
     cambios.esObligatoria = data.esObligatoria;
   }
   if (data.peso !== undefined) {
-    if (!Number.isFinite(data.peso)) throw new ErrorApp('Peso inválido', 400, CODIGOS.VALIDACION);
+    if (!Number.isFinite(data.peso) || data.peso < 0) {
+      throw new ErrorApp('Peso debe ser un número mayor o igual a 0', 400, CODIGOS.VALIDACION);
+    }
     cambios.peso = data.peso;
   }
   if (!Object.keys(cambios).length) throw new ErrorApp('No hay campos para actualizar', 400, CODIGOS.VALIDACION);
@@ -163,6 +199,7 @@ async function actualizarRelacion(proyectoId, habilidadId, data) {
 }
 
 async function eliminarRelacion(proyectoId, habilidadId) {
+  await comprobarProyectoEditable(proyectoId);
   try {
     await dynamoDb.send(
       new DeleteCommand({
@@ -187,16 +224,20 @@ async function consultarProyectosPorHabilidad(habilidadId) {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.send(
-    new QueryCommand({
+  const items = [];
+  let lastKey;
+  do {
+    const pagina = await dynamoDb.send(new QueryCommand({
       TableName: tableProyectoHabilidad,
       IndexName: 'GSI1',
       KeyConditionExpression: '#h = :h',
       ExpressionAttributeNames: { '#h': 'habilidadId' },
       ExpressionAttributeValues: { ':h': habilidadId },
-    })
-  );
-  const items = resultado.Items || [];
+      ...(lastKey && { ExclusiveStartKey: lastKey }),
+    }));
+    items.push(...(pagina.Items || []));
+    lastKey = pagina.LastEvaluatedKey;
+  } while (lastKey);
 
   cache.guardar(clave, items, CACHE_TTL_MS);
   return items;

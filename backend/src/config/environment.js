@@ -6,7 +6,6 @@ module.exports = {
   awsRegion: process.env.AWS_REGION || 'us-east-2',
   awsProfile: process.env.AWS_PROFILE,
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  jwtSecret: process.env.JWT_SECRET || 'cambiar_en_produccion',
 
   // Endpoint local de DynamoDB (solo para pruebas locales, opcional)
   dynamoDbEndpoint: process.env.DYNAMODB_ENDPOINT,

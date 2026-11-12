@@ -33,11 +33,13 @@ Solicitudes de participación. Registra las solicitudes de los colaboradores que
 
 1. `GET /proyectos/{proyectoId}/postulaciones` → Query por clave primaria con `proyectoId = :id`.
 2. `GET /colaboradores/{colaboradorId}/postulaciones` → Query GSI1 con `colaboradorId = :id`.
-3. `GET /postulaciones/{proyectoId}/{colaboradorId}` → Query por clave primaria con `proyectoId` y `postulacionKey`.
+3. `GET /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}` → GetItem por `proyectoId` y `postulacionKey`.
+4. `PATCH /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/estado` → Aceptar, rechazar o retirar según el estado y los permisos.
 
 ## Reglas de negocio
 
 - Un colaborador no puede postularse dos veces al mismo proyecto mientras exista su registro de postulación.
 - Solo se puede postular a proyectos activos.
-- La aceptación de una postulación debe gestionar la creación de la asignación correspondiente.
+- La aceptación crea la asignación y reserva la dedicación mediante una transacción atómica; el porcentaje acumulado se comprueba en `Colaboradores.dedicacionReservada`, sin depender de lecturas eventualmente consistentes del GSI.
+- Las consultas de postulaciones recorren todas las páginas de DynamoDB.
 - Se conserva el historial de las postulaciones rechazadas, aceptadas o retiradas.

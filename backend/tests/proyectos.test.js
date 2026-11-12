@@ -40,6 +40,12 @@ beforeEach(() => {
 });
 
 describe('Repositorio: proyectos', () => {
+  test('handler rechaza cuerpos JSON malformados antes de acceder al repositorio', async () => {
+    const respuesta = await handler.crearProyecto({ body: '{invalido' }, {});
+    expect(respuesta.statusCode).toBe(400);
+    expect(commandMocks.PutCommand).not.toHaveBeenCalled();
+  });
+
   test('registra un proyecto con líder válido, horas positivas y estado BORRADOR por defecto', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: LIDER });
     commandMocks.PutCommand.mockResolvedValue({});

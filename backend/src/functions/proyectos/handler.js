@@ -6,10 +6,17 @@ function obtenerBody(event) {
   if (!event.body) return {};
   if (typeof event.body === 'string') {
     try {
-      return JSON.parse(event.body);
+      const body = JSON.parse(event.body);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        throw new ErrorApp('Se requiere un objeto JSON', 400, CODIGOS.VALIDACION);
+      }
+      return body;
     } catch (_) {
-      return {};
+      throw new ErrorApp('JSON inválido', 400, CODIGOS.VALIDACION);
     }
+  }
+  if (typeof event.body !== 'object' || Array.isArray(event.body)) {
+    throw new ErrorApp('Se requiere un objeto JSON', 400, CODIGOS.VALIDACION);
   }
   return event.body;
 }
@@ -123,9 +130,9 @@ const { crearDespachador } = require('../../utils/lambda-dispatcher');
 const relaciones = require('../../repositories/proyecto-habilidad.repository');
 const handler = crearDespachador({
   'GET /api/v1/proyectos/{proyectoId}/habilidades': async (event) => exito(await relaciones.consultarHabilidadesProyecto(event.pathParameters.proyectoId)),
-  'POST /api/v1/proyectos/{proyectoId}/habilidades': async (event) => creado(await relaciones.asociarHabilidad({ ...JSON.parse(event.body), proyectoId: event.pathParameters.proyectoId })),
+  'POST /api/v1/proyectos/{proyectoId}/habilidades': async (event) => creado(await relaciones.asociarHabilidad({ ...obtenerBody(event), proyectoId: event.pathParameters.proyectoId })),
   'PUT /api/v1/proyectos/{proyectoId}/habilidades/{habilidadId}': async (event) => {
-    const body = JSON.parse(event.body);
+    const body = obtenerBody(event);
     const { proyectoId, habilidadId } = event.pathParameters;
     return exito(await relaciones.actualizarRelacion(proyectoId, habilidadId, body));
   },

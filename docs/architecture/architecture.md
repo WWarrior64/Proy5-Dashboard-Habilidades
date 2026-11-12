@@ -72,7 +72,7 @@ Cada función Lambda dispone de un rol de ejecución dedicado en IAM que restrin
 
 ## 3. Modelo de Datos y Persistencia (Amazon DynamoDB)
 
-La persistencia se implementa sobre 9 tablas diseñadas bajo el modelo NoSQL de clave-valor y documentos, configuradas en modo **On-Demand (PAY_PER_REQUEST)** para optimizar costos dentro del Free Tier:
+La persistencia se implementa sobre 9 tablas diseñadas bajo el modelo NoSQL de clave-valor y documentos, configuradas en modo **On-Demand (PAY_PER_REQUEST)** para optimizar costos dentro del Free Tier. Los nombres físicos con `-dev` de la siguiente tabla son ejemplos; el despliegue `prod` usa los mismos nombres con `-prod`:
 
 | Nombre Lógico SAM | Nombre Físico de Tabla | Partition Key (PK) | Sort Key (SK) | Índices Secundarios (GSIs) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -80,11 +80,11 @@ La persistencia se implementa sobre 9 tablas diseñadas bajo el modelo NoSQL de 
 | `ColaboradoresTable` | `internal-marketplace-colaboradores-dev` | `colaboradorId` (S) | *Ninguno* | GSI1 (`usuarioId`), GSI2 (`estado`, `rolProfesional#nombre`) |
 | `CargosTable` | `internal-marketplace-cargos-dev` | `cargoId` (S) | *Ninguno* | GSI1 (`estado`, `nombre`) |
 | `HabilidadesTable` | `internal-marketplace-habilidades-dev` | `habilidadId` (S) | *Ninguno* | GSI1 (`categoria`, `nombreNormalizado`) |
-| `ColaboradorHabilidadTable` | `internal-marketplace-colaborador-habilidad-dev` | `colaboradorId` (S) | `habilidadId` (S) | GSI1 (`habilidadId`, `nivel#colaboradorId`) |
-| `ProyectosTable` | `internal-marketplace-proyectos-dev` | `proyectoId` (S) | *Ninguno* | GSI1 (`estado`, `fechaPublicacion#proyectoId`), GSI2 (`liderId`, `estado#fechaCreacion`) |
+| `ColaboradorHabilidadTable` | `internal-marketplace-colaborador-habilidad-dev` | `colaboradorId` (S) | `habilidadId` (S) | GSI1 (`habilidadId`, `nivelColaboradorKey`) |
+| `ProyectosTable` | `internal-marketplace-proyectos-dev` | `proyectoId` (S) | *Ninguno* | GSI1 (`estado`, `fechaPublicacionKey`), GSI2 (`liderId`, `estadoFechaKey`) |
 | `ProyectoHabilidadTable` | `internal-marketplace-proyecto-habilidad-dev` | `proyectoId` (S) | `habilidadId` (S) | GSI1 (`habilidadId`, `proyectoId`) |
-| `PostulacionesTable` | `internal-marketplace-postulaciones-dev` | `proyectoId` (S) | `POSTULACION#colaboradorId` (S) | GSI1 (`colaboradorId`, `fechaPostulacion#proyectoId`) |
-| `AsignacionesTable` | `internal-marketplace-asignaciones-dev` | `asignacionId` (S) | *Ninguno* | GSI1 (`colaboradorId`, `estado#fechaAsignacion`), GSI2 (`proyectoId`, `estado#fechaAsignacion`), GSI3 (`estado`, `fechaAsignacion#asignacionId`) |
+| `PostulacionesTable` | `internal-marketplace-postulaciones-dev` | `proyectoId` (S) | `postulacionKey` (S; guarda `POSTULACION#colaboradorId`) | GSI1 (`colaboradorId`, `colaboradorFechaKey`) |
+| `AsignacionesTable` | `internal-marketplace-asignaciones-dev` | `asignacionId` (S) | *Ninguno* | GSI1 (`colaboradorId`, `colaboradorFechaKey`), GSI2 (`proyectoId`, `proyectoFechaKey`), GSI3 (`estado`, `estadoFechaKey`) |
 
 ### Transacciones Atómicas (TransactWriteItems)
 Para procesos de negocio críticos (como la aceptación de una postulación que crea una asignación e incrementa el porcentaje de dedicación activa del colaborador), se emplea `TransactWriteItems`. Esto evita condiciones de carrera y asegura consistencia estricta en operaciones compuestas.
@@ -93,8 +93,9 @@ Para procesos de negocio críticos (como la aceptación de una postulación que 
 
 ## 4. Estrategia de Caché y Rendimiento
 
-* **Caché en Memoria (In-Memory Cache):** Implementada en el servicio `cache.service.js` con soporte de Time-To-Live (TTL). Aprovecha la reutilización de contenedores calientes (*warm containers*) en AWS Lambda para responder consultas de catálogos (cargos, habilidades) reduciendo lecturas en DynamoDB.
-* **Invalidación por Evento:** Operaciones de mutación (`POST`, `PUT`, `PATCH`, `DELETE`) limpian selectivamente las claves de caché afectadas para impedir inconsistencias de lectura.
+* **Caché local de desarrollo:** `cache.service.js` conserva claves e intervalos TTL cuando se ejecuta fuera de AWS Lambda, con invalidación local tras las escrituras.
+* **Lecturas en Lambda sin caché de proceso:** Cuando existe `AWS_LAMBDA_FUNCTION_NAME`, el servicio no devuelve ni guarda entradas en memoria. Esto evita que una instancia reutilice una lectura obsoleta tras una escritura de otra Lambda. Aumenta las consultas y costos potenciales de DynamoDB, pero no requiere caché distribuida. Los índices secundarios DynamoDB siguen ofreciendo consistencia eventual; esta medida no garantiza lectura fuertemente consistente en GSIs.
+* **Decisiones críticas:** La dedicación y sus límites se comprueban mediante condiciones transaccionales contra DynamoDB, nunca utilizando la caché.
 * **CloudFront Edge Caching:** Configurado con la directiva optimizada de AWS (`Managed-CachingOptimized`) para servir activos estáticos del frontend desde puntos perimetrales con latencia mínima.
 
 ---
@@ -104,8 +105,8 @@ Para procesos de negocio críticos (como la aceptación de una postulación que 
 El ciclo de integración continua implementado en `.github/workflows/deploy.yml` valida automáticamente cada entrega:
 1. **Entorno de ejecución:** Node.js 24 en runners `ubuntu-latest`.
 2. **Control de Calidad:**
-   * Ejecución de ESLint 9 (Flat Config) en frontend y backend.
-   * Ejecución de pruebas unitarias con Jest (`npm test -- --runInBand`).
+   * Ejecución de ESLint del backend y pruebas unitarias Jest.
+   * Compilación del frontend; el lint y las pruebas automatizadas React en CI deberán incorporarse al integrar las ramas correspondientes.
 3. **Validación de Infraestructura:**
    * `sam validate --lint`: Comprobación de sintaxis y buenas prácticas en `infrastructure/template.yaml`.
    * `sam build`: Compilación y empaquetado de las funciones Lambda y sus dependencias.
