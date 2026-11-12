@@ -14,7 +14,10 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { login } = useAuth()
+  const [requiresNewPassword, setRequiresNewPassword] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const { login, completePasswordChange } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
@@ -37,10 +40,111 @@ export default function Login() {
       const result = await login(email, password)
       navigate(ROUTE_BY_ROLE[result.user.rol] || '/dashboards/empleado', { replace: true })
     } catch (err) {
-      setError(err.message || 'Error al iniciar sesión')
+      if (err.code === 'NEW_PASSWORD_REQUIRED') {
+        setRequiresNewPassword(true)
+        setPassword('')
+      } else {
+        setError(err.message || 'Error al iniciar sesión')
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleNewPassword = async (event) => {
+    event.preventDefault()
+    setError('')
+    if (newPassword.length < 8) {
+      setError('La nueva contraseña debe contener al menos 8 caracteres.')
+      return
+    }
+    if (newPassword !== confirmNewPassword) {
+      setError('Las contraseñas no coinciden.')
+      return
+    }
+    setLoading(true)
+    try {
+      const result = await completePasswordChange(newPassword)
+      setNewPassword('')
+      setConfirmNewPassword('')
+      navigate(ROUTE_BY_ROLE[result.user.rol] || '/dashboards/empleado', { replace: true })
+    } catch (err) {
+      setError(err.message || 'No se pudo guardar la nueva contraseña.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const volverAlLogin = () => {
+    setRequiresNewPassword(false)
+    setNewPassword('')
+    setConfirmNewPassword('')
+    setError('')
+  }
+
+  if (requiresNewPassword) {
+    return (
+      <main className="login-page">
+        <section className="login-card password-change-card" aria-labelledby="password-change-title">
+          <div className="login-header password-change-header">
+            <div className="login-logo" aria-hidden="true" />
+            <h1 className="login-title" id="password-change-title">Establecer nueva contraseña</h1>
+            <p className="password-change-description">
+              Reemplaza la contraseña temporal que recibiste por correo electrónico.
+            </p>
+          </div>
+
+          {error && <div className="error-message" role="alert">{error}</div>}
+
+          <form className="login-form password-change-form" onSubmit={handleNewPassword}>
+            <div className="login-field">
+              <label className="login-label" htmlFor="new-password">Nueva contraseña</label>
+              <input
+                className="login-input"
+                id="new-password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Mínimo 8 caracteres"
+                minLength={8}
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                disabled={loading}
+                required
+              />
+            </div>
+            <div className="login-field">
+              <label className="login-label" htmlFor="confirm-new-password">Confirmar contraseña</label>
+              <input
+                className="login-input"
+                id="confirm-new-password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Repite tu contraseña"
+                minLength={8}
+                value={confirmNewPassword}
+                onChange={(event) => setConfirmNewPassword(event.target.value)}
+                disabled={loading}
+                required
+              />
+            </div>
+            <p className="password-change-hint">
+              Utiliza una contraseña segura que cumpla las reglas de tu organización.
+            </p>
+            <button className="login-btn" type="submit" disabled={loading}>
+              {loading ? 'Guardando...' : 'Guardar contraseña'}
+            </button>
+          </form>
+          <button
+            className="password-change-back"
+            type="button"
+            onClick={volverAlLogin}
+            disabled={loading}
+          >
+            Volver a iniciar sesión
+          </button>
+        </section>
+      </main>
+    )
   }
 
   return (

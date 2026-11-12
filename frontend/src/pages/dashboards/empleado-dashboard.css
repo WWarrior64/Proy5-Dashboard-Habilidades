@@ -1,0 +1,190 @@
+/* Ajustes visuales exclusivos del Dashboard del Empleado.
+   Conserva los estilos de barra lateral y encabezado de Mis habilidades. */
+.emp-dashboard-page .emp-content.dashboard-content {
+  padding: 16px 24px 24px;
+  overflow-y: auto;
+}
+
+.emp-dashboard-page .dashboard-section-label {
+  color: #16255a;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0 0 12px;
+}
+
+.emp-dashboard-page .emp-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.emp-dashboard-page .emp-card {
+  width: auto;
+  min-width: 0;
+  height: 90px;
+  padding: 13px 15px;
+  flex-shrink: 1;
+}
+
+.emp-dashboard-page .emp-card-value {
+  font-size: 30px;
+}
+
+.emp-dashboard-page .emp-table-panel {
+  height: auto;
+  min-height: 0;
+  padding-bottom: 8px;
+  overflow: hidden;
+}
+
+.emp-dashboard-page .emp-table-header {
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px;
+}
+
+.emp-dashboard-page .emp-table-title {
+  font-size: 15px;
+}
+
+.emp-dashboard-page .emp-table-actions {
+  gap: 10px;
+  min-width: 0;
+}
+
+.emp-dashboard-page .dashboard-table-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 220px;
+  max-width: 100%;
+  height: 35px;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  padding: 0 10px;
+  background: #eef2f8;
+  color: #64748b;
+}
+
+.emp-dashboard-page .dashboard-table-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #333;
+  font-size: 12px;
+  outline: none;
+}
+
+.emp-dashboard-page .dashboard-table-search:focus-within {
+  border-color: var(--color-primary);
+}
+
+.emp-dashboard-page .emp-filter-icon {
+  width: 35px;
+  height: 35px;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  background: #eef2f8;
+  color: #64748b;
+}
+
+.emp-dashboard-page .emp-table-body {
+  display: block;
+  margin: 0;
+  overflow-x: auto;
+}
+
+.emp-dashboard-page .emp-table {
+  min-width: 550px;
+  table-layout: fixed;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.emp-dashboard-page .emp-table th {
+  height: auto;
+  padding: 10px 12px;
+  background: #cfddec;
+  color: #222;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: none;
+}
+
+.emp-dashboard-page .emp-table td {
+  height: auto;
+  padding: 10px 12px;
+  border-bottom: 1px solid #c9d4e0;
+  color: #333;
+  font-size: 12px;
+}
+
+.emp-dashboard-page .emp-status {
+  display: inline-block;
+  padding: 3px 7px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.emp-dashboard-page .emp-status.available {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.emp-dashboard-page .emp-status.unavailable {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+@media (max-width: 900px) {
+  .emp-dashboard-page .emp-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .emp-dashboard-page .emp-content.dashboard-content {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 620px) {
+  /* Mismas proporciones responsivas que Mis habilidades. */
+  .emp-dashboard-page .emp-sidebar { width: 145px; }
+  .emp-dashboard-page .emp-sidebar-top { padding-left: 12px; }
+  .emp-dashboard-page .emp-sidebar-brand { font-size: 14px; width: 120px; }
+  .emp-dashboard-page .emp-sidebar-divider { width: 115px; }
+  .emp-dashboard-page .emp-sidebar-menu { padding-left: 0; }
+  .emp-dashboard-page .emp-sidebar-item,
+  .emp-dashboard-page .emp-sidebar-item.active {
+    width: 125px;
+    font-size: 11px;
+    padding-left: 5px;
+    white-space: normal;
+  }
+  .emp-dashboard-page .emp-sidebar-bottom { padding-left: 12px; }
+  .emp-dashboard-page .emp-header-right { gap: 8px; }
+  .emp-dashboard-page .emp-user-icon { margin-right: 0; }
+  .emp-dashboard-page .emp-metrics { gap: 6px; }
+  .emp-dashboard-page .emp-card { height: 78px; padding: 8px; }
+  .emp-dashboard-page .emp-card-label { font-size: 10px; line-height: 1.2; }
+  .emp-dashboard-page .emp-card-value { font-size: 20px; }
+  .emp-dashboard-page .dashboard-table-search { width: 160px; }
+}
+
+@media (max-width: 430px) {
+  .emp-dashboard-page .emp-metrics {
+    grid-template-columns: 1fr;
+  }
+  .emp-dashboard-page .emp-table-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .emp-dashboard-page .emp-table-actions {
+    justify-content: space-between;
+  }
+}

@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import { Search, SlidersHorizontal, UserRound } from 'lucide-react'
+import EmpleadoLogoutButton from '../../components/layout/EmpleadoLogoutButton.jsx'
+import './empleado-dashboard.css'
 
 export default function EmpleadoDashboard() {
   const [searchHeader, setSearchHeader] = useState('')
@@ -20,7 +23,7 @@ export default function EmpleadoDashboard() {
   ]
 
   return (
-    <div className="emp-dashboard">
+    <div className="emp-dashboard emp-dashboard-page">
       {/* Sidebar */}
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
@@ -45,6 +48,7 @@ export default function EmpleadoDashboard() {
         </div>
         <div className="emp-sidebar-bottom">
           <div className="emp-sidebar-user">Empleado</div>
+          <EmpleadoLogoutButton />
         </div>
       </aside>
 
@@ -62,16 +66,14 @@ export default function EmpleadoDashboard() {
               onChange={(e) => setSearchHeader(e.target.value)}
             />
             <div className="emp-user-icon">
-              <svg viewBox="0 0 24 24">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              </svg>
+              <UserRound size={22} />
             </div>
           </div>
         </header>
 
         {/* Content */}
-        <div className="emp-content">
+        <div className="emp-content dashboard-content">
+          <h2 className="dashboard-section-label">Resumen general</h2>
           {/* Metrics cards */}
           <div className="emp-metrics">
             <div className="emp-card">
@@ -97,17 +99,18 @@ export default function EmpleadoDashboard() {
             <div className="emp-table-header">
               <h2 className="emp-table-title">Oportunidades recomendadas</h2>
               <div className="emp-table-actions">
-                <input
-                  type="text"
-                  className="emp-search"
-                  placeholder="Buscar..."
-                  value={searchTable}
-                  onChange={(e) => setSearchTable(e.target.value)}
-                />
+                <label className="dashboard-table-search">
+                  <Search size={15} aria-hidden="true" />
+                  <input
+                    type="text"
+                    aria-label="Buscar oportunidades"
+                    placeholder="Buscar..."
+                    value={searchTable}
+                    onChange={(e) => setSearchTable(e.target.value)}
+                  />
+                </label>
                 <div className="emp-filter-icon">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M3 7V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2m0 0 2 2h8a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zm0 0L3 7" />
-                  </svg>
+                  <SlidersHorizontal size={17} aria-hidden="true" />
                 </div>
               </div>
             </div>

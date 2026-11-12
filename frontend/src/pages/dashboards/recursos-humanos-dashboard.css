@@ -1,0 +1,224 @@
+/* Dashboard de RRHH. Reutiliza la estructura visual del empleado. */
+.rrhh-dashboard { width: 100%; }
+
+.rrhh-dashboard .emp-content.rrhh-dashboard-content {
+  padding: 16px 24px 24px;
+  overflow-y: auto;
+}
+
+.rrhh-dashboard-section-title {
+  margin: 0 0 12px;
+  color: #16255a;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.rrhh-dashboard-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.rrhh-dashboard .rrhh-dashboard-metrics .emp-card {
+  width: auto;
+  min-width: 0;
+  height: 90px;
+  padding: 13px 15px;
+  flex-shrink: 1;
+}
+
+.rrhh-dashboard .rrhh-dashboard-metrics .emp-card-value {
+  font-size: 30px;
+}
+
+.rrhh-talent-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 290px;
+  background: #eef2f8;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.rrhh-talent-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px;
+}
+
+.rrhh-talent-heading h3 {
+  margin: 0;
+  color: #16255a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.rrhh-talent-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rrhh-talent-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 220px;
+  max-width: 100%;
+  height: 35px;
+  padding: 0 10px;
+  color: #64748b;
+  background: #eef2f8;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+}
+
+.rrhh-talent-search:focus-within { border-color: #2563eb; }
+
+.rrhh-talent-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  outline: none;
+  color: #333;
+  font-size: 12px;
+}
+
+.rrhh-talent-search input::placeholder { color: #94a3b8; }
+
+.rrhh-talent-filter-select {
+  width: 150px;
+  min-width: 0;
+  height: 35px;
+  padding: 0 10px;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  background: #eef2f8;
+  color: #333;
+  font-size: 12px;
+}
+
+.rrhh-talent-filter-select:focus {
+  outline-color: #2563eb;
+}
+
+.rrhh-talent-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.rrhh-talent-table {
+  width: 100%;
+  min-width: 590px;
+  table-layout: fixed;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.rrhh-talent-table th {
+  padding: 10px 12px;
+  background: #cfddec;
+  color: #222;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: none;
+  text-align: left;
+  line-height: 1.2;
+}
+
+.rrhh-talent-table td {
+  padding: 10px 12px;
+  color: #333;
+  border-bottom: 1px solid #c9d4e0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.rrhh-talent-table tr:last-child td { border-bottom: 0; }
+
+.rrhh-talent-table th:nth-child(1) { width: 28%; }
+.rrhh-talent-table th:nth-child(2) { width: 26%; }
+.rrhh-talent-table th:nth-child(3) { width: 23%; }
+.rrhh-talent-table th:nth-child(4) { width: 23%; }
+
+.rrhh-talent-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* La misma paleta Senior / Mid / Junior utilizada en Mis habilidades. */
+.rrhh-talent-status.available {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.rrhh-talent-status.unavailable {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.rrhh-talent-empty {
+  margin: 0;
+  padding: 26px 12px;
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+}
+
+.rrhh-talent-count {
+  margin: auto 0 0;
+  padding: 13px 8px;
+  color: #8b939f;
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .rrhh-dashboard .emp-content.rrhh-dashboard-content { padding: 14px; }
+  .rrhh-dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .rrhh-dashboard .emp-sidebar { width: 145px; }
+  .rrhh-dashboard .emp-sidebar-top { padding-left: 12px; }
+  .rrhh-dashboard .emp-sidebar-brand { font-size: 14px; width: 120px; }
+  .rrhh-dashboard .emp-sidebar-divider { width: 115px; }
+  .rrhh-dashboard .emp-sidebar-menu { padding-left: 0; }
+  .rrhh-dashboard .emp-sidebar-item,
+  .rrhh-dashboard .emp-sidebar-item.active {
+    width: 125px;
+    font-size: 11px;
+    padding-left: 5px;
+    white-space: normal;
+  }
+  .rrhh-dashboard .emp-sidebar-bottom { padding-left: 12px; }
+  .rrhh-dashboard .emp-header-right { gap: 8px; }
+  .rrhh-dashboard .emp-user-icon { margin-right: 0; }
+  .rrhh-dashboard-metrics { gap: 6px; }
+  .rrhh-dashboard .rrhh-dashboard-metrics .emp-card { height: 78px; padding: 8px; }
+  .rrhh-dashboard .emp-card-label { font-size: 10px; line-height: 1.2; }
+  .rrhh-dashboard .rrhh-dashboard-metrics .emp-card-value { font-size: 20px; }
+  .rrhh-talent-heading { align-items: stretch; }
+  .rrhh-talent-actions { width: 100%; }
+  .rrhh-talent-search { flex: 1; width: auto; }
+}
+
+@media (max-width: 430px) {
+  .rrhh-dashboard-metrics { grid-template-columns: 1fr; }
+}

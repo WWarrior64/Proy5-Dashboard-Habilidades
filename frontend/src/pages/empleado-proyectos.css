@@ -1,0 +1,243 @@
+/* Vista de Proyectos disponibles del Empleado.
+   Se apoya en los mismos estilos base del Dashboard y Mis habilidades. */
+.emp-projects-page { width: 100%; }
+
+.emp-projects-page .emp-content.emp-projects-content {
+  padding: 16px 24px 24px;
+  overflow-y: auto;
+}
+
+.emp-projects-intro { margin-bottom: 12px; }
+.emp-projects-intro h2 {
+  margin: 0;
+  color: #16255a;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.emp-projects-page .emp-projects-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.emp-projects-page .emp-projects-metrics .emp-card {
+  width: auto;
+  min-width: 0;
+  height: 90px;
+  padding: 13px 15px;
+  flex-shrink: 1;
+}
+.emp-projects-page .emp-projects-metrics .emp-card-value { font-size: 30px; }
+
+.emp-projects-filters { margin-bottom: 12px; }
+.emp-projects-filters h3 {
+  margin: 0 0 8px;
+  color: #222;
+  font-size: 14px;
+  font-weight: 700;
+}
+.emp-projects-filter-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.emp-projects-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 35px;
+  width: 220px;
+  max-width: 100%;
+  padding: 0 10px;
+  background: #eef2f8;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  color: #64748b;
+}
+.emp-projects-search:focus-within { border-color: var(--color-primary); }
+.emp-projects-search input {
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 12px;
+  color: #333;
+}
+.emp-projects-search input::placeholder { color: #94a3b8; }
+.emp-projects-filter-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 35px;
+  height: 35px;
+  color: #64748b;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+.emp-projects-filter-button:hover,
+.emp-projects-filter-button.is-active {
+  color: #2563eb;
+  background: #eef2f8;
+  border-color: #c9d4e0;
+}
+.emp-projects-filter-note { font-size: 12px; color: #2563eb; }
+
+.emp-projects-table-panel {
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  background: #eef2f8;
+  overflow: hidden;
+}
+.emp-projects-table-scroll { width: 100%; overflow-x: auto; }
+.emp-projects-table {
+  width: 100%;
+  min-width: 800px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  table-layout: fixed;
+}
+.emp-projects-table th {
+  padding: 11px 10px;
+  background: #cfddec;
+  color: #222;
+  font-size: 12px;
+  line-height: 1.2;
+  text-transform: none;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.emp-projects-table td {
+  padding: 10px;
+  border-bottom: 1px solid #c9d4e0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #333;
+  vertical-align: middle;
+}
+.emp-projects-table tbody tr:last-child td { border-bottom: 0; }
+.emp-projects-table th:nth-child(1) { width: 17%; }
+.emp-projects-table th:nth-child(2) { width: 13%; }
+.emp-projects-table th:nth-child(3) { width: 23%; }
+.emp-projects-table th:nth-child(4) { width: 7%; }
+.emp-projects-table th:nth-child(5) { width: 17%; }
+.emp-projects-table th:nth-child(6) { width: 13%; }
+.emp-projects-table th:nth-child(7) { width: 10%; }
+
+.emp-projects-name strong {
+  display: block;
+  color: #222;
+  font-weight: 700;
+}
+.emp-projects-name > span {
+  display: block;
+  font-size: 11px;
+  color: #16a34a;
+}
+.emp-projects-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.emp-projects-tag {
+  display: inline-block;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.emp-projects-match-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 5px;
+  font-size: 11px;
+}
+.emp-projects-match-label strong { color: #16255a; font-weight: 700; }
+.emp-projects-match-label span { color: #7c8795; }
+.emp-projects-match-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  overflow: hidden;
+}
+.emp-projects-match-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2563eb;
+}
+.emp-projects-apply {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 82px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #2563eb;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.emp-projects-apply:hover:not(:disabled) { background: #1d4ed8; }
+.emp-projects-apply.is-applied {
+  border: 1px solid #c9d4e0;
+  background: #eef2f8;
+  color: #8b939f;
+  cursor: default;
+}
+.emp-projects-total {
+  padding: 12px 8px;
+  color: #8b939f;
+  font-size: 12px;
+  text-align: center;
+}
+.emp-projects-empty {
+  padding: 25px;
+  color: #64748b;
+  font-size: 13px;
+  text-align: center;
+}
+.emp-projects-footnote {
+  margin-top: 12px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .emp-projects-page .emp-content.emp-projects-content { padding: 14px; }
+}
+@media (max-width: 620px) {
+  /* Coincide con el menú responsivo de Mis habilidades. */
+  .emp-projects-page .emp-sidebar { width: 145px; }
+  .emp-projects-page .emp-sidebar-top { padding-left: 12px; }
+  .emp-projects-page .emp-sidebar-brand { font-size: 14px; width: 120px; }
+  .emp-projects-page .emp-sidebar-divider { width: 115px; }
+  .emp-projects-page .emp-sidebar-menu { padding-left: 0; }
+  .emp-projects-page .emp-sidebar-item,
+  .emp-projects-page .emp-sidebar-item.active {
+    width: 125px;
+    font-size: 11px;
+    padding-left: 5px;
+    white-space: normal;
+  }
+  .emp-projects-page .emp-sidebar-bottom { padding-left: 12px; }
+  .emp-projects-page .emp-header-right { gap: 8px; }
+  .emp-projects-page .emp-user-icon { margin-right: 0; }
+  .emp-projects-page .emp-projects-metrics { gap: 6px; }
+  .emp-projects-page .emp-projects-metrics .emp-card { height: 78px; padding: 8px; }
+  .emp-projects-page .emp-card-label { font-size: 10px; line-height: 1.2; }
+  .emp-projects-page .emp-projects-metrics .emp-card-value { font-size: 20px; }
+  .emp-projects-search { width: 175px; }
+}
+@media (max-width: 420px) {
+  .emp-projects-page .emp-projects-metrics { grid-template-columns: 1fr; }
+  .emp-projects-page .emp-projects-metrics .emp-card { height: 70px; }
+}

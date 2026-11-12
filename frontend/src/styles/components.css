@@ -423,6 +423,83 @@ tr:hover td {
   cursor: not-allowed;
 }
 
+/* Primera sesión: cambio de la contraseña temporal de Cognito.
+   Usa la misma tarjeta, tipografía, campos y paleta del inicio de sesión. */
+.password-change-card {
+  width: min(420px, calc(100vw - 32px));
+  height: auto;
+  min-height: 480px;
+  padding-bottom: 24px;
+  box-sizing: border-box;
+}
+
+.password-change-header {
+  margin-top: 38px;
+}
+
+.password-change-header .login-title {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.password-change-description {
+  width: 290px;
+  max-width: calc(100% - 32px);
+  margin: 12px auto 0;
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.password-change-form {
+  margin-top: 26px;
+}
+
+.password-change-form .login-btn {
+  margin-top: 14px;
+  margin-bottom: 12px;
+}
+
+.password-change-hint {
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.password-change-card .error-message {
+  width: 290px;
+  max-width: calc(100% - 32px);
+  margin: 16px 0 0;
+}
+
+.password-change-back {
+  color: #16255a;
+  background: transparent;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.password-change-back:hover {
+  text-decoration: underline;
+}
+
+.password-change-back:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+@media (max-width: 420px) {
+  .password-change-form,
+  .password-change-form .login-field,
+  .password-change-form .login-input,
+  .password-change-form .login-btn {
+    width: min(260px, calc(100vw - 72px));
+  }
+}
+
 /* ========================================
    Employee Dashboard Styles (scaled up)
    ======================================== */
@@ -465,7 +542,7 @@ tr:hover td {
 
 .emp-sidebar-divider {
   width: 170px;
-  height: 4px;
+  height: 1px;
   background: #C9D4E0;
   margin: 0 0 24px 0;
 }
@@ -493,6 +570,7 @@ tr:hover td {
 
 .emp-sidebar-item.active {
   background: #2563EB;
+  width: 160px;
 }
 
 .emp-sidebar-item:not(.active) {
@@ -500,13 +578,44 @@ tr:hover td {
 }
 
 .emp-sidebar-bottom {
-  padding: 0 0 24px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 14px 18px 28px;
 }
 
 .emp-sidebar-user {
   font-size: 16px;
   color: #ffffff;
   font-weight: 400;
+}
+
+.emp-sidebar-logout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  color: #ffffff;
+  background: transparent;
+  transition: background-color 0.2s ease;
+}
+
+.emp-sidebar-logout:hover {
+  background: rgb(255 255 255 / 0.14);
+}
+
+.emp-sidebar-logout:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.emp-sidebar-logout:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 /* Main area */
@@ -543,14 +652,15 @@ tr:hover td {
 }
 
 .emp-search {
-  width: 84px;
-  height: 22px;
+  width: 160px;
+  min-width: 0;
+  height: 32px;
   background: #EEF2F8;
   border: 1px solid #C9D4E0;
-  border-radius: 5px;
-  font-size: 10px;
+  border-radius: 6px;
+  font-size: 12px;
   color: #64748b;
-  padding: 0 6px;
+  padding: 0 10px;
   box-sizing: border-box;
 }
 
@@ -581,6 +691,56 @@ tr:hover td {
   fill: none;
   stroke: #000000;
   stroke-width: 1.5;
+}
+
+/* Header adaptable sin afectar otras interfaces del sistema. */
+@media (max-width: 900px) {
+  .emp-dashboard .emp-header {
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .emp-dashboard .emp-header-title {
+    min-width: 0;
+  }
+
+  .emp-dashboard .emp-header-right {
+    gap: 12px;
+  }
+
+  .emp-dashboard .emp-search {
+    width: clamp(100px, 16vw, 160px);
+  }
+
+  .emp-dashboard .emp-user-icon {
+    margin-right: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .emp-dashboard .emp-header-title {
+    font-size: 15px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .emp-dashboard .emp-header-right {
+    gap: 8px;
+  }
+
+  .emp-dashboard .emp-search {
+    width: 94px;
+  }
+
+  .emp-dashboard .emp-user-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .emp-dashboard .emp-sidebar-bottom {
+    padding-right: 10px;
+  }
 }
 
 /* Content */

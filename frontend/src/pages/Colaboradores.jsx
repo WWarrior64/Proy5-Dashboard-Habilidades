@@ -14,6 +14,7 @@ import ColaboradorForm from '../components/colaboradores/ColaboradorForm.jsx'
 import ColaboradorTable from '../components/colaboradores/ColaboradorTable.jsx'
 import ColaboradorFilters from '../components/colaboradores/ColaboradorFilters.jsx'
 import ColaboradorDetails from '../components/colaboradores/ColaboradorDetails.jsx'
+import RrhhColaboradoresVista from './RrhhColaboradoresVista.jsx'
 
 export default function Colaboradores() {
   const { user } = useAuth()
@@ -120,10 +121,21 @@ export default function Colaboradores() {
     setShowConfirm(true)
   }
 
+  const handleRemove = (colaborador) => {
+    if (colaborador.estado === 'INACTIVO') return
+    setConfirmTarget({ ...colaborador, accion: 'BAJA_PERFIL' })
+    setShowConfirm(true)
+  }
+
   const handleConfirm = async () => {
     if (!confirmTarget) return
     try {
-      await colaboradoresService.changeStatus(confirmTarget.colaboradorId, { activo: confirmTarget.estado === 'ACTIVO' })
+      if (confirmTarget.accion === 'BAJA_PERFIL') {
+        // El endpoint DELETE da de baja el perfil de colaborador, no su cuenta de usuario.
+        await colaboradoresService.remove(confirmTarget.colaboradorId)
+      } else {
+        await colaboradoresService.changeStatus(confirmTarget.colaboradorId, { activo: confirmTarget.estado === 'ACTIVO' })
+      }
       setShowConfirm(false)
       setConfirmTarget(null)
       await loadColaboradores()
@@ -142,6 +154,25 @@ export default function Colaboradores() {
 
   return (
     <>
+      {user?.rol === 'RRHH' ? (
+        <RrhhColaboradoresVista
+          colaboradores={colaboradores}
+          usuarios={usuarios}
+          cargos={cargos}
+          loading={loading}
+          error={error}
+          canManage={canManage}
+          onCreate={handleCreate}
+          onEdit={handleEdit}
+          onRemove={handleRemove}
+          onDetails={(colaborador) => {
+            setDetailsColaborador(colaborador)
+            setShowDetails(true)
+          }}
+          onRetry={loadColaboradores}
+        />
+      ) : (
+        <>
     <div className="page-header">
       <div>
         <h1 className="page-title">Colaboradores</h1>
@@ -196,6 +227,8 @@ export default function Colaboradores() {
         </div>
       </div>
     )}
+        </>
+      )}
 
     <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Editar colaborador' : 'Registrar colaborador'}>
       <ColaboradorForm
@@ -216,9 +249,12 @@ export default function Colaboradores() {
       isOpen={showConfirm}
       onConfirm={handleConfirm}
       onCancel={() => setShowConfirm(false)}
-      title="¿Cambiar estado de colaborador?"
-      message={`¿Está seguro de que desea ${confirmTarget?.estado === 'ACTIVO' ? 'activar' : 'dar de baja'} a este colaborador?`}
-      confirmLabel={confirmTarget?.estado === 'ACTIVO' ? 'Activar' : 'Dar de baja'}
+      title={confirmTarget?.accion === 'BAJA_PERFIL' ? '¿Eliminar colaborador?' : '¿Cambiar estado de colaborador?'}
+      message={confirmTarget?.accion === 'BAJA_PERFIL'
+        ? 'Se dará de baja el perfil de colaborador. La cuenta de usuario no se desactivará ni se eliminará.'
+        : `¿Está seguro de que desea ${confirmTarget?.estado === 'ACTIVO' ? 'activar' : 'dar de baja'} a este colaborador?`}
+      confirmLabel={confirmTarget?.accion === 'BAJA_PERFIL' ? 'Eliminar' : confirmTarget?.estado === 'ACTIVO' ? 'Activar' : 'Dar de baja'}
+      danger={confirmTarget?.accion === 'BAJA_PERFIL'}
       cancelLabel="Volver"
     />
     </>
