@@ -4,7 +4,7 @@ const dashboardRepo = require('../../repositories/dashboard.repository.js');
 
 function responderError(e) {
   if (e instanceof ErrorApp) return error(e.message, e.codigo, e.codigoError);
-  return error(e.message || 'Error interno del servidor', 500, CODIGOS.INTERNO);
+  return error('Error interno del servidor', 500, CODIGOS.INTERNO);
 }
 
 function obtenerNumerico(query, nombre, valorPorDefecto, maximo) {
