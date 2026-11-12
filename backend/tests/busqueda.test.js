@@ -56,6 +56,8 @@ describe('Módulo de Búsqueda de Candidatos - Handler', () => {
             cargoId: 'crg_1',
             rolProfesional: 'Fullstack Developer',
             estado: 'ACTIVO',
+            disponibilidad: 'DISPONIBLE',
+            dedicacionReservada: 0,
           };
         }
         if (id === 'colab_2') {
@@ -65,6 +67,8 @@ describe('Módulo de Búsqueda de Candidatos - Handler', () => {
             cargoId: 'crg_2',
             rolProfesional: 'Frontend Dev',
             estado: 'ACTIVO',
+            disponibilidad: 'DISPONIBLE',
+            dedicacionReservada: 0,
           };
         }
         return null;

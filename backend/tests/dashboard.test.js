@@ -54,7 +54,7 @@ describe('Módulo de Dashboard - Handler', () => {
 
       const body = JSON.parse(result.body);
       expect(body.error).toBeDefined();
-      expect(body.error.mensaje).toContain('DynamoDB timeout');
+      expect(body.error.mensaje).toBe('Error interno del servidor');
     });
   });
 
