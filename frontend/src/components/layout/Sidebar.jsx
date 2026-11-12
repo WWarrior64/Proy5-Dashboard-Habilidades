@@ -1,26 +1,33 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, Users, Briefcase, BadgePercent, ClipboardList, FileText, ShieldAlert, LogOut } from 'lucide-react'
+import { Home, Users, Briefcase, BadgePercent, ClipboardList, FileText, ShieldAlert, Search, LogOut } from 'lucide-react'
 import { usePermissions } from '../../hooks/usePermissions.js'
+import { ROUTE_PATHS, ROLES } from '../../utils/constants.js'
 
-const navItems = [
-  { path: '/dashboards/administrador', label: 'Resumen', icon: Home },
-  { path: '/usuarios', label: 'Usuarios', icon: ShieldAlert },
-  { path: '/colaboradores', label: 'Colaboradores', icon: Users },
-  { path: '/proyectos', label: 'Proyectos', icon: Briefcase },
-  { path: '/perfil', label: 'Perfil', icon: FileText },
+const ALL_NAV_ITEMS = [
+  { path: ROUTE_PATHS.DASHBOARD_ADMIN, label: 'Resumen', icon: Home, permission: null },
+  { path: ROUTE_PATHS.USUARIOS, label: 'Usuarios', icon: ShieldAlert, permission: 'consultar_usuarios' },
+  { path: ROUTE_PATHS.COLABORADORES, label: 'Colaboradores', icon: Users, permission: 'consultar_colaboradores' },
+  { path: ROUTE_PATHS.PROYECTOS, label: 'Proyectos', icon: Briefcase, permission: 'consultar_proyectos' },
+  { path: ROUTE_PATHS.HABILIDADES, label: 'Habilidades', icon: BadgePercent, permission: 'consultar_habilidades' },
+  { path: ROUTE_PATHS.CARGOS, label: 'Cargos', icon: ClipboardList, permission: 'consultar_cargos' },
+  { path: ROUTE_PATHS.BUSQUEDA, label: 'Búsqueda', icon: Search, permission: 'buscar_candidatos' },
+  { path: ROUTE_PATHS.ASIGNACIONES, label: 'Asignaciones', icon: ClipboardList, permission: 'consultar_asignaciones' },
+  { path: ROUTE_PATHS.POSTULACIONES, label: 'Postulaciones', icon: FileText, permission: 'consultar_postulaciones' },
+  { path: ROUTE_PATHS.PERFIL, label: 'Perfil', icon: FileText, permission: null },
 ]
-
-const ROUTE_PERMISSION_MAP = {
-  '/dashboards/administrador': 'ver_usuarios',
-  '/usuarios': 'ver_usuarios',
-  '/colaboradores': 'ver_colaboradores',
-  '/proyectos': 'ver_proyectos',
-  '/perfil': 'ver_perfil',
-}
 
 export default function Sidebar({ user, onLogout }) {
   const location = useLocation()
   const { hasPermission } = usePermissions()
+  const isAdmin = user?.rol === ROLES.ADMINISTRADOR
+  const isRRHH = user?.rol === ROLES.RRHH
+
+  // Filtrar módulos visibles por rol: RRHH y ADMINISTRADOR ven todos los módulos de gestión
+  const visibleItems = ALL_NAV_ITEMS.filter((item) => {
+    if (!item.permission) return true
+    if (!hasPermission(item.permission)) return false
+    return true
+  })
 
   return (
     <aside className="w-64" style={{ backgroundColor: 'var(--color-sidebar)', color: '#e2e8f0', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
@@ -29,10 +36,9 @@ export default function Sidebar({ user, onLogout }) {
         <span className="font-bold text-lg tracking-tight">Internal<span style={{ color: '#2563eb' }}>Market</span></span>
       </div>
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon
-          const requiredPermission = ROUTE_PERMISSION_MAP[item.path]
-          const canAccess = !requiredPermission || hasPermission(requiredPermission) || item.path === '/perfil'
+          const canAccess = !item.permission || hasPermission(item.permission) || item.path === ROUTE_PATHS.PERFIL
           if (!canAccess) return null
           const active = location.pathname === item.path || location.pathname.startsWith(item.path + '/')
           return (
