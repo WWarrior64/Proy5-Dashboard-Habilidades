@@ -54,7 +54,7 @@ jobs:
         run: sam build --template-file infrastructure/template.yaml
 
   validate-frontend:
-    name: Validar Frontend (Build)
+    name: Validar Frontend (Lint, Tests y Build)
     runs-on: ubuntu-latest
     env:
       RUN_AWS_INTEGRATION: 'false'
@@ -71,6 +71,14 @@ jobs:
 
       - name: Instalar dependencias desde el lockfile de workspaces
         run: npm ci
+
+      - name: Ejecutar linter del Frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Ejecutar pruebas del Frontend
+        working-directory: frontend
+        run: npm test
 
       - name: Compilar Frontend (Build)
         working-directory: frontend

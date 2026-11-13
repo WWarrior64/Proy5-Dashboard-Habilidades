@@ -9,6 +9,7 @@ import { habilidadesService } from '../services/habilidades.service.js'
 import { proyectosService } from '../services/proyectos.service.js'
 import { asignacionesService } from '../services/asignaciones.service.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
+import { disponibilidadCalculada, porcentajeLibre } from '../utils/disponibilidad.js'
 import api from '../services/api.js'
 import './perfil.css'
 
@@ -100,6 +101,7 @@ const disponibilidadTexto = estado => ({
   PARCIAL: 'Disponibilidad parcial',
   ASIGNADA: 'Asignado',
   NO_DISPONIBLE: 'No disponible',
+  SIN_DATOS: 'Sin datos',
 })[estado] || 'No registrada'
 
 export default function Perfil() {
@@ -132,13 +134,15 @@ export default function Perfil() {
       setAvisoCarga('')
       const consultas = {
         cuenta: usuariosService.getMe(),
-        colaboradores: colaboradoresService.list({ limit: 200 }),
+        colaboradores: rol === 'EMPLEADO'
+          ? colaboradoresService.getMe().then(response => ({ data: { datos: { items: [response.data?.datos].filter(Boolean) } } }))
+          : colaboradoresService.listAll(),
         proyectos: proyectosService.list(rol === 'LIDER_PROYECTO'
           ? { liderId: user.usuarioId } : { estado: 'ACTIVO' }),
       }
-      if (rol === 'ADMINISTRADOR') consultas.usuarios = usuariosService.list({ limit: 200 })
+      if (rol === 'ADMINISTRADOR') consultas.usuarios = usuariosService.listAll()
       if (rol === 'RRHH') {
-        consultas.catalogo = habilidadesService.list({ limit: 200 })
+        consultas.catalogo = habilidadesService.listAll()
         consultas.asignaciones = asignacionesService.list({})
       }
 
@@ -157,7 +161,7 @@ export default function Perfil() {
       const secundarios = {}
       if (colaborador) {
         secundarios.habilidades = colaboradoresService.listSkills(colaborador.colaboradorId)
-        secundarios.catalogo = habilidadesService.list({ limit: 200 })
+        secundarios.catalogo = habilidadesService.listAll()
         if (rol === 'EMPLEADO') {
           secundarios.postulaciones = api.get(`/colaboradores/${encodeURIComponent(colaborador.colaboradorId)}/postulaciones`)
           secundarios.asignaciones = api.get(`/colaboradores/${encodeURIComponent(colaborador.colaboradorId)}/asignaciones`)
@@ -251,7 +255,7 @@ export default function Perfil() {
     if (rol === 'RRHH') return [
       ['Colaboradores', cantidad(datos.colaboradores)],
       ['Disponibles', datos.colaboradores
-        ? datos.colaboradores.filter(item => item.disponibilidad === 'DISPONIBLE' && item.estado === 'ACTIVO').length : '—'],
+        ? datos.colaboradores.filter(item => disponibilidadCalculada(item) === 'DISPONIBLE').length : '—'],
       ['Proyectos activos', cantidad(proyectosActivos)],
       ['Asignaciones activas', cantidad(datos.asignaciones)],
     ]
@@ -266,13 +270,18 @@ export default function Perfil() {
 
   const proyectosVisibles = useMemo(() => {
     const termino = [busquedaSuperior, busquedaTabla].map(texto => texto.trim().toLocaleLowerCase('es'))
-    const habilidadesIds = new Set((datos.habilidades || []).map(habilidad => habilidad.habilidadId))
+    const niveles = { JUNIOR: 1, MID: 2, SENIOR: 3 }
+    const habilidadesNivel = new Map((datos.habilidades || []).map(habilidad => [
+      habilidad.habilidadId, niveles[String(habilidad.nivel || '').toUpperCase()] || 0,
+    ]))
     const proyectos = (datos.proyectos || []).map(item => {
       const requisitos = datos.proyectosHabilidades[item.proyectoId] || []
       const nombres = new Map((datos.catalogo || []).map(habilidad => [habilidad.habilidadId, habilidad.nombre]))
       const habilidadesRequeridas = requisitos.map(habilidad => nombres.get(habilidad.habilidadId) || habilidad.nombre || '—')
       const coincidencia = requisitos.length && datos.habilidades
-        ? Math.round(requisitos.filter(habilidad => habilidadesIds.has(habilidad.habilidadId)).length / requisitos.length * 100)
+        ? Math.round(requisitos.filter(habilidad =>
+          (habilidadesNivel.get(habilidad.habilidadId) || 0) >= (niveles[String(habilidad.nivelMinimo || 'JUNIOR').toUpperCase()] || 1),
+        ).length / requisitos.length * 100)
         : null
       return { ...item, habilidadesRequeridas, coincidencia }
     })
@@ -412,7 +421,12 @@ export default function Perfil() {
                   </div>
                   <p>Rol profesional: <strong>{datos.colaborador?.rolProfesional || 'No registrado'}</strong></p>
                   <p>Disponibilidad: <strong>{datos.colaborador
-                    ? disponibilidadTexto(datos.colaborador.disponibilidad) : 'No registrada'}</strong></p>
+                    ? disponibilidadTexto(disponibilidadCalculada(datos.colaborador)) : 'No registrada'}</strong></p>
+                  {datos.colaborador && <p>Capacidad libre: <strong>{porcentajeLibre(datos.colaborador) == null
+                    ? 'Sin datos' : porcentajeLibre(datos.colaborador) + ' %'}</strong>
+                    {' · '}Dedicación reservada: <strong>{Number.isFinite(datos.colaborador.dedicacionReservada)
+                      ? datos.colaborador.dedicacionReservada + ' %' : 'Sin datos'}</strong></p>}
+                  <p className="perfil-sin-datos">La disponibilidad se calcula a partir de las asignaciones. Se actualiza al asignar, finalizar o desvincular proyectos.</p>
                 </div>
               </section>
               <section className="perfil-bloque" aria-labelledby="perfil-proyectos-titulo">
@@ -454,7 +468,7 @@ export default function Perfil() {
                   <div className="perfil-bloque-heading"><h2 id="perfil-profesional-titulo">Información profesional</h2></div>
                   <div className="perfil-bloque-cuerpo">
                     <p>Rol profesional: <strong>{datos.colaborador.rolProfesional || 'No registrado'}</strong></p>
-                    <p>Disponibilidad: <strong>{disponibilidadTexto(datos.colaborador.disponibilidad)}</strong></p>
+                    <p>Disponibilidad: <strong>{disponibilidadTexto(disponibilidadCalculada(datos.colaborador))}</strong></p>
                   </div>
                 </section>
               )}

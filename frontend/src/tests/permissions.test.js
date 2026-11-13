@@ -56,8 +56,8 @@ describe('Permissions', () => {
       expect(canAccessRoute(ROLES.RRHH, '/colaboradores')).toBe(true)
     })
 
-    it('ruta sin permiso definido debe ser accesible', () => {
-      expect(canAccessRoute(ROLES.EMPLEADO, '/ruta-inexistente')).toBe(true)
+    it('ruta sin permiso definido debe rechazarse', () => {
+      expect(canAccessRoute(ROLES.EMPLEADO, '/ruta-inexistente')).toBe(false)
     })
   })
 
@@ -65,7 +65,7 @@ describe('Permissions', () => {
     it('EMPLEADO debe tener permisos específicos', () => {
       const perms = getRolePermissions(ROLES.EMPLEADO)
       expect(perms).toContain(PERMISSIONS.VER_PERFIL)
-      expect(perms).toContain(PERMISSIONS.BUSCAR_CANDIDATOS)
+      expect(perms).toContain(PERMISSIONS.CONSULTAR_PROYECTOS)
     })
 
     it('ADMINISTRADOR debe tener más permisos que EMPLEADO', () => {

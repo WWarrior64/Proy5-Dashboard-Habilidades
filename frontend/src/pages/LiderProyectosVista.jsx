@@ -40,6 +40,7 @@ const formularioVacio = {
   horasRequeridas: '',
   estado: 'BORRADOR',
   habilidadesTexto: '',
+  requisitos: [],
 }
 
 function obtenerLista(respuesta) {
@@ -49,17 +50,57 @@ function obtenerLista(respuesta) {
 
 const nombreEstado = estado => estados.find(item => item.valor === estado)?.nombre || estado || 'Sin estado'
 
+function prepararRequisitos(seleccionados, catalogo) {
+  const activos = new Set(catalogo.filter(item => item.estado === 'ACTIVO').map(item => item.habilidadId))
+  if (new Set(seleccionados.map(item => item.habilidadId)).size !== seleccionados.length) {
+    throw new Error('No repitas una misma habilidad en los requisitos del proyecto.')
+  }
+  return seleccionados.map(item => {
+    if (!activos.has(item.habilidadId)) {
+      throw new Error('Selecciona habilidades activas del catálogo de RRHH.')
+    }
+    if (!['JUNIOR', 'MID', 'SENIOR'].includes(item.nivelMinimo)) {
+      throw new Error('Selecciona un nivel mínimo válido para cada habilidad.')
+    }
+    return { habilidadId: item.habilidadId, nivelMinimo: item.nivelMinimo, esObligatoria: true }
+  })
+}
+
+async function sincronizarRequisitos(proyectoId, requisitos) {
+  const base = `/proyectos/${encodeURIComponent(proyectoId)}/habilidades`
+  const anteriores = obtenerLista(await api.get(base))
+  const anterioresPorId = new Map(anteriores.map(item => [item.habilidadId, item]))
+  const actuales = new Set(requisitos.map(item => item.habilidadId))
+  for (const requisito of requisitos) {
+    const anterior = anterioresPorId.get(requisito.habilidadId)
+    if (!anterior) await api.post(base, requisito)
+    else if (anterior.nivelMinimo !== requisito.nivelMinimo) {
+      await api.put(`${base}/${encodeURIComponent(requisito.habilidadId)}`, {
+        nivelMinimo: requisito.nivelMinimo,
+      })
+    }
+  }
+  for (const anterior of anteriores) {
+    if (!actuales.has(anterior.habilidadId)) {
+      await api.delete(`${base}/${encodeURIComponent(anterior.habilidadId)}`)
+    }
+  }
+}
+
 export default function LiderProyectosVista() {
   const { user } = useAuth()
   const [proyectos, setProyectos] = useState([])
   const [ejemplos, setEjemplos] = useState(ejemplosIniciales)
   const [habilidadesPorProyecto, setHabilidadesPorProyecto] = useState({})
+  const [requisitosPorProyecto, setRequisitosPorProyecto] = useState({})
+  const [habilidadesDisponibles, setHabilidadesDisponibles] = useState([])
+  const [errorCatalogo, setErrorCatalogo] = useState('')
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [busqueda, setBusqueda] = useState('')
-  const [estadoFiltro, setEstadoFiltro] = useState('')
+  const [estadoFiltro, setEstadoFiltro] = useState('VIGENTES')
   const [modal, setModal] = useState(null)
   const [formulario, setFormulario] = useState(formularioVacio)
   const [errorFormulario, setErrorFormulario] = useState('')
@@ -82,24 +123,30 @@ export default function LiderProyectosVista() {
 
       if (lista.length) {
         const [catalogo, ...resultadosRelaciones] = await Promise.allSettled([
-          habilidadesService.list({ limit: 100 }),
+          habilidadesService.listAll(),
           ...lista.map(item => api.get(`/proyectos/${encodeURIComponent(item.proyectoId)}/habilidades`)),
         ])
         const nombres = catalogo.status === 'fulfilled'
           ? new Map(obtenerLista(catalogo.value).map(item => [item.habilidadId, item.nombre]))
           : new Map()
         const resultado = {}
+        const relacionesPorProyecto = {}
         lista.forEach((item, indice) => {
           const relacionado = resultadosRelaciones[indice]
           if (relacionado.status === 'fulfilled') {
+            relacionesPorProyecto[item.proyectoId] = obtenerLista(relacionado.value)
+              .map(relacion => ({ habilidadId: relacion.habilidadId, nivelMinimo: relacion.nivelMinimo || 'JUNIOR' }))
             resultado[item.proyectoId] = obtenerLista(relacionado.value).map(relacion =>
-              nombres.get(relacion.habilidadId) || relacion.nombre || relacion.habilidadId,
+              (nombres.get(relacion.habilidadId) || relacion.nombre || relacion.habilidadId) +
+                ' · ' + (relacion.nivelMinimo || 'JUNIOR'),
             )
           }
         })
         setHabilidadesPorProyecto(resultado)
+        setRequisitosPorProyecto(relacionesPorProyecto)
       } else {
         setHabilidadesPorProyecto({})
+        setRequisitosPorProyecto({})
       }
     } catch (fallo) {
       setProyectos([])
@@ -111,8 +158,28 @@ export default function LiderProyectosVista() {
 
   useEffect(() => { cargarProyectos() }, [cargarProyectos])
 
+  useEffect(() => {
+    let activo = true
+    habilidadesService.listAll().then(respuesta => {
+      if (activo) setHabilidadesDisponibles(obtenerLista(respuesta))
+    }).catch(fallo => {
+      if (activo) setErrorCatalogo(getApiErrorMessage(fallo, 'No se pudo consultar el catálogo de habilidades.'))
+    })
+    return () => { activo = false }
+  }, [])
+
+  const recargarHabilidades = async () => {
+    try {
+      const respuesta = await habilidadesService.listAll()
+      setHabilidadesDisponibles(obtenerLista(respuesta))
+      setErrorCatalogo('')
+    } catch (fallo) {
+      setErrorCatalogo(getApiErrorMessage(fallo, 'No se pudo consultar el catálogo de habilidades.'))
+    }
+  }
+
   // Los registros ficticios existen solo en el frontend de desarrollo.
-  const mostrandoEjemplo = import.meta.env.DEV && !cargando && proyectos.length === 0
+  const mostrandoEjemplo = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error && proyectos.length === 0
   const catalogo = useMemo(() => (mostrandoEjemplo ? ejemplos : proyectos).map(item => ({
     ...item,
     habilidadesMostrar: mostrandoEjemplo ? item.habilidades : (habilidadesPorProyecto[item.proyectoId] ||
@@ -127,7 +194,8 @@ export default function LiderProyectosVista() {
       const contenido = [item.nombre, item.descripcion, ...(item.habilidadesMostrar || [])]
         .filter(Boolean).join(' ').toLocaleLowerCase('es')
       return terminos.every(texto => contenido.includes(texto)) &&
-        (!estadoFiltro || item.estado === estadoFiltro)
+        (estadoFiltro === 'TODOS' || (estadoFiltro === 'VIGENTES'
+          ? !['CANCELADO', 'COMPLETADO'].includes(item.estado) : item.estado === estadoFiltro))
     })
   }, [catalogo, busqueda, busquedaSuperior, estadoFiltro])
 
@@ -143,9 +211,27 @@ export default function LiderProyectosVista() {
       horasRequeridas: String(item.horasRequeridas || ''),
       estado: item.estado,
       habilidadesTexto: (item.habilidadesMostrar || []).join(', '),
-    } : { ...formularioVacio })
+      requisitos: requisitosPorProyecto[item.proyectoId] || [],
+    } : { ...formularioVacio, requisitos: [] })
     setModal(item || { proyectoId: null })
   }
+
+  const agregarRequisito = () => {
+    const seleccionadas = new Set(formulario.requisitos.map(item => item.habilidadId))
+    const siguiente = habilidadesDisponibles.find(item => item.estado === 'ACTIVO' && !seleccionadas.has(item.habilidadId))
+    if (!siguiente) return
+    setFormulario(actual => ({ ...actual, requisitos: [...actual.requisitos,
+      { habilidadId: siguiente.habilidadId, nivelMinimo: 'JUNIOR' }] }))
+  }
+
+  const editarRequisito = (indice, cambios) => setFormulario(actual => ({
+    ...actual, requisitos: actual.requisitos.map((item, posicion) =>
+      posicion === indice ? { ...item, ...cambios } : item),
+  }))
+
+  const quitarRequisito = indice => setFormulario(actual => ({
+    ...actual, requisitos: actual.requisitos.filter((_, posicion) => posicion !== indice),
+  }))
 
   const guardarProyecto = async evento => {
     evento.preventDefault()
@@ -161,8 +247,11 @@ export default function LiderProyectosVista() {
     setErrorFormulario('')
     try {
       const cambios = { nombre, descripcion, horasRequeridas: horas, estado: formulario.estado }
-      if (mostrandoEjemplo) {
+      if (modal?.esEjemplo) {
         const habilidades = formulario.habilidadesTexto.split(',').map(texto => texto.trim()).filter(Boolean)
+        if (formulario.estado === 'ACTIVO' && !habilidades.length) {
+          throw new Error('Selecciona al menos una habilidad requerida antes de publicar el proyecto.')
+        }
         if (modal.proyectoId) {
           setEjemplos(actuales => actuales.map(item =>
             item.proyectoId === modal.proyectoId ? { ...item, ...cambios, habilidades } : item,
@@ -172,11 +261,28 @@ export default function LiderProyectosVista() {
             ...cambios, proyectoId: '__ejemplo_' + crypto.randomUUID(), habilidades, esEjemplo: true,
           }])
         }
-      } else if (modal.proyectoId) {
-        await proyectosService.update(modal.proyectoId, cambios)
-        await cargarProyectos()
       } else {
-        await proyectosService.create({ ...cambios, liderId: user.usuarioId, creadoPor: user.usuarioId })
+        const requisitos = prepararRequisitos(formulario.requisitos, habilidadesDisponibles)
+        if (formulario.estado === 'ACTIVO' && requisitos.length === 0) {
+          throw new Error('Selecciona al menos una habilidad requerida antes de publicar un proyecto activo.')
+        }
+        if (modal.proyectoId) {
+          if (!['CANCELADO', 'COMPLETADO'].includes(modal.estado)) {
+            await sincronizarRequisitos(modal.proyectoId, requisitos)
+          }
+          await proyectosService.update(modal.proyectoId, cambios)
+        } else {
+          // Mantener en BORRADOR hasta que los requisitos estén guardados; no publicar proyectos incompletos.
+          const creado = await proyectosService.create({
+            ...cambios, estado: 'BORRADOR', liderId: user.usuarioId, creadoPor: user.usuarioId,
+          })
+          const proyectoId = creado.data?.datos?.proyectoId
+          if (!proyectoId) throw new Error('Se creó el proyecto pero no se recibió su identificador para guardar los requisitos.')
+          await sincronizarRequisitos(proyectoId, requisitos)
+          if (cambios.estado !== 'BORRADOR') {
+            await proyectosService.update(proyectoId, { estado: cambios.estado })
+          }
+        }
         await cargarProyectos()
       }
       setModal(null)
@@ -276,7 +382,8 @@ export default function LiderProyectosVista() {
                     value={busqueda} onChange={evento => setBusqueda(evento.target.value)} />
                 </label>
                 <select aria-label="Filtrar por estado" value={estadoFiltro} onChange={evento => setEstadoFiltro(evento.target.value)}>
-                  <option value="">Estado: Todos</option>
+                  <option value="VIGENTES">Estado: Vigentes</option>
+                   <option value="TODOS">Todos los estados</option>
                   {estados.map(item => <option key={item.valor} value={item.valor}>{item.nombre}</option>)}
                 </select>
               </div>
@@ -377,16 +484,64 @@ export default function LiderProyectosVista() {
                 {estados.map(item => <option key={item.valor} value={item.valor}>{item.nombre}</option>)}
               </select>
             </label>
-            {mostrandoEjemplo && (
-              <label>Habilidades requeridas (vista previa)
+            {modal.esEjemplo ? (
+              <label>Habilidades requeridas (ejemplo)
                 <input placeholder="React, SQL..." value={formulario.habilidadesTexto}
                   onChange={evento => setFormulario({ ...formulario, habilidadesTexto: evento.target.value })} />
               </label>
+            ) : (
+              <div className="lider-proyectos-requisitos" aria-label="Habilidades requeridas del proyecto">
+                <div className="lider-proyectos-requisitos-encabezado">
+                  <strong>Habilidades requeridas</strong>
+                  <button type="button" onClick={agregarRequisito} disabled={guardando ||
+                    !!errorCatalogo || !habilidadesDisponibles.some(item => item.estado === 'ACTIVO' &&
+                      !formulario.requisitos.some(relacion => relacion.habilidadId === item.habilidadId))}>
+                    <Plus size={15} aria-hidden="true" /> Añadir habilidad
+                  </button>
+                </div>
+                {errorCatalogo && <p role="alert" className="lider-proyectos-form-error">{errorCatalogo}</p>}
+                {!errorCatalogo && !habilidadesDisponibles.some(item => item.estado === 'ACTIVO') && (
+                  <p className="lider-proyectos-requisitos-ayuda">No hay habilidades activas disponibles. Solicita a RRHH que registre o active las habilidades necesarias antes de publicar.</p>
+                )}
+                {(errorCatalogo || !habilidadesDisponibles.some(item => item.estado === 'ACTIVO')) && (
+                  <button type="button" className="btn btn-outline" onClick={recargarHabilidades} disabled={guardando}>
+                    Actualizar catálogo de habilidades
+                  </button>
+                )}
+                {!formulario.requisitos.length && <p className="lider-proyectos-requisitos-ayuda">
+                  Añade las habilidades y el nivel mínimo. Es obligatorio al publicar un proyecto activo.
+                </p>}
+                {formulario.requisitos.map((requisito, indice) => (
+                  <div className="lider-proyectos-requisito-fila" key={requisito.habilidadId}>
+                    <label>Habilidad
+                      <select value={requisito.habilidadId} disabled={guardando} onChange={evento =>
+                        editarRequisito(indice, { habilidadId: evento.target.value })}>
+                        {habilidadesDisponibles.filter(item => item.estado === 'ACTIVO' &&
+                          (item.habilidadId === requisito.habilidadId ||
+                            !formulario.requisitos.some(relacion => relacion.habilidadId === item.habilidadId)))
+                          .map(item => <option key={item.habilidadId} value={item.habilidadId}>{item.nombre}</option>)}
+                      </select>
+                    </label>
+                    <label>Nivel mínimo
+                      <select value={requisito.nivelMinimo} disabled={guardando} onChange={evento =>
+                        editarRequisito(indice, { nivelMinimo: evento.target.value })}>
+                        <option value="JUNIOR">Junior</option>
+                        <option value="MID">Mid</option>
+                        <option value="SENIOR">Senior</option>
+                      </select>
+                    </label>
+                    <button type="button" className="lider-proyectos-requisito-quitar" disabled={guardando}
+                      aria-label="Quitar habilidad requerida" onClick={() => quitarRequisito(indice)}>
+                      <X size={16} aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
             <div className="lider-proyectos-dialog-actions">
               <button type="button" className="lider-proyectos-cancelar-modal" disabled={guardando} onClick={() => setModal(null)}>Cancelar</button>
               <button type="submit" className="rrhh-proyectos-add" disabled={guardando}>
-                {guardando ? 'Guardando...' : 'Guardar proyecto'}
+                {guardando ? 'Guardando...' : formulario.estado === 'ACTIVO' ? 'Publicar proyecto' : 'Guardar proyecto'}
               </button>
             </div>
           </form>

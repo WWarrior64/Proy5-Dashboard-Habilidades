@@ -23,7 +23,7 @@ export const validators = {
   },
   phone: (value) => {
     if (!value) return undefined
-    const re = /^[\d\s\-\+\(\)]+$/
+    const re = /^[\d\s+()-]+$/
     return re.test(value) ? undefined : 'Teléfono inválido'
   },
   alphanumeric: (value) => {

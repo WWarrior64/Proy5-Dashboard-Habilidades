@@ -30,6 +30,9 @@ Globals:
         TABLE_PROYECTO_HABILIDAD: !Ref ProyectoHabilidadTable
         TABLE_POSTULACIONES: !Ref PostulacionesTable
         TABLE_ASIGNACIONES: !Ref AsignacionesTable
+        TABLE_ADMINISTRACION: !Ref AdministracionTable
+        TABLE_AUDITORIA: !Ref AuditoriaTable
+        AUDIT_ENABLED: 'true'
 
 Resources:
   # ============================================================================
@@ -77,6 +80,10 @@ Resources:
       Handler: src/functions/usuarios/handler.handler
       Description: Gestion de usuarios y perfiles
       Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt AuditoriaTable.Arn
         - DynamoDBCrudPolicy:
             TableName: !Ref UsuariosTable
         - DynamoDBReadPolicy:
@@ -134,6 +141,12 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/usuarios/yo
             Method: GET
+        Route8:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/usuarios/yo/acceso
+            Method: POST
 
 
   ColaboradoresFunction:
@@ -144,6 +157,10 @@ Resources:
       Handler: src/functions/colaboradores/handler.handler
       Description: Gestion de colaboradores de la empresa
       Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt AuditoriaTable.Arn
         - DynamoDBCrudPolicy:
             TableName: !Ref ColaboradoresTable
         - DynamoDBReadPolicy:
@@ -231,6 +248,10 @@ Resources:
       Handler: src/functions/cargos/handler.handler
       Description: Catalogo de cargos
       Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt AuditoriaTable.Arn
         - DynamoDBCrudPolicy:
             TableName: !Ref CargosTable
         - DynamoDBReadPolicy:
@@ -278,6 +299,10 @@ Resources:
       Handler: src/functions/habilidades/handler.handler
       Description: Catalogo central de habilidades
       Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt AuditoriaTable.Arn
         - DynamoDBCrudPolicy:
             TableName: !Ref HabilidadesTable
         - DynamoDBReadPolicy:
@@ -374,6 +399,12 @@ Resources:
       Handler: src/functions/proyectos/handler.handler
       Description: Gestion de proyectos internos
       Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt AuditoriaTable.Arn
+        - DynamoDBReadPolicy:
+            TableName: !Ref AsignacionesTable
         - DynamoDBCrudPolicy:
             TableName: !Ref ProyectosTable
         - DynamoDBCrudPolicy:
@@ -460,10 +491,19 @@ Resources:
       Handler: src/functions/postulaciones/handler.handler
       Description: Gestion de postulaciones de colaboradores
       Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt AuditoriaTable.Arn
         - DynamoDBCrudPolicy:
             TableName: !Ref PostulacionesTable
         - DynamoDBReadPolicy:
             TableName: !Ref ProyectosTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:ConditionCheckItem
+              Resource: !GetAtt ProyectosTable.Arn
         - DynamoDBCrudPolicy:
             TableName: !Ref ColaboradoresTable
         - DynamoDBCrudPolicy:
@@ -517,10 +557,19 @@ Resources:
       Handler: src/functions/asignaciones/handler.handler
       Description: Gestion de asignaciones y dedicacion de colaboradores
       Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt AuditoriaTable.Arn
         - DynamoDBCrudPolicy:
             TableName: !Ref AsignacionesTable
         - DynamoDBReadPolicy:
             TableName: !Ref ProyectosTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:ConditionCheckItem
+              Resource: !GetAtt ProyectosTable.Arn
         - DynamoDBCrudPolicy:
             TableName: !Ref ColaboradoresTable
         - DynamoDBReadPolicy:
@@ -582,6 +631,12 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/asignaciones/{asignacionId}/estado
             Method: PATCH
+        Route10:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/asignaciones/mias
+            Method: GET
 
 
   DashboardFunction:
@@ -592,6 +647,8 @@ Resources:
       Handler: src/functions/dashboard/handler.handler
       Description: Consultas y metricas agregadas para el dashboard
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProyectoHabilidadTable
         - DynamoDBReadPolicy:
             TableName: !Ref ColaboradoresTable
         - DynamoDBReadPolicy:
@@ -648,6 +705,95 @@ Resources:
             Path: /api/v1/dashboard/resumen
             Method: GET
 
+
+  AdministracionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub internal-marketplace-administracion-${StageName}
+      CodeUri: ../backend/
+      Handler: src/functions/administracion/handler.handler
+      Description: Configuracion administrativa descriptiva, sin modificar reglas de autorizacion
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt AuditoriaTable.Arn
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdministracionTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsuariosTable
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !Sub '${AuditoriaTable.Arn}/index/GSI1'
+      Events:
+        ConfigConsultar:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/administracion/configuracion
+            Method: GET
+        ConfigActualizar:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/administracion/configuracion
+            Method: PUT
+        RolesConsultar:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/administracion/roles-permisos
+            Method: GET
+        RolesActualizar:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/administracion/roles-permisos
+            Method: PUT
+        AuditoriaConsultar:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/administracion/auditoria
+            Method: GET
+
+  AuditoriaTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub internal-marketplace-auditoria-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: auditoriaId
+          AttributeType: S
+        - AttributeName: tipoRegistro
+          AttributeType: S
+        - AttributeName: fechaId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: auditoriaId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: tipoRegistro
+              KeyType: HASH
+            - AttributeName: fechaId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  AdministracionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub internal-marketplace-administracion-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: configuracionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: configuracionId
+          KeyType: HASH
 
   UsuariosTable:
     Type: AWS::DynamoDB::Table

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import Button from '../common/Button.jsx'
 
-export default function ProyectoForm({ proyecto, onSave, onCancel, loading = false, lideres = [] }) {
+export default function ProyectoForm({ proyecto, onSave, onCancel, loading = false,
+  lideres = [], habilidades = [], requisitosIniciales = [] }) {
   const [form, setForm] = useState({
     nombre: proyecto?.nombre || '',
     descripcion: proyecto?.descripcion || '',
@@ -9,6 +10,9 @@ export default function ProyectoForm({ proyecto, onSave, onCancel, loading = fal
     horasRequeridas: proyecto?.horasRequeridas || '',
     estado: proyecto?.estado || 'BORRADOR',
     creadoPor: proyecto?.creadoPor || '',
+    requisitos: requisitosIniciales.map(item => ({
+      habilidadId: item.habilidadId, nivelMinimo: item.nivelMinimo || 'JUNIOR',
+    })),
   })
   const [errors, setErrors] = useState({})
 
@@ -27,6 +31,13 @@ export default function ProyectoForm({ proyecto, onSave, onCancel, loading = fal
     if (!form.liderId.trim()) newErrors.liderId = 'El líder es obligatorio'
     if (!form.horasRequeridas || parseFloat(form.horasRequeridas) <= 0) newErrors.horasRequeridas = 'Las horas deben ser positivas'
     if (!form.estado) newErrors.estado = 'El estado es obligatorio'
+    if (form.estado === 'ACTIVO' && form.requisitos.length === 0) {
+      newErrors.requisitos = 'Selecciona al menos una habilidad antes de publicar el proyecto'
+    }
+    if (form.requisitos.some(item => !habilidades.some(habilidad =>
+      habilidad.habilidadId === item.habilidadId && habilidad.estado === 'ACTIVO'))) {
+      newErrors.requisitos = 'Selecciona únicamente habilidades activas del catálogo de RRHH'
+    }
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -96,6 +107,53 @@ export default function ProyectoForm({ proyecto, onSave, onCancel, loading = fal
             <option key={est.value} value={est.value}>{est.label}</option>
           ))}
         </select>
+      </div>
+      <div className="form-group">
+        <label className="label">Habilidades requeridas</label>
+        <p className="page-subtitle">Selecciona las habilidades y el nivel mínimo para este proyecto.</p>
+        {form.requisitos.map((requisito, indice) => (
+          <div key={requisito.habilidadId} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+            <select className="input" aria-label={'Habilidad requerida ' + (indice + 1)}
+              style={{ flex: '2 1 160px', minWidth: 0 }} value={requisito.habilidadId} disabled={loading}
+              onChange={e => setForm(actual => ({
+                ...actual, requisitos: actual.requisitos.map((item, posicion) =>
+                  posicion === indice ? { ...item, habilidadId: e.target.value } : item),
+              }))}>
+              {habilidades.filter(item => item.estado === 'ACTIVO' &&
+                (item.habilidadId === requisito.habilidadId ||
+                  !form.requisitos.some(actual => actual.habilidadId === item.habilidadId)))
+                .map(item => <option key={item.habilidadId} value={item.habilidadId}>{item.nombre}</option>)}
+            </select>
+            <select className="input" aria-label={'Nivel mínimo ' + (indice + 1)}
+              style={{ flex: '1 1 110px', minWidth: 0 }} value={requisito.nivelMinimo} disabled={loading}
+              onChange={e => setForm(actual => ({
+                ...actual, requisitos: actual.requisitos.map((item, posicion) =>
+                  posicion === indice ? { ...item, nivelMinimo: e.target.value } : item),
+              }))}>
+              <option value="JUNIOR">Junior</option>
+              <option value="MID">Mid</option>
+              <option value="SENIOR">Senior</option>
+            </select>
+            <button type="button" className="btn btn-outline" aria-label={'Quitar habilidad ' + (indice + 1)}
+              disabled={loading}
+              onClick={() => setForm(actual => ({
+                ...actual, requisitos: actual.requisitos.filter((_, posicion) => posicion !== indice),
+              }))}>Quitar</button>
+          </div>
+        ))}
+        <button type="button" className="btn btn-outline" disabled={loading ||
+          !habilidades.some(item => item.estado === 'ACTIVO' &&
+            !form.requisitos.some(actual => actual.habilidadId === item.habilidadId))}
+          onClick={() => {
+            const siguiente = habilidades.find(item => item.estado === 'ACTIVO' &&
+              !form.requisitos.some(actual => actual.habilidadId === item.habilidadId))
+            if (siguiente) setForm(actual => ({
+              ...actual, requisitos: [...actual.requisitos, {
+                habilidadId: siguiente.habilidadId, nivelMinimo: 'JUNIOR',
+              }],
+            }))
+          }}>+ Añadir habilidad</button>
+        {errors.requisitos && <p className="error-text">{errors.requisitos}</p>}
       </div>
       <div className="modal-footer" style={{ justifyContent: 'flex-end', borderTop: 'none', paddingTop: 0 }}>
         <Button variant="outline" onClick={onCancel} disabled={loading}>

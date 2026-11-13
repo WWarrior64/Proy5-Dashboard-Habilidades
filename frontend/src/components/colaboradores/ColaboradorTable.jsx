@@ -1,5 +1,6 @@
 import DataTable from '../common/DataTable.jsx'
 import Button from '../common/Button.jsx'
+import { disponibilidadCalculada, porcentajeLibre } from '../../utils/disponibilidad.js'
 
 export default function ColaboradorTable({ colaboradores = [], onEdit, onToggleStatus, loading = false }) {
   const columns = [
@@ -16,7 +17,8 @@ export default function ColaboradorTable({ colaboradores = [], onEdit, onToggleS
     nombre: c.nombre || `${c.usuarioId || ''} ${c.colaboradorId || ''}`,
     habilidades: c.habilidades?.join(', ') || 'Sin habilidades',
     nivel: c.nivel || '-',
-    disponibilidad: c.disponibilidad || 'DISPONIBLE',
+    disponibilidad: disponibilidadCalculada(c),
+    porcentajeLibre: porcentajeLibre(c),
     acciones: (
       <div style={{ display: 'flex', gap: '0.5rem' }}>
         <Button variant="outline" size="sm" onClick={() => onEdit(c)}>Editar</Button>
@@ -30,7 +32,9 @@ export default function ColaboradorTable({ colaboradores = [], onEdit, onToggleS
   const renderCell = (row, key) => {
     if (key === 'disponibilidad') {
       const color = row.disponibilidad === 'DISPONIBLE' ? '#10b981' : '#f59e0b'
-      return <span className="badge" style={{ background: color === '#10b981' ? '#dcfce7' : '#fef3c7', color }}>{row.disponibilidad}</span>
+      return <span className="badge" style={{ background: color === '#10b981' ? '#dcfce7' : '#fef3c7', color }}>
+        {row.disponibilidad}{row.porcentajeLibre == null ? '' : ` · ${row.porcentajeLibre} % libre`}
+      </span>
     }
     if (key === 'acciones') return row.acciones
     return row[key]

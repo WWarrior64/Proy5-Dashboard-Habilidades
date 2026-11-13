@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { Pencil, Plus, Search, Trash2, UserRound, UsersRound, X } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import { usuariosService } from '../services/usuarios.service.js'
+import { administracionService } from '../services/administracion.service.js'
 import { ROLE_PERMISSIONS } from '../utils/permissions.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
 import './administrador-roles-permisos.css'
@@ -61,12 +62,37 @@ export default function AdministradorRolesPermisosVista() {
   const [confirmacion, setConfirmacion] = useState(null)
   const [detalleRol, setDetalleRol] = useState(null)
   const [aviso, setAviso] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const [configCargando, setConfigCargando] = useState(true)
+  const [apiDisponible, setApiDisponible] = useState(false)
+
+  useEffect(() => {
+    let cancelado = false
+    administracionService.getRolesPermisos()
+      .then(respuesta => {
+        if (cancelado) return
+        setApiDisponible(true)
+        const datos = respuesta.data?.datos
+        if (Array.isArray(datos?.roles) && Array.isArray(datos?.permisos)) {
+          setRoles(datos.roles)
+          setPermisos(datos.permisos)
+        }
+      })
+      .catch(error_ => {
+        if (!cancelado) {
+          setApiDisponible(false)
+          setAviso(getApiErrorMessage(error_, 'La API administrativa no está disponible. Despliega el backend antes de editar.'))
+        }
+      })
+      .finally(() => { if (!cancelado) setConfigCargando(false) })
+    return () => { cancelado = true }
+  }, [])
 
   const cargarUsuarios = useCallback(async () => {
     setCargando(true)
     setError('')
     try {
-      const respuesta = await usuariosService.list({ limit: 500 })
+      const respuesta = await usuariosService.listAll()
       setUsuarios(extraer(respuesta))
       setUsuariosCargados(true)
     } catch (fallo) {
@@ -123,8 +149,11 @@ export default function AdministradorRolesPermisosVista() {
     }))
   }
 
-  const guardar = evento => {
+  const guardar = async evento => {
     evento.preventDefault()
+    if (!modal || guardando || !apiDisponible) return
+    let nuevosRoles = roles
+    let nuevosPermisos = permisos
     const nombre = formulario.nombre.trim()
     const descripcion = formulario.descripcion.trim()
     if (!nombre || !descripcion) {
@@ -134,7 +163,7 @@ export default function AdministradorRolesPermisosVista() {
 
     if (modal?.tipo === 'permiso') {
       if (permisos.some(item => item.nombre.toLocaleLowerCase('es') === nombre.toLocaleLowerCase('es') && item.id !== modal.id)) {
-        setErrorFormulario('Ya existe un permiso con ese nombre en la vista previa.')
+        setErrorFormulario('Ya existe un permiso con ese nombre.')
         return
       }
       const actualizado = {
@@ -143,12 +172,12 @@ export default function AdministradorRolesPermisosVista() {
         descripcion,
         roles: formulario.seleccionados,
       }
-      setPermisos(actuales => modal.id
-        ? actuales.map(item => item.id === modal.id ? actualizado : item)
-        : [...actuales, actualizado])
+      nuevosPermisos = modal.id
+        ? permisos.map(item => item.id === modal.id ? actualizado : item)
+        : [...permisos, actualizado]
     } else if (modal?.tipo === 'rol') {
       if (roles.some(item => item.nombre.toLocaleLowerCase('es') === nombre.toLocaleLowerCase('es') && item.id !== modal.id)) {
-        setErrorFormulario('Ya existe un rol con ese nombre en la vista previa.')
+        setErrorFormulario('Ya existe un rol con ese nombre.')
         return
       }
       const anterior = roles.find(rol => rol.id === modal.id)
@@ -158,35 +187,60 @@ export default function AdministradorRolesPermisosVista() {
         descripcion,
         sistema: anterior?.sistema || false,
       }
-      setRoles(actuales => modal.id
-        ? actuales.map(item => item.id === modal.id ? actualizado : item)
-        : [...actuales, actualizado])
-      setPermisos(actuales => actuales.map(permiso => ({
+      nuevosRoles = modal.id
+        ? roles.map(item => item.id === modal.id ? actualizado : item)
+        : [...roles, actualizado]
+      nuevosPermisos = permisos.map(permiso => ({
         ...permiso,
         roles: formulario.seleccionados.includes(permiso.id)
           ? Array.from(new Set([...permiso.roles, actualizado.id]))
           : permiso.roles.filter(id => id !== actualizado.id),
-      })))
+      }));
     }
 
-    setModal(null)
-    setAviso('Cambio aplicado únicamente a esta vista previa; los permisos reales no se modificaron.')
+    setGuardando(true)
+    setErrorFormulario('')
+    try {
+      await administracionService.saveRolesPermisos({ roles: nuevosRoles, permisos: nuevosPermisos })
+      setRoles(nuevosRoles)
+      setPermisos(nuevosPermisos)
+      setModal(null)
+      setAviso('Información administrativa guardada. Los permisos reales permanecen definidos por las reglas del backend.')
+    } catch (error_) {
+      setErrorFormulario(getApiErrorMessage(error_, 'No se pudieron guardar los roles y permisos.'))
+    } finally {
+      setGuardando(false)
+    }
   }
 
-  const eliminar = () => {
-    if (!confirmacion) return
-    if (confirmacion.tipo === 'permiso') {
-      setPermisos(actuales => actuales.filter(item => item.id !== confirmacion.id))
-    } else {
-      setRoles(actuales => actuales.filter(item => item.id !== confirmacion.id))
-      setPermisos(actuales => actuales.map(item => ({
-        ...item,
-        roles: item.roles.filter(id => id !== confirmacion.id),
-      })))
-      if (detalleRol?.id === confirmacion.id) setDetalleRol(null)
+  const eliminar = async () => {
+    if (!confirmacion || guardando || !apiDisponible) return
+    if (confirmacion.tipo === 'rol' && roles.find(item => item.id === confirmacion.id)?.sistema) {
+      setAviso('No se puede eliminar un rol fundamental del sistema.')
+      setConfirmacion(null)
+      return
     }
-    setConfirmacion(null)
-    setAviso('Elemento retirado solo de la vista previa. El sistema de autorización real no cambió.')
+    const nuevosRoles = confirmacion.tipo === 'rol'
+      ? roles.filter(item => item.id !== confirmacion.id) : roles
+    const nuevosPermisos = confirmacion.tipo === 'permiso'
+      ? permisos.filter(item => item.id !== confirmacion.id)
+      : permisos.map(item => ({
+        ...item, roles: item.roles.filter(id => id !== confirmacion.id),
+      }))
+    setGuardando(true)
+    setError('')
+    try {
+      await administracionService.saveRolesPermisos({ roles: nuevosRoles, permisos: nuevosPermisos })
+      setRoles(nuevosRoles)
+      setPermisos(nuevosPermisos)
+      if (detalleRol?.id === confirmacion.id) setDetalleRol(null)
+      setConfirmacion(null)
+      setAviso('Elemento eliminado de la información administrativa. La autorización real no cambió.')
+    } catch (error_) {
+      setError(getApiErrorMessage(error_, 'No se pudo eliminar el elemento.'))
+    } finally {
+      setGuardando(false)
+    }
   }
 
   const usuariosDelRol = detalleRol ? usuarios.filter(usuario => usuario.rol === detalleRol.id) : []
@@ -229,8 +283,8 @@ export default function AdministradorRolesPermisosVista() {
 
         <section className="emp-content admin-rp-content" aria-label="Administración de roles y permisos">
           <p className="admin-rp-nota" role="status">
-            Permisos basados en la configuración actual del frontend. Crear, editar y eliminar son acciones de demostración
-            y no modifican las reglas de seguridad ni el backend.
+            Roles y permisos descriptivos almacenados en el backend. Los controles de acceso reales siguen siendo
+            las reglas estáticas del servidor; aquí no se conceden permisos de acceso.
           </p>
           {error && (
             <div className="admin-rp-feedback" role="alert">
@@ -238,12 +292,13 @@ export default function AdministradorRolesPermisosVista() {
               <button type="button" onClick={cargarUsuarios} disabled={cargando}>Reintentar</button>
             </div>
           )}
+          {configCargando && <p className="admin-rp-aviso" role="status">Consultando información administrativa...</p>}
           {aviso && <p className="admin-rp-aviso" role="status">{aviso}</p>}
 
           <section className="admin-rp-seccion" aria-labelledby="admin-rp-permisos">
             <div className="admin-rp-seccion-heading">
               <h2 id="admin-rp-permisos">Permisos</h2>
-              <button type="button" className="admin-rp-primary" onClick={() => abrirPermiso(null)}>
+              <button type="button" className="admin-rp-primary" onClick={() => abrirPermiso(null)} disabled={guardando || configCargando || !apiDisponible}>
                 <Plus size={15} aria-hidden="true" /> Nuevo permiso
               </button>
             </div>
@@ -261,11 +316,11 @@ export default function AdministradorRolesPermisosVista() {
                   </div>
                   <div className="admin-rp-acciones">
                     <button type="button" className="admin-rp-icono" title={'Editar ' + permiso.nombre}
-                      aria-label={'Editar ' + permiso.nombre} onClick={() => abrirPermiso(permiso)}>
+                      aria-label={'Editar ' + permiso.nombre} onClick={() => abrirPermiso(permiso)} disabled={guardando || !apiDisponible}>
                       <Pencil size={16} aria-hidden="true" />
                     </button>
                     <button type="button" className="admin-rp-icono eliminar" title={'Eliminar ' + permiso.nombre}
-                      aria-label={'Eliminar ' + permiso.nombre}
+                      aria-label={'Eliminar ' + permiso.nombre} disabled={guardando || !apiDisponible}
                       onClick={() => setConfirmacion({ tipo: 'permiso', id: permiso.id, nombre: permiso.nombre })}>
                       <Trash2 size={16} aria-hidden="true" />
                     </button>
@@ -279,7 +334,7 @@ export default function AdministradorRolesPermisosVista() {
           <section className="admin-rp-seccion" aria-labelledby="admin-rp-roles">
             <div className="admin-rp-seccion-heading">
               <h2 id="admin-rp-roles">Roles</h2>
-              <button type="button" className="admin-rp-primary" onClick={() => abrirRol(null)}>
+              <button type="button" className="admin-rp-primary" onClick={() => abrirRol(null)} disabled={guardando || configCargando || !apiDisponible}>
                 <Plus size={15} aria-hidden="true" /> Nuevo rol
               </button>
             </div>
@@ -307,11 +362,11 @@ export default function AdministradorRolesPermisosVista() {
                         <UsersRound size={17} aria-hidden="true" />
                       </button>
                       <button type="button" className="admin-rp-icono" title={'Editar ' + rol.nombre}
-                        aria-label={'Editar ' + rol.nombre} onClick={() => abrirRol(rol)}>
+                        aria-label={'Editar ' + rol.nombre} onClick={() => abrirRol(rol)} disabled={guardando || !apiDisponible}>
                         <Pencil size={16} aria-hidden="true" />
                       </button>
                       <button type="button" className="admin-rp-icono eliminar" title={'Eliminar ' + rol.nombre}
-                        aria-label={'Eliminar ' + rol.nombre}
+                        aria-label={'Eliminar ' + rol.nombre} disabled={rol.sistema || guardando || !apiDisponible}
                         onClick={() => setConfirmacion({ tipo: 'rol', id: rol.id, nombre: rol.nombre })}>
                         <Trash2 size={16} aria-hidden="true" />
                       </button>
@@ -335,7 +390,7 @@ export default function AdministradorRolesPermisosVista() {
               <h2 id="admin-rp-form-title">{modal.id ? 'Editar' : 'Nuevo'} {modal.tipo === 'permiso' ? 'permiso' : 'rol'}</h2>
               <button type="button" onClick={() => setModal(null)} aria-label="Cerrar formulario"><X size={18} /></button>
             </div>
-            <p className="admin-rp-dialog-nota">Vista previa: los cambios no se guardan en el backend.</p>
+            <p className="admin-rp-dialog-nota">Se guardan definiciones descriptivas; no cambian las autorizaciones reales.</p>
             {errorFormulario && <p className="admin-rp-error" role="alert">{errorFormulario}</p>}
             <label>Nombre
               <input autoFocus required value={formulario.nombre} disabled={modal.tipo === 'rol' && roles.some(rol => rol.id === modal.id && rol.sistema)}
@@ -360,7 +415,7 @@ export default function AdministradorRolesPermisosVista() {
             </fieldset>
             <div className="admin-rp-dialog-actions">
               <button type="button" className="admin-rp-secondary" onClick={() => setModal(null)}>Cancelar</button>
-              <button type="submit" className="admin-rp-primary">Guardar cambios</button>
+              <button type="submit" className="admin-rp-primary" disabled={guardando || !apiDisponible}>{guardando ? 'Guardando...' : 'Guardar cambios'}</button>
             </div>
           </form>
         </div>
@@ -375,11 +430,11 @@ export default function AdministradorRolesPermisosVista() {
               <h2 id="admin-rp-confirm-title">¿Eliminar {confirmacion.tipo === 'permiso' ? 'permiso' : 'rol'}?</h2>
               <button type="button" onClick={() => setConfirmacion(null)} aria-label="Cerrar confirmación"><X size={18} /></button>
             </div>
-            <p>Se ocultará <strong>{confirmacion.nombre}</strong> de esta vista previa.
+            <p>Se eliminará <strong>{confirmacion.nombre}</strong> de la configuración administrativa.
               Los roles, permisos y accesos reales del sistema permanecerán intactos.</p>
             <div className="admin-rp-dialog-actions">
               <button type="button" className="admin-rp-secondary" onClick={() => setConfirmacion(null)}>Volver</button>
-              <button type="button" className="admin-rp-danger" onClick={eliminar}>Eliminar de la vista previa</button>
+              <button type="button" className="admin-rp-danger" onClick={eliminar} disabled={guardando || !apiDisponible}>{guardando ? 'Eliminando...' : 'Eliminar'}</button>
             </div>
           </section>
         </div>

@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Eye, Pencil, Plus, UserRound, X } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
+import { administracionService } from '../services/administracion.service.js'
+import { getApiErrorMessage } from '../utils/apiErrors.js'
 import './administrador-configuracion.css'
 
 const menu = [
@@ -62,6 +64,31 @@ export default function AdministradorConfiguracionVista() {
   const [error, setError] = useState('')
   const [detalle, setDetalle] = useState(null)
   const [aviso, setAviso] = useState('')
+  const [cargando, setCargando] = useState(true)
+  const [guardando, setGuardando] = useState(false)
+  const [apiDisponible, setApiDisponible] = useState(false)
+
+  useEffect(() => {
+    let cancelado = false
+    administracionService.getConfiguracion()
+      .then(respuesta => {
+        if (cancelado) return
+        setApiDisponible(true)
+        const datos = respuesta.data?.datos
+        if (Array.isArray(datos?.parametros) && Array.isArray(datos?.catalogos)) {
+          setParametros(datos.parametros)
+          setCatalogos(datos.catalogos)
+        }
+      })
+      .catch(error_ => {
+        if (!cancelado) {
+          setApiDisponible(false)
+          setAviso(getApiErrorMessage(error_, 'La API administrativa no está disponible. Despliega el backend antes de editar.'))
+        }
+      })
+      .finally(() => { if (!cancelado) setCargando(false) })
+    return () => { cancelado = true }
+  }, [])
 
   const parametrosVisibles = useMemo(() => parametros.filter(item =>
     [item.nombre, item.descripcion, item.valor].some(valor => normalizar(valor).includes(normalizar(busqueda))),
@@ -94,9 +121,15 @@ export default function AdministradorConfiguracionVista() {
     setError('')
   }
 
-  const guardar = evento => {
+  const guardar = async evento => {
     evento.preventDefault()
-    if (!modal) return
+    if (!modal || guardando || !apiDisponible) return
+    const siguiente = { parametros, catalogos }
+    if (modal.id && (parametros.find(item => item.id === modal.id)?.esReferencia ||
+      catalogos.find(item => item.id === modal.id)?.esReferencia)) {
+      setError('Las reglas fundamentales son fijas y no pueden cambiarse desde esta pantalla.')
+      return
+    }
     const nombre = limpiar(formulario.nombre)
     const descripcion = limpiar(formulario.descripcion)
 
@@ -125,9 +158,9 @@ export default function AdministradorConfiguracionVista() {
         tipo: formulario.tipo,
         esReferencia: previo?.esReferencia || false,
       }
-      setParametros(actuales => modal.id
-        ? actuales.map(item => item.id === modal.id ? editado : item)
-        : [...actuales, editado])
+      siguiente.parametros = modal.id
+        ? parametros.map(item => item.id === modal.id ? editado : item)
+        : [...parametros, editado]
     } else {
       const valores = formulario.valoresTexto.split(/[\n,]/)
         .map(limpiar).filter(Boolean)
@@ -151,13 +184,24 @@ export default function AdministradorConfiguracionVista() {
         valores,
         esReferencia: previo?.esReferencia || false,
       }
-      setCatalogos(actuales => modal.id
-        ? actuales.map(item => item.id === modal.id ? editado : item)
-        : [...actuales, editado])
+      siguiente.catalogos = modal.id
+        ? catalogos.map(item => item.id === modal.id ? editado : item)
+        : [...catalogos, editado]
     }
 
-    setModal(null)
-    setAviso('Cambios aplicados solo a la vista previa; no se modificaron la base de datos ni las reglas del sistema.')
+    setGuardando(true)
+    setError('')
+    try {
+      await administracionService.saveConfiguracion(siguiente)
+      setParametros(siguiente.parametros)
+      setCatalogos(siguiente.catalogos)
+      setModal(null)
+      setAviso('Configuración descriptiva guardada en el backend. No cambia las reglas técnicas de la plataforma.')
+    } catch (error_) {
+      setError(getApiErrorMessage(error_, 'No se pudo guardar la configuración.'))
+    } finally {
+      setGuardando(false)
+    }
   }
 
   return (
@@ -199,15 +243,16 @@ export default function AdministradorConfiguracionVista() {
 
         <section className="emp-content admin-config-content" aria-label="Configuración de la plataforma">
           <p className="admin-config-nota" role="status">
-            Valores de referencia del sistema. Crear y editar funcionan como vista previa;
-            los cambios no se guardan ni alteran el comportamiento real de la plataforma.
+            Los parámetros y catálogos adicionales se guardan en el backend. Los límites,
+            niveles y estados oficiales permanecen fijos y no cambian por estas opciones.
           </p>
+          {cargando && <p className="admin-config-aviso" role="status">Cargando configuración...</p>}
           {aviso && <p className="admin-config-aviso" role="status">{aviso}</p>}
 
           <section className="admin-config-seccion" aria-labelledby="admin-config-parametros">
             <div className="admin-config-heading">
               <h2 id="admin-config-parametros">Parámetros generales</h2>
-              <button type="button" className="admin-config-primary" onClick={() => abrirParametro(null)}>
+              <button type="button" className="admin-config-primary" onClick={() => abrirParametro(null)} disabled={guardando || cargando || !apiDisponible}>
                 <Plus size={15} aria-hidden="true" /> Nuevo parámetro
               </button>
             </div>
@@ -221,7 +266,8 @@ export default function AdministradorConfiguracionVista() {
                   </div>
                   <div className="admin-config-acciones">
                     <button type="button" className="admin-config-icono"
-                      onClick={() => abrirParametro(item)} aria-label={'Editar ' + item.nombre}
+                      onClick={() => abrirParametro(item)} disabled={item.esReferencia || guardando || cargando || !apiDisponible}
+                      aria-label={'Editar ' + item.nombre}
                       title={'Editar ' + item.nombre}>
                       <Pencil size={16} aria-hidden="true" />
                     </button>
@@ -235,7 +281,7 @@ export default function AdministradorConfiguracionVista() {
           <section className="admin-config-seccion" aria-labelledby="admin-config-catalogos">
             <div className="admin-config-heading">
               <h2 id="admin-config-catalogos">Catálogos del sistema</h2>
-              <button type="button" className="admin-config-primary" onClick={() => abrirCatalogo(null)}>
+              <button type="button" className="admin-config-primary" onClick={() => abrirCatalogo(null)} disabled={guardando || cargando || !apiDisponible}>
                 <Plus size={15} aria-hidden="true" /> Nuevo catálogo
               </button>
             </div>
@@ -261,7 +307,8 @@ export default function AdministradorConfiguracionVista() {
                       <Eye size={16} aria-hidden="true" />
                     </button>
                     <button type="button" className="admin-config-icono"
-                      onClick={() => abrirCatalogo(item)} aria-label={'Editar catálogo ' + item.nombre}
+                      onClick={() => abrirCatalogo(item)} disabled={item.esReferencia || guardando || cargando || !apiDisponible}
+                      aria-label={'Editar catálogo ' + item.nombre}
                       title={'Editar catálogo ' + item.nombre}>
                       <Pencil size={16} aria-hidden="true" />
                     </button>
@@ -288,7 +335,7 @@ export default function AdministradorConfiguracionVista() {
                 <X size={18} aria-hidden="true" />
               </button>
             </div>
-            <p className="admin-config-dialog-nota">Vista previa: los cambios no se guardan en el backend.</p>
+            <p className="admin-config-dialog-nota">Los parámetros adicionales se guardan en DynamoDB; las reglas fundamentales no cambian.</p>
             {error && <p className="admin-config-form-error" role="alert">{error}</p>}
             <label>Nombre
               <input required maxLength={110} value={formulario.nombre}
@@ -325,7 +372,7 @@ export default function AdministradorConfiguracionVista() {
             )}
             <div className="admin-config-dialog-actions">
               <button type="button" className="admin-config-secondary" onClick={() => setModal(null)}>Cancelar</button>
-              <button type="submit" className="admin-config-primary">Guardar cambios</button>
+              <button type="submit" className="admin-config-primary" disabled={guardando || !apiDisponible}>{guardando ? 'Guardando...' : 'Guardar cambios'}</button>
             </div>
           </form>
         </div>

@@ -1,7 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Eye, Search, Trash2, UserRound, X } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
+import { colaboradoresService } from '../services/colaboradores.service.js'
+import { postulacionesService } from '../services/postulaciones.service.js'
+import { proyectosService } from '../services/proyectos.service.js'
+import { extractItems } from '../utils/apiResponses.js'
+import { getApiErrorMessage } from '../utils/apiErrors.js'
+import { nombreLiderProyecto } from '../utils/formatters.js'
 import './empleado-postulaciones.css'
 
 // Ejemplos visuales: se reemplazarán por las solicitudes reales al integrar el backend.
@@ -43,13 +49,60 @@ function claseEstado(estado) {
   return estados.find(item => item.nombre === estado)?.estilo || 'retirada'
 }
 
+const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
+const nombreEstado = { PENDIENTE: 'En revisión', ACEPTADA: 'Aceptada', RECHAZADA: 'Rechazada', RETIRADA: 'Retirada' }
+const fechaVisible = valor => valor ? new Date(valor).toLocaleDateString('es-SV', { timeZone: 'UTC' }) : '—'
+
 export default function EmpleadoPostulaciones() {
-  const [postulaciones, setPostulaciones] = useState(postulacionesIniciales)
+  const [postulaciones, setPostulaciones] = useState(modoDemo ? postulacionesIniciales : [])
+  const [colaboradorId, setColaboradorId] = useState(null)
+  const [cargando, setCargando] = useState(!modoDemo)
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('Todos')
   const [detalle, setDetalle] = useState(null)
   const [porRetirar, setPorRetirar] = useState(null)
+
+  useEffect(() => {
+    if (modoDemo) return undefined
+    let cancelado = false
+    const cargar = async () => {
+      setCargando(true)
+      setError('')
+      try {
+        const perfil = await colaboradoresService.getMe()
+        const colaborador = perfil.data?.datos
+        if (!colaborador?.colaboradorId) throw new Error('La cuenta no tiene un perfil de colaborador.')
+        const [respuesta, proyectosRespuesta] = await Promise.all([
+          postulacionesService.listByCollaborator(colaborador.colaboradorId),
+          proyectosService.list(),
+        ])
+        const proyectos = new Map(extractItems(proyectosRespuesta.data).map(item => [item.proyectoId, item]))
+        const items = extractItems(respuesta.data).map(item => ({
+          ...item,
+          id: item.postulacionId || item.proyectoId,
+          proyecto: proyectos.get(item.proyectoId)?.nombre || item.proyectoId,
+          lider: nombreLiderProyecto(proyectos.get(item.proyectoId)),
+          fechaPostulacion: fechaVisible(item.fechaPostulacion),
+          fechaRevision: fechaVisible(item.fechaRevision),
+          observacion: item.observacionRevision || 'Sin observación',
+          estado: nombreEstado[item.estado] || item.estado,
+        }))
+        if (!cancelado) {
+          setColaboradorId(colaborador.colaboradorId)
+          setPostulaciones(items)
+        }
+      } catch (fallo) {
+        if (!cancelado) setError(getApiErrorMessage(fallo, 'No se pudieron consultar las postulaciones.'))
+      } finally {
+        if (!cancelado) setCargando(false)
+      }
+    }
+    cargar()
+    return () => { cancelado = true }
+  }, [])
 
   const visibles = useMemo(() => {
     const termino = [busqueda, busquedaSuperior].map(valor => valor.trim().toLocaleLowerCase('es'))
@@ -67,10 +120,23 @@ export default function EmpleadoPostulaciones() {
     rechazadas: postulaciones.filter(item => item.estado === 'Rechazada').length,
   }
 
-  const eliminarPostulacion = () => {
-    if (porRetirar === null) return
-    setPostulaciones(actuales => actuales.filter(item => item.id !== porRetirar))
-    setPorRetirar(null)
+  const eliminarPostulacion = async () => {
+    if (porRetirar === null || guardando) return
+    const postulacion = postulaciones.find(item => item.id === porRetirar)
+    if (!postulacion || postulacion.estado !== 'En revisión') return
+    setGuardando(true)
+    setError('')
+    try {
+      if (!modoDemo) await postulacionesService.withdraw(postulacion.proyectoId, colaboradorId)
+      setPostulaciones(actuales => actuales.map(item => item.id === porRetirar
+        ? { ...item, estado: 'Retirada', fechaRevision: fechaVisible(new Date().toISOString()) }
+        : item))
+      setPorRetirar(null)
+    } catch (fallo) {
+      setError(getApiErrorMessage(fallo, 'No se pudo retirar la postulación.'))
+    } finally {
+      setGuardando(false)
+    }
   }
 
   return (
@@ -113,6 +179,8 @@ export default function EmpleadoPostulaciones() {
             <h2 id="applications-title">Mis postulaciones</h2>
           </div>
 
+          {cargando && <p role="status">Consultando postulaciones...</p>}
+          {error && <p role="alert">{error}</p>}
           <div className="emp-applications-metrics">
             <div className="emp-card">
               <p className="emp-card-label">Total</p>
@@ -191,15 +259,15 @@ export default function EmpleadoPostulaciones() {
                           >
                             <Eye size={16} aria-hidden="true" />
                           </button>
-                          <button
+                          {item.estado === 'En revisión' && <button
                             type="button"
                             className="emp-applications-withdraw"
                             onClick={() => setPorRetirar(item.id)}
-                            aria-label={'Eliminar postulación a ' + item.proyecto}
-                            title={'Eliminar postulación a ' + item.proyecto}
+                            aria-label={'Retirar postulación a ' + item.proyecto}
+                            title={'Retirar postulación a ' + item.proyecto}
                           >
                             <Trash2 size={16} aria-hidden="true" />
-                          </button>
+                          </button>}
                         </div>
                       </td>
                     </tr>
@@ -244,11 +312,11 @@ export default function EmpleadoPostulaciones() {
           if (evento.target === evento.currentTarget) setPorRetirar(null)
         }}>
           <section className="emp-applications-modal" role="alertdialog" aria-modal="true" aria-labelledby="application-withdraw-title" aria-describedby="application-withdraw-description">
-            <h2 id="application-withdraw-title">Eliminar postulación</h2>
-            <p id="application-withdraw-description">¿Deseas eliminar esta postulación de la lista? Este cambio solo se reflejará en los datos de demostración.</p>
+            <h2 id="application-withdraw-title">Retirar postulación</h2>
+            <p id="application-withdraw-description">¿Deseas retirar esta postulación? Su historial se conservará con estado Retirada.</p>
             <div className="emp-applications-modal-buttons">
               <button type="button" className="emp-applications-cancel" onClick={() => setPorRetirar(null)}>Cancelar</button>
-              <button type="button" className="emp-applications-close" onClick={eliminarPostulacion}>Eliminar</button>
+              <button type="button" className="emp-applications-close" onClick={eliminarPostulacion} disabled={guardando}>{guardando ? 'Retirando...' : 'Retirar'}</button>
             </div>
           </section>
         </div>

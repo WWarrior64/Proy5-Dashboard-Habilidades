@@ -1,4 +1,4 @@
-import { expect } from 'vitest'
+import { vi, beforeEach, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
 
 // Mock matchMedia for jsdom

@@ -43,6 +43,7 @@ function ultimoAcceso(usuario) {
   const fecha = new Date(dato)
   return Number.isNaN(fecha.getTime()) ? 'No registrado' : fecha.toLocaleString('es-SV', {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    timeZone: 'America/El_Salvador',
   })
 }
 
@@ -57,21 +58,21 @@ export default function AdministradorUsuariosVista() {
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [rolFiltro, setRolFiltro] = useState('')
-  const [estadoFiltro, setEstadoFiltro] = useState('')
+  const [estadoFiltro, setEstadoFiltro] = useState('ACTIVO')
   const [pagina, setPagina] = useState(1)
   const [formularioAbierto, setFormularioAbierto] = useState(false)
   const [usuarioEditar, setUsuarioEditar] = useState(null)
   const [menuAbierto, setMenuAbierto] = useState(null)
   const [confirmacion, setConfirmacion] = useState(null)
 
-  const puedeGestionar = user?.rol === 'ADMINISTRADOR' || user?.rol === 'RRHH'
+  const puedeGestionar = user?.rol === 'ADMINISTRADOR'
 
   const cargarUsuarios = useCallback(async () => {
     setUsuariosCargando(true)
     setError('')
     try {
       // Los filtros son locales: las tarjetas de métricas siempre resumen los mismos datos.
-      const respuesta = await usuariosService.list({ limit: 500 })
+      const respuesta = await usuariosService.listAll()
       setUsuarios(extraer(respuesta))
     } catch (fallo) {
       setError(getApiErrorMessage(fallo, 'No se pudieron cargar los usuarios.'))
@@ -84,7 +85,7 @@ export default function AdministradorUsuariosVista() {
 
   useEffect(() => {
     let cancelado = false
-    colaboradoresService.list({ limit: 500 })
+    colaboradoresService.listAll()
       .then(respuesta => {
         if (!cancelado) setPerfiles(new Set(extraer(respuesta).map(item => item.usuarioId).filter(Boolean)))
       })
@@ -97,7 +98,7 @@ export default function AdministradorUsuariosVista() {
     return usuarios.filter(item => {
       const contenido = [item.nombre, item.email, nombreRol(item.rol)].join(' ').toLocaleLowerCase('es')
       return terminos.every(termino => contenido.includes(termino)) &&
-        (!rolFiltro || item.rol === rolFiltro) && (!estadoFiltro || item.estado === estadoFiltro)
+        (!rolFiltro || item.rol === rolFiltro) && (estadoFiltro === 'TODOS' || item.estado === estadoFiltro)
     })
   }, [usuarios, busqueda, busquedaSuperior, rolFiltro, estadoFiltro])
 
@@ -140,7 +141,6 @@ export default function AdministradorUsuariosVista() {
       if (usuarioEditar) {
         const cambios = {}
         if (datos.nombre !== usuarioEditar.nombre) cambios.nombre = datos.nombre
-        if (datos.email !== usuarioEditar.email) cambios.email = datos.email
         if (Object.keys(cambios).length) await usuariosService.update(usuarioEditar.usuarioId, cambios)
         if (datos.rol !== usuarioEditar.rol) {
           await usuariosService.changeRole(usuarioEditar.usuarioId, { rol: datos.rol })
@@ -272,8 +272,9 @@ export default function AdministradorUsuariosVista() {
               </label>
               <select aria-label="Filtrar usuarios por estado" value={estadoFiltro}
                 onChange={evento => filtrar(setEstadoFiltro, evento.target.value)}>
-                <option value="">Estado: Todos</option>
-                <option value="ACTIVO">Activos</option>
+                <option value="ACTIVO">Estado: Activos</option>
+                 <option value="TODOS">Todos los estados</option>
+                
                 <option value="INACTIVO">Inactivos</option>
               </select>
             </div>

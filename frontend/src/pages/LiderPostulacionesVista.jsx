@@ -6,6 +6,7 @@ import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import { proyectosService } from '../services/proyectos.service.js'
 import { colaboradoresService } from '../services/colaboradores.service.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
+import { nombreColaborador } from '../utils/formatters.js'
 import api from '../services/api.js'
 import './lider-postulaciones.css'
 
@@ -81,15 +82,16 @@ export default function LiderPostulacionesVista() {
       const respuestaProyectos = await proyectosService.list({ liderId: user.usuarioId })
       const proyectos = obtenerItems(respuestaProyectos).filter(item => item.liderId === user.usuarioId)
       const [respuestaPersonas, ...resultados] = await Promise.allSettled([
-        colaboradoresService.list({ limit: 100 }),
+        colaboradoresService.listAll(),
         ...proyectos.map(item => api.get(`/proyectos/${encodeURIComponent(item.proyectoId)}/postulaciones`)),
       ])
 
       const personas = respuestaPersonas.status === 'fulfilled'
         ? obtenerItems(respuestaPersonas.value) : []
       const nombresPersonas = new Map(personas.map(item => [
-        item.colaboradorId, item.nombre || item.nombreCompleto || item.usuario?.nombre || '',
+        item.colaboradorId, nombreColaborador(item),
       ]))
+      const usuariosPersonas = new Map(personas.map(item => [item.colaboradorId, item.usuarioId]))
 
       if (resultados.some(resultado => resultado.status === 'rejected')) {
         setError('No se pudieron consultar todas las postulaciones. Revisa la conexión y vuelve a intentar.')
@@ -101,6 +103,8 @@ export default function LiderPostulacionesVista() {
             ...item,
             proyectoId: proyecto.proyectoId,
             proyecto: proyecto.nombre,
+            esLiderDelProyecto: Boolean(proyecto.liderId &&
+              usuariosPersonas.get(item.colaboradorId) === proyecto.liderId),
             candidato: nombresPersonas.get(item.colaboradorId) ||
               item.candidatoNombre || item.nombreColaborador ||
               (item.colaboradorId ? 'Colaborador ' + String(item.colaboradorId).slice(0, 8) : 'Colaborador sin nombre'),
@@ -118,7 +122,7 @@ export default function LiderPostulacionesVista() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  const mostrarEjemplos = import.meta.env.DEV && !cargando
+  const mostrarEjemplos = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error
   const postulaciones = useMemo(() => [
     ...reales,
     ...(mostrarEjemplos ? ejemplos : []),
@@ -151,6 +155,10 @@ export default function LiderPostulacionesVista() {
 
   const decidir = async nuevoEstado => {
     if (!porDecidir || porDecidir.estado !== 'PENDIENTE' || guardando) return
+    if (nuevoEstado === 'ACEPTADA' && porDecidir.esLiderDelProyecto) {
+      setErrorDecision('El líder no puede asignarse como colaborador a su propio proyecto.')
+      return
+    }
     const porcentajeDedicacion = Number(dedicacion)
     const horasAsignadas = Number(horas)
     if (nuevoEstado === 'ACEPTADA' && (
@@ -177,7 +185,6 @@ export default function LiderPostulacionesVista() {
           `/proyectos/${encodeURIComponent(porDecidir.proyectoId)}/postulaciones/${encodeURIComponent(porDecidir.colaboradorId)}/estado`,
           {
             estado: nuevoEstado,
-            revisadoPor: user.usuarioId,
             observacionRevision: observacion.trim(),
             ...(nuevoEstado === 'ACEPTADA' ? { porcentajeDedicacion, horasAsignadas } : {}),
           },
@@ -370,6 +377,9 @@ export default function LiderPostulacionesVista() {
             </p>
             {porDecidir.esEjemplo && <p className="lider-postulaciones-preview">Vista previa: la decisión solo cambiará el registro de ejemplo.</p>}
             {errorDecision && <p className="lider-postulaciones-error" role="alert">{errorDecision}</p>}
+            {porDecidir.esLiderDelProyecto && (
+              <p className="lider-postulaciones-modal-help">No se puede aceptar esta postulación porque el candidato dirige el proyecto.</p>
+            )}
             <label>Observación de revisión (opcional)
               <textarea rows={3} maxLength={500} value={observacion}
                 disabled={guardando} onChange={evento => setObservacion(evento.target.value)}
@@ -393,7 +403,7 @@ export default function LiderPostulacionesVista() {
                 onClick={() => setPorDecidir(null)}>Volver</button>
               <button type="button" className="lider-postulaciones-reject" disabled={guardando}
                 onClick={() => decidir('RECHAZADA')}>Rechazar</button>
-              <button type="button" className="lider-postulaciones-primary" disabled={guardando}
+              <button type="button" className="lider-postulaciones-primary" disabled={guardando || porDecidir.esLiderDelProyecto}
                 onClick={() => decidir('ACEPTADA')}>{guardando ? 'Guardando...' : 'Aceptar'}</button>
             </div>
           </section>

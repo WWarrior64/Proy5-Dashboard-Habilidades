@@ -90,8 +90,9 @@ async function crearPostulacion(datos) {
     throw new ErrorApp('proyectoId y colaboradorId son obligatorios', 400, CODIGOS.VALIDACION);
   }
 
-  await validarColaboradorActivo(colaboradorId);
-  await validarProyectoActivo(proyectoId);
+  const colaborador = await validarColaboradorActivo(colaboradorId);
+  const proyecto = await validarProyectoActivo(proyectoId);
+  dedicacion.verificarLiderDistinto(proyecto, colaborador);
 
   const id = postulacionId || uuidv4();
   const ahora = ahoraISO();
@@ -189,16 +190,17 @@ async function aceptarPostulacion(proyectoId, colaboradorId, datosRevision) {
   if (postulacion.estado !== 'PENDIENTE') {
     throw new ErrorApp('La postulación ya fue procesada', 409, CODIGOS.CONFLICTO);
   }
-  await validarProyectoActivo(proyectoId);
+  const proyecto = await validarProyectoActivo(proyectoId);
 
   const colaborador = await validarColaboradorActivo(colaboradorId);
+  dedicacion.verificarLiderDistinto(proyecto, colaborador);
   const reservaPrevia = colaborador.dedicacionReservada;
-  if (reservaPrevia !== undefined &&
-      (!Number.isFinite(reservaPrevia) || reservaPrevia < 0 || reservaPrevia > 100)) {
-    throw new ErrorApp('El colaborador requiere regularizar su dedicación reservada', 409, CODIGOS.CONFLICTO);
+  if (!Number.isFinite(reservaPrevia) || reservaPrevia < 0 || reservaPrevia > 100) {
+    throw new ErrorApp('El colaborador requiere inicializar su dedicación reservada antes de aceptar la postulación',
+      409, CODIGOS.CONFLICTO);
   }
-  // Una reserva ausente puede aparecer en registros históricos: la transacción
-  // posterior exige attribute_exists(dedicacionReservada) y rechaza su escritura.
+  // Los registros anteriores sin dedicación inicializada requieren revisión de sus asignaciones
+  // activas antes de regularizarse; no se puede suponer que su dedicación sea cero.
 
   if (typeof porcentajeDedicacion !== 'number' || !Number.isFinite(porcentajeDedicacion) || porcentajeDedicacion <= 0 || porcentajeDedicacion > 100) {
     throw new ErrorApp('El porcentaje de dedicación debe estar entre 1 y 100', 400, CODIGOS.VALIDACION);
@@ -213,7 +215,8 @@ async function aceptarPostulacion(proyectoId, colaboradorId, datosRevision) {
     throw new ErrorApp('La dedicación acumulada del colaborador superaría el 100 %', 409, CODIGOS.CONFLICTO);
   }
 
-  const asignacionId = uuidv4();
+  await dedicacion.verificarAsignacionUnica(proyectoId, colaboradorId);
+  const asignacionId = dedicacion.idAsignacionUnica(proyectoId, colaboradorId);
   const ahora = ahoraISO();
   const asignacion = {
     asignacionId,
@@ -236,15 +239,7 @@ async function aceptarPostulacion(proyectoId, colaboradorId, datosRevision) {
   try {
     await dedicacion.ejecutar([
         dedicacion.reserva(colaboradorId, porcentajeDedicacion),
-        {
-          ConditionCheck: {
-            TableName: tableProyectos,
-            Key: { proyectoId },
-            ConditionExpression: '#est = :activo',
-            ExpressionAttributeNames: { '#est': 'estado' },
-            ExpressionAttributeValues: { ':activo': 'ACTIVO' },
-          },
-        },
+        dedicacion.condicionProyectoAsignable(proyectoId, colaborador.usuarioId, tableProyectos),
         {
           Update: {
             TableName: tablePostulaciones,

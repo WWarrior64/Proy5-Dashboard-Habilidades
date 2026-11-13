@@ -33,10 +33,12 @@ async function validarReglas(data, colaboradorIdExcluir = null) {
   if (existentePorUsuario && existentePorUsuario.colaboradorId !== colaboradorIdExcluir) {
     throw new ErrorApp('El usuario ya tiene un perfil de colaborador asociado', 409, CODIGOS.CONFLICTO);
   }
+  return usuario;
 }
 
 async function crear(data) {
-  await validarReglas(data);
+  const usuario = await validarReglas(data);
+  const nombre = usuario?.nombre || data.nombre || data.rolProfesional;
   if (data.colaboradorId?.startsWith('USUARIO#')) {
     throw new ErrorApp('Identificador de colaborador reservado', 400, CODIGOS.VALIDACION);
   }
@@ -46,8 +48,8 @@ async function crear(data) {
     usuarioId: data.usuarioId,
     cargoId: data.cargoId,
     rolProfesional: data.rolProfesional,
-    nombre: data.nombre || data.rolProfesional,
-    'rolProfesional#nombre': `${data.rolProfesional}#${data.nombre || data.rolProfesional}`,
+    nombre,
+    'rolProfesional#nombre': `${data.rolProfesional}#${nombre}`,
     dedicacionReservada: 0,
     disponibilidad: data.disponibilidad || 'DISPONIBLE',
     estado: data.estado || 'ACTIVO',
@@ -169,6 +171,13 @@ async function actualizar(colaboradorId, data) {
     throw new ErrorApp('Colaborador no encontrado', 404, CODIGOS.NO_ENCONTRADO);
   }
 
+  if (data.estado === 'ACTIVO' && existente.estado === 'INACTIVO') {
+    const cuenta = await usuariosRepository.obtenerPorId(existente.usuarioId);
+    if (!cuenta || cuenta.estado !== 'ACTIVO') {
+      throw new ErrorApp('La cuenta del usuario debe estar activa para reincorporar al colaborador', 409, CODIGOS.CONFLICTO);
+    }
+  }
+
   if (data.cargoId && data.cargoId !== existente.cargoId) {
     const cargo = await cargosRepository.obtenerPorId(data.cargoId);
     if (!cargo) {
@@ -204,6 +213,14 @@ async function actualizar(colaboradorId, data) {
     expressionAttributeValues[':fechaBaja'] = new Date().toISOString();
   }
   if (data.estado === 'ACTIVO' && existente.estado === 'INACTIVO') {
+    updateParts.push('#fechaReincorporacion = :fechaReincorporacion');
+    expressionAttributeNames['#fechaReincorporacion'] = 'fechaReincorporacion';
+    expressionAttributeValues[':fechaReincorporacion'] = new Date().toISOString();
+    if (existente.fechaBaja) {
+      updateParts.push('#ultimaFechaBaja = :ultimaFechaBaja');
+      expressionAttributeNames['#ultimaFechaBaja'] = 'ultimaFechaBaja';
+      expressionAttributeValues[':ultimaFechaBaja'] = existente.fechaBaja;
+    }
     updateParts.push('#fechaBaja = :fechaBaja');
     expressionAttributeNames['#fechaBaja'] = 'fechaBaja';
     expressionAttributeValues[':fechaBaja'] = null;

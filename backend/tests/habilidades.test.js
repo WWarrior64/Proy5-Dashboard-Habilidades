@@ -2,6 +2,8 @@ const habilidadesHandler = require('../src/functions/habilidades/handler');
 const habilidadesRepository = require('../src/repositories/habilidades.repository');
 
 jest.mock('../src/repositories/habilidades.repository');
+jest.mock('../src/repositories/usuarios.repository', () => ({ obtenerPorCognitoSub: jest.fn() }));
+const usuariosRepository = require('../src/repositories/usuarios.repository');
 
 describe('Módulo de Habilidades - Handler', () => {
   beforeEach(() => {
@@ -29,6 +31,30 @@ describe('Módulo de Habilidades - Handler', () => {
 
       expect(result.statusCode).toBe(201);
       expect(habilidadesRepository.crear).toHaveBeenCalledWith(habilidadMock);
+    });
+
+    test('crea una habilidad pasando por autenticación, autorización y validación Joi', async () => {
+      usuariosRepository.obtenerPorCognitoSub.mockResolvedValue({
+        usuarioId: 'admin-1', rol: 'ADMINISTRADOR', estado: 'ACTIVO',
+      });
+      habilidadesRepository.crear.mockResolvedValue({
+        habilidadId: 'hab-real', nombre: 'JavaScript', categoria: 'FRONTEND', estado: 'ACTIVO',
+      });
+      const result = await habilidadesHandler.handler({
+        httpMethod: 'POST',
+        path: '/api/v1/habilidades',
+        requestContext: { authorizer: { claims: { sub: 'cognito-admin' } } },
+        body: JSON.stringify({
+          nombre: 'JavaScript', categoria: 'FRONTEND',
+          creadoPor: 'suplantado', revisadoPor: 'suplantado', actualizadoPor: 'suplantado',
+        }),
+      }, {});
+
+      expect(result.statusCode).toBe(201);
+      expect(habilidadesRepository.crear).toHaveBeenCalledWith({
+        habilidadId: undefined, nombre: 'JavaScript', categoria: 'FRONTEND',
+        descripcion: undefined, estado: undefined,
+      });
     });
 
     test('debe retornar 409 cuando ya existe una habilidad con el mismo nombre normalizado', async () => {

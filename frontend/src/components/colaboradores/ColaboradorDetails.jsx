@@ -1,3 +1,5 @@
+import { disponibilidadCalculada, porcentajeLibre } from '../../utils/disponibilidad.js'
+
 export default function ColaboradorDetails({ colaborador }) {
   if (!colaborador) return null
 
@@ -27,7 +29,7 @@ export default function ColaboradorDetails({ colaborador }) {
         </div>
         <div>
           <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: 0 }}>Disponibilidad</p>
-          <p style={{ fontSize: '0.95rem', fontWeight: '500', margin: '0.25rem 0 0', color: 'var(--color-text)' }}>{colaborador.disponibilidad || 'DISPONIBLE'}</p>
+          <p style={{ fontSize: '0.95rem', fontWeight: '500', margin: '0.25rem 0 0', color: 'var(--color-text)' }}>{disponibilidadCalculada(colaborador)} · {porcentajeLibre(colaborador) == null ? 'Sin porcentaje registrado' : porcentajeLibre(colaborador) + ' % libre'}</p>
         </div>
       </div>
       {colaborador.observaciones && (

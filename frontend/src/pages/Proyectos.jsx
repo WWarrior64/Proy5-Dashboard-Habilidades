@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth.js'
 import { proyectosService } from '../services/proyectos.service.js'
 import { usuariosService } from '../services/usuarios.service.js'
+import { habilidadesService } from '../services/habilidades.service.js'
+import { extractItems } from '../utils/apiResponses.js'
+import api from '../services/api.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
 import Modal from '../components/common/Modal.jsx'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
@@ -18,6 +21,8 @@ export default function Proyectos() {
   const { user } = useAuth()
   const [proyectos, setProyectos] = useState([])
   const [lideres, setLideres] = useState([])
+  const [habilidadesCatalogo, setHabilidadesCatalogo] = useState([])
+  const [requisitosEnEdicion, setRequisitosEnEdicion] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showForm, setShowForm] = useState(false)
@@ -51,7 +56,7 @@ export default function Proyectos() {
 
   const loadReferenceData = useCallback(async () => {
     try {
-      const usuariosResp = await usuariosService.list({})
+      const usuariosResp = await usuariosService.listAll()
       const uData = usuariosResp.data
       let uItems = []
       if (uData && uData.datos && uData.datos.items) uItems = uData.datos.items
@@ -72,20 +77,57 @@ export default function Proyectos() {
   }, [loadReferenceData])
 
   const handleCreate = () => {
+    setRequisitosEnEdicion([])
     setEditMode(false)
     setEditingProyecto(null)
     setShowForm(true)
   }
 
-  const handleEdit = (proyecto) => {
-    setEditMode(true)
-    setEditingProyecto(proyecto)
-    setShowForm(true)
+  const handleEdit = async proyecto => {
+    try {
+      const respuesta = await api.get(`/proyectos/${encodeURIComponent(proyecto.proyectoId)}/habilidades`)
+      setRequisitosEnEdicion(extractItems(respuesta.data))
+      setEditMode(true)
+      setEditingProyecto(proyecto)
+      setShowForm(true)
+    } catch (fallo) {
+      setError(getApiErrorMessage(fallo, 'No se pudieron cargar las habilidades requeridas del proyecto.'))
+    }
   }
 
   const handleViewDetails = (proyecto) => {
     setDetailProyecto(proyecto)
     setShowDetails(true)
+  }
+
+  useEffect(() => {
+    let activo = true
+    habilidadesService.listAll().then(respuesta => {
+      if (activo) setHabilidadesCatalogo(extractItems(respuesta.data))
+    }).catch(fallo => {
+      if (activo) setError(getApiErrorMessage(fallo, 'No se pudo consultar el catálogo de habilidades.'))
+    })
+    return () => { activo = false }
+  }, [])
+
+  const sincronizarRequisitos = async (proyectoId, requisitos) => {
+    const base = `/proyectos/${encodeURIComponent(proyectoId)}/habilidades`
+    const actuales = extractItems((await api.get(base)).data)
+    const seleccionados = new Set(requisitos.map(item => item.habilidadId))
+    for (const requisito of requisitos) {
+      const anterior = actuales.find(item => item.habilidadId === requisito.habilidadId)
+      if (!anterior) await api.post(base, { ...requisito, esObligatoria: true })
+      else if (anterior.nivelMinimo !== requisito.nivelMinimo) {
+        await api.put(`${base}/${encodeURIComponent(requisito.habilidadId)}`, {
+          nivelMinimo: requisito.nivelMinimo,
+        })
+      }
+    }
+    for (const anterior of actuales) {
+      if (!seleccionados.has(anterior.habilidadId)) {
+        await api.delete(`${base}/${encodeURIComponent(anterior.habilidadId)}`)
+      }
+    }
   }
 
   const handleSave = async (formData) => {
@@ -98,10 +140,27 @@ export default function Proyectos() {
         horasRequeridas: Number(formData.horasRequeridas),
         estado: formData.estado,
       }
+      const requisitos = formData.requisitos || []
+      if (payload.estado === 'ACTIVO' && !requisitos.length) {
+        throw new Error('Debes seleccionar habilidades requeridas antes de publicar el proyecto.')
+      }
+      if (requisitos.some(item => !habilidadesCatalogo.some(habilidad =>
+        habilidad.habilidadId === item.habilidadId && habilidad.estado === 'ACTIVO'))) {
+        throw new Error('Solo se pueden seleccionar habilidades activas del catálogo.')
+      }
       if (editMode && editingProyecto) {
+        if (!['CANCELADO', 'COMPLETADO'].includes(editingProyecto.estado)) {
+          await sincronizarRequisitos(editingProyecto.proyectoId, requisitos)
+        }
         await proyectosService.update(editingProyecto.proyectoId, payload)
       } else {
-        await proyectosService.create({ ...payload, creadoPor: user?.usuarioId })
+        const creado = await proyectosService.create({
+          ...payload, estado: 'BORRADOR', creadoPor: user?.usuarioId,
+        })
+        const proyectoId = creado.data?.datos?.proyectoId
+        if (!proyectoId) throw new Error('Se creó el proyecto sin un identificador para sus habilidades.')
+        await sincronizarRequisitos(proyectoId, requisitos)
+        if (payload.estado !== 'BORRADOR') await proyectosService.update(proyectoId, { estado: payload.estado })
       }
       setShowForm(false)
       setEditingProyecto(null)
@@ -140,7 +199,7 @@ export default function Proyectos() {
 
   return (
     <>
-    {user?.rol === 'RRHH' ? (
+    {['RRHH', 'ADMINISTRADOR'].includes(user?.rol) ? (
       <RrhhProyectosVista
         proyectos={proyectos}
         lideres={lideres}
@@ -219,6 +278,8 @@ export default function Proyectos() {
         onCancel={() => setShowForm(false)}
         loading={loading}
         lideres={lideres}
+        habilidades={habilidadesCatalogo}
+        requisitosIniciales={requisitosEnEdicion}
       />
     </Modal>
 

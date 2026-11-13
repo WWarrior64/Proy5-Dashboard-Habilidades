@@ -9,9 +9,9 @@ Proyecto desarrollado para la cátedra de Cómputo en la Nube (Grupo B) de la Un
 La plataforma sigue una arquitectura desacoplada y orientada a eventos sobre AWS Serverless:
 
 * Frontend: Single Page Application (SPA) en React 18 + Vite, alojada en un bucket privado de Amazon S3 y distribuida globalmente con Amazon CloudFront mediante Origin Access Control (OAC).
-* Backend: 10 funciones modulares en AWS Lambda ejecutadas sobre el runtime oficial nodejs24.x.
+* Backend: 11 funciones modulares en AWS Lambda ejecutadas sobre el runtime `nodejs24.x`, incluyendo Administración y consulta de Auditoría.
 * API Gateway: REST API modular con prefijo unificado /api/v1 y soporte CORS global habilitado.
-* Base de Datos NoSQL: 9 tablas en Amazon DynamoDB con modo de facturación PAY_PER_REQUEST y diseño de índices secundarios globales (GSI).
+* Base de Datos NoSQL: 11 tablas en Amazon DynamoDB con facturación `PAY_PER_REQUEST`, incluyendo Administración y Auditoría, e índices secundarios globales (GSI).
 * Identidad y Seguridad: Autenticación y gestión de sesiones delegada en Amazon Cognito User Pools (validación mediante tokens JWT).
 * Infraestructura como Código (IaC): Orquestada mediante AWS SAM (infrastructure/template.yaml).
 * CI/CD: Pipeline automatizado en GitHub Actions (.github/workflows/deploy.yml) para validación de linter, suites de prueba y verificación de build SAM.
@@ -21,7 +21,7 @@ La plataforma sigue una arquitectura desacoplada y orientada a eventos sobre AWS
 * .github/workflows/deploy.yml — Pipeline de integración continua (CI)
 * backend/eslint.config.js — Reglas de estilo ESLint 9 (Flat Config)
 * backend/src/config/ — Conexión a DynamoDB v3 y entorno
-* backend/src/functions/ — Handlers Lambda modulares (10 dominios)
+* backend/src/functions/ — Handlers Lambda modulares (11 funciones, incluida Administración)
 * backend/src/repositories/ — Capa de acceso a datos DynamoDB
 * backend/src/services/ — Lógica de negocio, caché y filtrado
 * backend/src/utils/ — Formateadores de respuesta y errores
@@ -82,6 +82,9 @@ TABLE_PROYECTOS=internal-marketplace-proyectos-dev
 TABLE_PROYECTO_HABILIDAD=internal-marketplace-proyecto-habilidad-dev
 TABLE_POSTULACIONES=internal-marketplace-postulaciones-dev
 TABLE_ASIGNACIONES=internal-marketplace-asignaciones-dev
+TABLE_ADMINISTRACION=internal-marketplace-administracion-dev
+TABLE_AUDITORIA=internal-marketplace-auditoria-dev
+AUDIT_ENABLED=true
 ```
 
 ### 4.3 Validación y Emulación Local con AWS SAM
@@ -135,12 +138,28 @@ cd backend && npm test -- --runInBand
 cd frontend && npm run build
 ```
 
-* Pruebas de API con Postman: Importa los archivos ubicados en `postman/` siguiendo las instrucciones de `postman/README.md`.
+* Pruebas de API con Postman: Importa los archivos ubicados en `postman/` siguiendo las instrucciones de `postman/README.md`. La colección existente debe revisarse frente a las rutas añadidas posteriormente.
+
+* Pruebas del frontend (Vitest):
+
+```bash
+npm test --workspace=frontend
+```
+
+### 5.1 Validación funcional pendiente del despliegue
+
+El flujo de publicación crea primero un proyecto `BORRADOR`, registra al menos una habilidad requerida en ProyectoHabilidad y posteriormente lo cambia a `ACTIVO`. La fecha de publicación se registra al activarlo; la interfaz puede estimar la finalización contando jornadas de 8 horas de lunes a viernes, sin feriados, si no existe una fecha de cierre planificada.
+
+La disponibilidad de los colaboradores depende de `100 - dedicacionReservada` y se actualiza con las transacciones de asignaciones. Las observaciones son opcionales; los colaboradores dados de baja se conservan y pueden reincorporarse si su cuenta sigue activa. Los filtros de las vistas administrativas ocultan por defecto los registros inactivos, cancelados o históricos y permiten consultarlos mediante el estado correspondiente.
+
+Un líder no puede postularse ni ser asignado como colaborador a un proyecto que dirige, pero **sí puede colaborar en proyectos de otros líderes**. La ruta `GET /api/v1/asignaciones/mias` ofrece sus propias participaciones sin darle permisos de administración sobre asignaciones ajenas. El registro `ultimoAcceso` se actualiza después del inicio de sesión mediante `POST /api/v1/usuarios/yo/acceso`. Los eventos de auditoría posteriores a su habilitación se almacenan en DynamoDB y son consultables por administradores.
+
+Los cambios más recientes son modificaciones locales de código e infraestructura. Los diagnósticos de VS Code no sustituyen ejecutar Jest, Vitest, compilación de producción, `sam validate`, `sam build` y `sam deploy`, ni comprobar las rutas en AWS. Antes de desplegar, guardar los archivos modificados y revisar el estado de Git.
 
 ## 6. Equipo de Desarrollo y Roles
 
 * Desarrollador 1: Arquitectura Base y Contrato API (Handlers base y utilidades de respuesta).
 * Desarrollador 2: Servicios Core del Backend (Usuarios, Colaboradores, Cargos, Habilidades y Búsqueda).
 * Desarrollador 3: Servicios de Asignación y Métricas (Proyectos, Postulaciones, Asignaciones y Dashboard).
-* Desarrollador 4: Modelado de Datos NoSQL (Esquema de 9 tablas DynamoDB y diseño de índices GSIs).
-* Diego Ernesto Portillo Alfaro (Desarrollador 5): Infraestructura, CI/CD y Calidad (Plantilla AWS SAM con 10 Lambdas Node 24, ESLint 9, GitHub Actions, Postman y Documentación).
+* Desarrollador 4: Modelado de Datos NoSQL (esquema vigente de 11 tablas DynamoDB y diseño de índices GSI).
+* Diego Ernesto Portillo Alfaro (Desarrollador 5): Infraestructura, CI/CD y Calidad (Plantilla AWS SAM actualmente con 11 Lambdas Node 24, ESLint 9, GitHub Actions, Postman y documentación).

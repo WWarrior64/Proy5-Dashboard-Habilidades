@@ -5,7 +5,7 @@
 ## Motor recomendado
 Amazon DynamoDB (NoSQL) dentro del AWS Free Tier.
 
-## Nueve tablas DynamoDB
+## Once tablas DynamoDB
 Cada entidad tiene su propio archivo Markdown en `database/schemas/`:
 
 | N.º | Tabla | Función | Clave primaria |
@@ -19,6 +19,8 @@ Cada entidad tiene su propio archivo Markdown en `database/schemas/`:
 | 7 | `internal-marketplace-proyecto-habilidad-dev` | Relación proyecto-habilidad requerida. | Compuesta (`proyectoId`, `habilidadId`) |
 | 8 | `internal-marketplace-postulaciones-dev` | Solicitudes de participación en proyectos. | Compuesta (`proyectoId`, `postulacionKey`) |
 | 9 | `internal-marketplace-asignaciones-dev` | Vinculación efectiva de colaboradores con proyectos. | Simple (`asignacionId`) |
+| 10 | `internal-marketplace-administracion-dev` | Configuración administrativa y roles/permisos descriptivos. | Simple (`configuracionId`) |
+| 11 | `internal-marketplace-auditoria-dev` | Eventos de operación e inicios de sesión autenticados. | Simple (`auditoriaId`) y GSI (`tipoRegistro`, `fechaId`) |
 
 ## Archivos de esquema
 - `database/schemas/usuarios.md` → Entidad Usuarios (`internal-marketplace-usuarios-dev`)
@@ -30,6 +32,8 @@ Cada entidad tiene su propio archivo Markdown en `database/schemas/`:
 - `database/schemas/proyecto-habilidad.md` → Entidad ProyectoHabilidad (`internal-marketplace-proyecto-habilidad-dev`)
 - `database/schemas/postulaciones.md` → Entidad Postulaciones (`internal-marketplace-postulaciones-dev`)
 - `database/schemas/asignaciones.md` → Entidad Asignaciones (`internal-marketplace-asignaciones-dev`)
+- `database/schemas/auditoria.md` → Entidad Auditoría (`internal-marketplace-auditoria-dev`)
+- La configuración administrativa utiliza `configuracionId` en la tabla `internal-marketplace-administracion-dev`.
 
 ## Matriz de habilidades (relación N:M)
 La relación entre Desarrolladores, Habilidades y Proyectos se modela como una matriz N:M, donde un colaborador puede tener múltiples habilidades y un proyecto puede requerir múltiples habilidades.
@@ -51,4 +55,8 @@ Para evitar nombres de atributos con caracteres especiales (`#`), las claves de 
 - **Colaborador N:M Proyecto**: Mediante `internal-marketplace-asignaciones-dev` (confirmado) e `internal-marketplace-postulaciones-dev` (pendiente)
 
 ## Control atómico de dedicación
-Al crear, aceptar, modificar o desvincular asignaciones se usa `TransactWriteItems` para actualizar `Colaboradores.dedicacionReservada` junto con los registros relacionados. Una condición impide que la dedicación reservada quede fuera del rango 0–100 %, incluso ante solicitudes concurrentes. Los ítems históricos sin el atributo deben reconciliarse antes de nuevas reservas.
+Al crear, aceptar, modificar, finalizar o desvincular asignaciones se usa `TransactWriteItems` para actualizar `Colaboradores.dedicacionReservada` junto con los registros relacionados. Una condición impide que la dedicación reservada quede fuera del rango 0–100 %, incluso ante solicitudes concurrentes. Los ítems históricos sin el atributo deben reconciliarse antes de nuevas reservas.
+
+El mismo colaborador no puede ser asignado más de una vez al mismo proyecto, incluso si la relación anterior está desvinculada. Tampoco puede asignarse ni postularse al proyecto que él mismo dirige (`Colaboradores.usuarioId = Proyectos.liderId`), aunque **un líder sí puede participar como colaborador en proyectos ajenos**. La consulta personal `/api/v1/asignaciones/mias` se resuelve a partir de la identidad autenticada.
+
+La tabla Usuarios registra `ultimoAcceso` mediante el flujo de inicio de sesión; la tabla Auditoría almacena nuevos eventos de cambios y accesos con `auditoriaId`, `fecha`, `usuarioId`, `entidad`, `tipo` y la referencia del recurso. No se atribuyen retroactivamente autores a eventos históricos sin datos verificables. La baja del colaborador es lógica y su reincorporación conserva el perfil e historial.

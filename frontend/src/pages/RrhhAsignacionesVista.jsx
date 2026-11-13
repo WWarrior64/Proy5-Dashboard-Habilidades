@@ -7,6 +7,7 @@ import { colaboradoresService } from '../services/colaboradores.service.js'
 import { proyectosService } from '../services/proyectos.service.js'
 import { usuariosService } from '../services/usuarios.service.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
+import { esCandidatoAsignable } from '../utils/asignacionElegibilidad.js'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import './rrhh-asignaciones.css'
 
@@ -34,6 +35,7 @@ const formularioInicial = { colaboradorId: '', proyectoId: '', porcentajeDedicac
 export default function RrhhAsignacionesVista() {
   const { user } = useAuth()
   const [asignaciones, setAsignaciones] = useState([])
+  const [historialCompleto, setHistorialCompleto] = useState(false)
   const [colaboradores, setColaboradores] = useState([])
   const [proyectos, setProyectos] = useState([])
   const [usuarios, setUsuarios] = useState([])
@@ -44,6 +46,7 @@ export default function RrhhAsignacionesVista() {
   const [busqueda, setBusqueda] = useState('')
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [filtroProyecto, setFiltroProyecto] = useState('')
+  const [filtroEstado, setFiltroEstado] = useState('ACTIVA')
   const [modal, setModal] = useState(null)
   const [formulario, setFormulario] = useState(formularioInicial)
   const [errorFormulario, setErrorFormulario] = useState('')
@@ -51,16 +54,19 @@ export default function RrhhAsignacionesVista() {
 
   const cargarDatos = useCallback(async () => {
     setCargando(true)
+    setHistorialCompleto(false)
     setError('')
     const [resultadoAsignaciones, resultadoColaboradores, resultadoProyectos, resultadoUsuarios] = await Promise.allSettled([
-      asignacionesService.list(),
-      colaboradoresService.list({ limit: 100 }),
+      asignacionesService.listHistory(),
+      colaboradoresService.listAll(),
       proyectosService.list(),
-      usuariosService.list({}),
+      usuariosService.listAll(),
     ])
     if (resultadoAsignaciones.status === 'fulfilled') {
       setAsignaciones(extraerLista(resultadoAsignaciones.value))
+      setHistorialCompleto(true)
     } else {
+      setAsignaciones([])
       setError(getApiErrorMessage(resultadoAsignaciones.reason, 'No fue posible cargar las asignaciones.'))
     }
     setColaboradores(resultadoColaboradores.status === 'fulfilled' ? extraerLista(resultadoColaboradores.value) : [])
@@ -71,17 +77,18 @@ export default function RrhhAsignacionesVista() {
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
 
-  const mostrandoEjemplo = import.meta.env.DEV && !cargando && asignaciones.length === 0
+  const mostrandoEjemplo = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error && asignaciones.length === 0
   const usuariosPorId = useMemo(() => new Map(usuarios.map(item => [item.usuarioId, item.nombre])), [usuarios])
   const opcionesColaboradores = useMemo(() => colaboradores
     .filter(item => item.estado !== 'INACTIVO')
     .map(item => ({
       id: item.colaboradorId,
+      usuarioId: item.usuarioId,
       nombre: usuariosPorId.get(item.usuarioId) || item.nombre || item.colaboradorId,
     })), [colaboradores, usuariosPorId])
   const opcionesProyectos = useMemo(() => proyectos
     .filter(item => item.estado === 'ACTIVO')
-    .map(item => ({ id: item.proyectoId, nombre: item.nombre || item.proyectoId })), [proyectos])
+    .map(item => ({ id: item.proyectoId, liderId: item.liderId, nombre: item.nombre || item.proyectoId })), [proyectos])
 
   const catalogo = useMemo(() => {
     if (mostrandoEjemplo) return ejemplos
@@ -103,29 +110,43 @@ export default function RrhhAsignacionesVista() {
     return catalogo.filter(item => {
       const contenido = [item.colaborador, item.proyecto].join(' ').toLocaleLowerCase('es')
       return terminos.every(termino => contenido.includes(termino)) &&
+        (filtroEstado === 'TODOS' || item.estado === filtroEstado) &&
         (!filtroProyecto || item.proyecto === filtroProyecto)
     })
-  }, [catalogo, busqueda, busquedaSuperior, filtroProyecto])
+  }, [catalogo, busqueda, busquedaSuperior, filtroProyecto, filtroEstado])
 
   const activas = catalogo.filter(item => item.estado === 'ACTIVA')
   const promedio = activas.length
     ? Math.round(activas.reduce((suma, item) => suma + (Number(item.porcentajeDedicacion) || 0), 0) / activas.length)
     : 0
   const horas = activas.reduce((suma, item) => suma + (Number(item.horasAsignadas) || 0), 0)
-  const usarEjemplosAlCrear = mostrandoEjemplo && (!opcionesColaboradores.length || !opcionesProyectos.length)
+  const usarEjemplosAlCrear = import.meta.env.VITE_DEMO_MODE === 'true' && mostrandoEjemplo &&
+    (!opcionesColaboradores.length || !opcionesProyectos.length)
   const personasFormulario = usarEjemplosAlCrear
-    ? Array.from(new Map(asignacionesDeEjemplo.map(item => [item.colaboradorId, { id: item.colaboradorId, nombre: item.colaborador }])).values())
+    ? Array.from(new Map(asignacionesDeEjemplo.map(item => [item.colaboradorId, { id: item.colaboradorId, nombre: item.colaborador, esEjemplo: true }])).values())
     : opcionesColaboradores
   const proyectosFormulario = usarEjemplosAlCrear
-    ? Array.from(new Map(asignacionesDeEjemplo.map(item => [item.proyectoId, { id: item.proyectoId, nombre: item.proyecto }])).values())
+    ? Array.from(new Map(asignacionesDeEjemplo.map(item => [item.proyectoId, { id: item.proyectoId, nombre: item.proyecto, esEjemplo: true }])).values())
     : opcionesProyectos
+  const personasElegibles = modal?.tipo === 'editar' ? personasFormulario : personasFormulario.filter(item =>
+    esCandidatoAsignable(item, proyectosFormulario.find(proyecto => proyecto.id === formulario.proyectoId)) &&
+    !catalogo.some(asignacion => asignacion.proyectoId === formulario.proyectoId &&
+      asignacion.colaboradorId === item.id))
 
   const abrirNuevo = () => {
+    if (!historialCompleto) {
+      setError('No se puede crear una asignación sin consultar primero el historial completo. Reintenta cargar los datos.')
+      return
+    }
     setErrorFormulario('')
+    const proyectoId = proyectosFormulario[0]?.id || ''
+    const proyecto = proyectosFormulario.find(item => item.id === proyectoId)
+    const candidato = personasFormulario.find(item => esCandidatoAsignable(item, proyecto) &&
+      !catalogo.some(asignacion => asignacion.proyectoId === proyectoId && asignacion.colaboradorId === item.id))
     setFormulario({
       ...formularioInicial,
-      colaboradorId: personasFormulario[0]?.id || '',
-      proyectoId: proyectosFormulario[0]?.id || '',
+      colaboradorId: candidato?.id || '',
+      proyectoId,
     })
     setModal({ tipo: 'nuevo' })
   }
@@ -144,6 +165,10 @@ export default function RrhhAsignacionesVista() {
   const guardar = async evento => {
     evento.preventDefault()
     if (!modal) return
+    if (modal.tipo === 'nuevo' && !historialCompleto) {
+      setErrorFormulario('No se pudo verificar el historial completo de asignaciones. Recarga los datos antes de continuar.')
+      return
+    }
     const porcentajeDedicacion = Number(formulario.porcentajeDedicacion)
     const horasAsignadas = Number(formulario.horasAsignadas)
     if (!formulario.colaboradorId || !formulario.proyectoId || porcentajeDedicacion <= 0 ||
@@ -153,6 +178,17 @@ export default function RrhhAsignacionesVista() {
       return
     }
 
+    if (modal.tipo === 'nuevo' && !esCandidatoAsignable(
+      personasFormulario.find(item => item.id === formulario.colaboradorId),
+      proyectosFormulario.find(item => item.id === formulario.proyectoId))) {
+      setErrorFormulario('El líder no puede ser asignado como colaborador a su propio proyecto.')
+      return
+    }
+    if (modal.tipo === 'nuevo' && catalogo.some(item => item.proyectoId === formulario.proyectoId &&
+      item.colaboradorId === formulario.colaboradorId)) {
+      setErrorFormulario('Este colaborador ya tiene una asignación registrada en este proyecto.')
+      return
+    }
     setOcupado(true)
     setErrorFormulario('')
     try {
@@ -180,7 +216,6 @@ export default function RrhhAsignacionesVista() {
           proyectoId: formulario.proyectoId,
           porcentajeDedicacion,
           horasAsignadas,
-          creadoPor: user?.usuarioId,
         })
         await cargarDatos()
       } else {
@@ -278,7 +313,7 @@ export default function RrhhAsignacionesVista() {
 
           <section className="rrhh-asignaciones-panel" aria-labelledby="rrhh-asignaciones-listado">
             <div className="rrhh-asignaciones-panel-header">
-              <h3 id="rrhh-asignaciones-listado">Asignaciones activas</h3>
+              <h3 id="rrhh-asignaciones-listado">Asignaciones</h3>
               <div className="rrhh-asignaciones-panel-controls">
                 <label className="rrhh-asignaciones-search">
                   <Search size={15} aria-hidden="true" />
@@ -290,6 +325,13 @@ export default function RrhhAsignacionesVista() {
                     onChange={evento => setBusqueda(evento.target.value)}
                   />
                 </label>
+                <select aria-label="Filtrar asignaciones por estado" value={filtroEstado}
+                  onChange={evento => setFiltroEstado(evento.target.value)}>
+                  <option value="ACTIVA">Estado: Activas</option>
+                  <option value="FINALIZADA">Finalizadas</option>
+                  <option value="DESVINCULADA">Desvinculadas</option>
+                  <option value="TODOS">Todo el historial</option>
+                </select>
                 <select aria-label="Filtrar por proyecto" value={filtroProyecto} onChange={evento => setFiltroProyecto(evento.target.value)}>
                   <option value="">Proyecto: Todos</option>
                   {proyectosFiltro.map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}
@@ -331,7 +373,9 @@ export default function RrhhAsignacionesVista() {
                           <td>{item.proyecto}</td>
                           <td>{item.porcentajeDedicacion}%</td>
                           <td>{item.horasAsignadas}</td>
-                          <td><span className="rrhh-asignaciones-status">Activa</span></td>
+                          <td><span className={'rrhh-asignaciones-status ' + String(item.estado || '').toLowerCase()}>
+                             {item.estado === 'ACTIVA' ? 'Activa' : item.estado === 'FINALIZADA' ? 'Finalizada' : 'Desvinculada'}
+                           </span></td>
                           <td>
                             <div className="rrhh-asignaciones-actions">
                               <button
@@ -339,7 +383,7 @@ export default function RrhhAsignacionesVista() {
                                 aria-label={'Editar asignación de ' + item.colaborador}
                                 title={'Editar asignación de ' + item.colaborador}
                                 onClick={() => abrirEdicion(item)}
-                                disabled={ocupado}
+                                disabled={ocupado || item.estado !== 'ACTIVA'}
                               ><Pencil size={16} aria-hidden="true" /></button>
                               <button
                                 type="button"
@@ -347,7 +391,7 @@ export default function RrhhAsignacionesVista() {
                                 aria-label={'Desvincular a ' + item.colaborador + ' de ' + item.proyecto}
                                 title={'Desvincular a ' + item.colaborador + ' de ' + item.proyecto}
                                 onClick={() => setPorDesvincular(item)}
-                                disabled={ocupado}
+                                disabled={ocupado || item.estado !== 'ACTIVA'}
                               ><Unlink2 size={17} aria-hidden="true" /></button>
                             </div>
                           </td>
@@ -378,16 +422,26 @@ export default function RrhhAsignacionesVista() {
             <label>Colaborador
               <select value={formulario.colaboradorId} disabled={modal.tipo === 'editar' || ocupado} required onChange={evento => setFormulario({ ...formulario, colaboradorId: evento.target.value })}>
                 <option value="">Seleccionar colaborador</option>
-                {(modal.tipo === 'editar' && modal.item.esEjemplo ? [{ id: modal.item.colaboradorId, nombre: modal.item.colaborador }] : personasFormulario).map(item => (
+                {(modal.tipo === 'editar' && modal.item.esEjemplo ? [{ id: modal.item.colaboradorId, nombre: modal.item.colaborador }] : personasElegibles).map(item => (
                   <option key={item.id} value={item.id}>{item.nombre}</option>
                 ))}
                 {modal.tipo === 'editar' && !modal.item.esEjemplo && !opcionesColaboradores.some(item => item.id === formulario.colaboradorId) && (
                   <option value={formulario.colaboradorId}>{modal.item.colaborador}</option>
                 )}
               </select>
+              {modal.tipo === 'nuevo' && !personasElegibles.length && (
+                <span role="status">No hay colaboradores elegibles: se excluye al líder del proyecto y a quienes ya fueron asignados.</span>
+              )}
             </label>
             <label>Proyecto
-              <select value={formulario.proyectoId} disabled={modal.tipo === 'editar' || ocupado} required onChange={evento => setFormulario({ ...formulario, proyectoId: evento.target.value })}>
+              <select value={formulario.proyectoId} disabled={modal.tipo === 'editar' || ocupado} required onChange={evento => {
+                 const nuevoProyecto = evento.target.value
+                 const proyecto = proyectosFormulario.find(item => item.id === nuevoProyecto)
+                  const candidato = personasFormulario.find(item => esCandidatoAsignable(item, proyecto) &&
+                    !catalogo.some(asignacion => asignacion.proyectoId === nuevoProyecto &&
+                      asignacion.colaboradorId === item.id))
+                 setFormulario({ ...formulario, proyectoId: nuevoProyecto, colaboradorId: candidato?.id || '' })
+               }}>
                 <option value="">Seleccionar proyecto</option>
                 {(modal.tipo === 'editar' && modal.item.esEjemplo ? [{ id: modal.item.proyectoId, nombre: modal.item.proyecto }] : proyectosFormulario).map(item => (
                   <option key={item.id} value={item.id}>{item.nombre}</option>

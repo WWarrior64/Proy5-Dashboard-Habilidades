@@ -1,6 +1,7 @@
 const { exito, creado, error } = require('../../utils/responses.js');
 const { ErrorApp, CODIGOS } = require('../../utils/errors.js');
 const proyectosRepo = require('../../repositories/proyectos.repository.js');
+const usuariosRepo = require('../../repositories/usuarios.repository.js');
 
 function obtenerBody(event) {
   if (!event.body) return {};
@@ -35,6 +36,26 @@ function responderError(e) {
   return error(e.message || 'Error interno del servidor', 500, CODIGOS.INTERNO);
 }
 
+async function incluirNombreLider(proyectos) {
+  if (proyectos == null) return proyectos;
+  const lista = Array.isArray(proyectos) ? proyectos : [proyectos];
+  const ids = [...new Set(lista.map(item => item.liderId).filter(Boolean))];
+  const nombres = new Map();
+  for (let inicio = 0; inicio < ids.length; inicio += 15) {
+    const resultados = await Promise.allSettled(ids.slice(inicio, inicio + 15)
+      .map(async id => ({ id, nombre: (await usuariosRepo.obtenerPorId(id))?.nombre?.trim() || null })));
+    resultados.forEach(resultado => {
+      if (resultado.status === 'fulfilled') nombres.set(resultado.value.id, resultado.value.nombre);
+      else console.warn('No se pudo resolver el nombre público de un líder:', resultado.reason?.name);
+    });
+  }
+  const enriquecidos = lista.map(item => ({
+    ...item,
+    liderNombre: nombres.get(item.liderId) || item.liderNombre || null,
+  }));
+  return Array.isArray(proyectos) ? enriquecidos : enriquecidos[0];
+}
+
 async function crearProyecto(event, context) {
   try {
     const datos = obtenerBody(event);
@@ -53,7 +74,7 @@ async function listarProyectos(event, context) {
     if (query.liderId) filtros.liderId = query.liderId;
     if (query.fecha) filtros.fecha = query.fecha;
     const proyectos = await proyectosRepo.listarProyectos(filtros);
-    return exito(proyectos);
+    return exito(await incluirNombreLider(proyectos));
   } catch (e) {
     return responderError(e);
   }
@@ -66,7 +87,7 @@ async function obtenerProyecto(event, context) {
       throw new ErrorApp('Se requiere el parámetro proyectoId', 400, CODIGOS.VALIDACION);
     }
     const proyecto = await proyectosRepo.obtenerProyecto(proyectoId);
-    return exito(proyecto);
+    return exito(await incluirNombreLider(proyecto));
   } catch (e) {
     return responderError(e);
   }
@@ -106,7 +127,7 @@ async function cambiarEstadoProyecto(event, context) {
 async function listarProyectosActivos(event, context) {
   try {
     const proyectos = await proyectosRepo.listarProyectosActivos();
-    return exito(proyectos);
+    return exito(await incluirNombreLider(proyectos));
   } catch (e) {
     return responderError(e);
   }

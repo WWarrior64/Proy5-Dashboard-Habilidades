@@ -1,6 +1,8 @@
 # Contexto del Proyecto para el Equipo
 
-Este documento describe en tercera persona el estado actual del proyecto, los archivos creados, las ubicaciones clave y los próximos pasos. Su propósito es permitir que cualquier miembro del equipo sin contexto previo entienda qué se ha hecho, dónde buscar cada cosa y qué queda por realizar.
+Este documento describe el estado del proyecto, los archivos creados, las ubicaciones clave y los próximos pasos. Su propósito es permitir que cualquier miembro del equipo sin contexto previo entienda qué se ha hecho, dónde buscar cada cosa y qué queda por realizar.
+
+> **Guía de lectura:** las secciones iniciales conservan hitos y recuentos históricos (incluidas referencias a 9 tablas y 10 Lambdas). Para el estado técnico vigente consultar la sección final **«Actualización consolidada — 13 de noviembre de 2026»**, donde se documentan 11 tablas y 11 Lambdas. No debe interpretarse una evidencia antigua como una validación del último código o de su despliegue.
 
 ## 1. Estado General del Proyecto
 
@@ -502,3 +504,41 @@ Todos los doce puntos de la auditoría sobre `becef13` están corregidos y verif
 Las secciones anteriores, incluido el cierre de la auditoría histórica `becef13`, documentan etapas previas. **Este apartado prevalece como resumen temporal del estado de la rama 3 al 10 de noviembre de 2026.**
 
 Este archivo debe mantenerse actualizado conforme avance el proyecto.
+
+---
+
+## Actualización consolidada — 13 de noviembre de 2026 — Integración frontend, backend y AWS
+
+Este apartado registra el estado **más reciente del código local** y complementa, sin sustituir ni reescribir, la evidencia histórica documentada hasta el 10 de noviembre.
+
+### Arquitectura actual
+
+La plantilla `infrastructure/template.yaml` define **11 funciones Lambda** (incluida `AdministracionFunction`) y **11 tablas DynamoDB**. Las dos tablas adicionales respecto al modelo inicial de nueve son `AdministracionTable` y `AuditoriaTable`. La auditoría utiliza GSI1 por `tipoRegistro` y `fechaId`. Los recursos son declarativos: su presencia en SAM no demuestra que una pila de producción ya se haya actualizado. La SPA sigue implementada en React/Vite y la API emplea Cognito, API Gateway y el prefijo `/api/v1`.
+
+### Cambios de negocio implementados en el código
+
+| Área | Comportamiento vigente y archivos clave |
+| --- | --- |
+| Proyectos y requisitos | `backend/src/repositories/proyectos.repository.js` impide crear proyectos directamente como `ACTIVO` y exige al menos una habilidad en ProyectoHabilidad al publicarlos. `frontend/src/pages/LiderProyectosVista.jsx` guarda los requisitos antes de activar el proyecto. `fechaPublicacion` se establece al pasar de `BORRADOR` a `ACTIVO`. |
+| Fechas visibles | `frontend/src/utils/proyectoFechas.js` prioriza fechas planificadas; si faltan, toma la fecha de publicación (o la fecha histórica disponible) como inicio y estima el fin con jornadas de 8 horas de lunes a viernes, sin feriados. La estimación no equivale a una fecha contractual guardada en DynamoDB. |
+| Colaboradores y disponibilidad | La dedicación ocupada se almacena en `Colaboradores.dedicacionReservada`. La disponibilidad visible se deriva de ese porcentaje. RRHH puede filtrar perfiles inactivos y reincorporarlos si la cuenta sigue activa; la baja es lógica, conserva el perfil e historial y se registran `ultimaFechaBaja` y `fechaReincorporacion` cuando corresponda. |
+| Observaciones | Los formularios de colaboradores y de habilidades consideran `observaciones` opcionales y omiten el campo al quedar vacío para evitar errores de validación en APIs anteriores. |
+| Asignaciones y postulaciones | Se conserva la protección frente a asignaciones repetidas y dedicaciones superiores al 100 %, con transacciones DynamoDB. Se rechaza que un líder sea colaborador de un proyecto que dirige, pero **puede participar en proyectos de otro líder**; la validación se aplica tanto a asignaciones directas como a postulaciones y aceptaciones. |
+| Participaciones personales del líder | `frontend/src/components/asignaciones/MisParticipaciones.jsx` añade una sección separada y de solo lectura dentro de Asignaciones. `GET /api/v1/asignaciones/mias` resuelve el perfil desde el usuario Cognito autenticado, sin recibir el ID del colaborador en la URL. La política de rutas permite consultar registros propios y no otorga edición sobre proyectos ajenos. |
+| Filtrado visual | Las vistas de Usuarios, Colaboradores, Cargos, Habilidades, Proyectos y Asignaciones muestran activos o vigentes por defecto. Los registros dados de baja, cancelados, completados, finalizados y desvinculados permanecen consultables al seleccionar el filtro adecuado. |
+| Último acceso | `POST /api/v1/usuarios/yo/acceso` actualiza `Usuarios.ultimoAcceso` tras autenticación correcta; `GET /usuarios/yo` y el refresco de página no lo modifican. La interfaz presenta el horario de El Salvador. |
+| Auditoría | `backend/src/repositories/auditoria.repository.js` registra nuevas operaciones exitosas e inicios de sesión con actor autenticado, fecha y tipo, sin copiar credenciales. `GET /api/v1/administracion/auditoria` restringe la lectura a administradores. La pantalla ya no reconstruye falsamente autores desde proyectos/asignaciones. Los registros anteriores sin identidad verificable no se reconstruyen. |
+| Cargos | El modal de RRHH incorpora confirmación en pantalla y filtros por estado; se evita depender del diálogo nativo del navegador. |
+
+### Contratos y archivos de documentación
+
+Se actualizaron `README.md`, `infrastructure/README.md`, `database/README.md`, `docs/api/api-documentation.md`, `docs/architecture/architecture.md`, `docs/database/database-design.md`, `docs/figma/prototype-guide.md`, `docs/team/responsibilities.md`, `postman/README.md` y los esquemas que requerían aclaraciones. `database/schemas/data-model.md` y `database/schemas/auditoria.md` ya describían el modelo de once tablas y la bitácora persistente. La colección Postman JSON original puede requerir actualizaciones posteriores: cambiar su README **no** agrega solicitudes nuevas a dicha colección.
+
+### Validaciones y despliegue pendientes
+
+- En la revisión de diagnósticos del editor no se detectaron errores de análisis estático. Este dato no sustituye la ejecución de Jest, Vitest, linters, compilaciones de frontend ni validación de SAM.
+- El error observado en producción al consultar asignaciones personales (HTTP 403 y, en otra respuesta, `{"message":"Unauthorized"}`) motivó el nuevo endpoint `/asignaciones/mias`. El código y la plantilla locales lo incorporan, pero **no existe confirmación de despliegue de esa ruta** en la API publicada.
+- Antes de la entrega corresponde guardar los archivos, revisar `git diff`, ejecutar las suites automatizadas, validar/compilar SAM y desplegar las Lambdas, rutas, IAM y tablas que hayan cambiado. Después es necesario reconstruir/publicar React en S3/CloudFront y probar los cuatro roles con tokens Cognito vigentes.
+- En AWS deben comprobarse especialmente la publicación con habilidades, autoasignación prohibida pero colaboración entre líderes permitida, historial de asignaciones, reincorporación, `ultimoAcceso`, auditoría y filtros. Se requiere respaldo/control de costos antes de cualquier despliegue.
+- La actualización de Markdown constituye documentación del estado del código, **no una certificación de que el entorno remoto esté actualizado ni de que las pruebas hayan pasado**.
+

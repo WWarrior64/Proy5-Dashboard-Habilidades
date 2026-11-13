@@ -14,3 +14,9 @@
 - Cada integrante defiende su parte individualmente el 21 de noviembre.
 - Historial de commits activo desde el 31 de octubre.
 - Rama `main`, `develop` y ramas por feature.
+
+## Alcance funcional de la versión integrada
+
+La tabla anterior conserva las responsabilidades originales de los cinco roles de trabajo del proyecto, que no deben confundirse con los **roles de acceso** dentro de la aplicación (`EMPLEADO`, `RRHH`, `LIDER_PROYECTO`, `ADMINISTRADOR`). La implementación actual contempla once funciones Lambda y once tablas DynamoDB, incluyendo Administración y Auditoría.
+
+Antes de integrar cambios y presentar la entrega, corresponde ejecutar pruebas de backend y frontend, validar la plantilla SAM y comprobar el despliegue en AWS. Debe probarse con cuentas de cada rol el ciclo de publicación de proyectos con habilidades requeridas, los porcentajes de dedicación, los filtros históricos, la reincorporación de colaboradores y las asignaciones personales de líderes en proyectos ajenos. La documentación no sustituye la evidencia de ejecución real.

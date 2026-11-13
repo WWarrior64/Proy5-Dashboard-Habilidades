@@ -39,3 +39,4 @@ El campo `cargoId` es generado por el backend mediante UUID cuando no se incluye
 - No se permite eliminar físicamente un cargo que tenga colaboradores relacionados.
 - Si deja de utilizarse, se cambia su estado a `INACTIVO`.
 - No se asignan nuevos colaboradores a cargos inactivos.
+- El modal administrativo de RRHH muestra los cargos activos por defecto; permite consultar los desactivados o todos mediante el filtro de estado y confirmar explícitamente su activación/desactivación.

@@ -1,7 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Eye, Search, UserRound, X } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
+import { colaboradoresService } from '../services/colaboradores.service.js'
+import { asignacionesService } from '../services/asignaciones.service.js'
+import { proyectosService } from '../services/proyectos.service.js'
+import { extractItems } from '../utils/apiResponses.js'
+import { getApiErrorMessage } from '../utils/apiErrors.js'
+import { nombreLiderProyecto } from '../utils/formatters.js'
 import './empleado-asignaciones.css'
 
 // Datos de ejemplo para el prototipo; no representan asignaciones del backend.
@@ -44,22 +50,70 @@ const estilosEstado = {
   Desvinculada: 'desvinculada',
 }
 
+const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
+const estadosBackend = { ACTIVA: 'Activa', FINALIZADA: 'Finalizada', DESVINCULADA: 'Desvinculada' }
+const fechaVisible = valor => valor ? new Date(valor).toLocaleDateString('es-SV', { timeZone: 'UTC' }) : '—'
+
 export default function EmpleadoAsignaciones() {
+  const [asignaciones, setAsignaciones] = useState(modoDemo ? asignacionesIniciales : [])
+  const [cargando, setCargando] = useState(!modoDemo)
+  const [error, setError] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [estado, setEstado] = useState('Todos')
   const [detalle, setDetalle] = useState(null)
 
+  useEffect(() => {
+    if (modoDemo) return undefined
+    let cancelado = false
+    const cargar = async () => {
+      setCargando(true)
+      setError('')
+      try {
+        const perfil = await colaboradoresService.getMe()
+        const colaboradorId = perfil.data?.datos?.colaboradorId
+        if (!colaboradorId) throw new Error('La cuenta no tiene un perfil de colaborador.')
+        const [respuesta, proyectosRespuesta] = await Promise.all([
+          asignacionesService.listByCollaborator(colaboradorId),
+          proyectosService.list(),
+        ])
+        const proyectos = new Map(extractItems(proyectosRespuesta.data).map(item => [item.proyectoId, item]))
+        const items = extractItems(respuesta.data).map(item => {
+          const proyecto = proyectos.get(item.proyectoId)
+          return {
+            ...item,
+            id: item.asignacionId,
+            proyecto: proyecto?.nombre || item.proyectoId,
+            lider: nombreLiderProyecto(proyecto),
+            dedicacion: item.porcentajeDedicacion || 0,
+            horasCompletadas: item.horasCompletadas || 0,
+            horasAsignadas: item.horasAsignadas || 0,
+            fechaInicio: fechaVisible(item.fechaInicio),
+            fechaFin: fechaVisible(item.fechaFin || proyecto?.fechaFin),
+            estado: estadosBackend[item.estado] || item.estado,
+          }
+        })
+        if (!cancelado) setAsignaciones(items)
+      } catch (fallo) {
+        if (!cancelado) setError(getApiErrorMessage(fallo, 'No se pudieron consultar las asignaciones.'))
+      } finally {
+        if (!cancelado) setCargando(false)
+      }
+    }
+    cargar()
+    return () => { cancelado = true }
+  }, [])
+
   const visibles = useMemo(() => {
     const terminos = [busqueda, busquedaSuperior].map(valor => valor.trim().toLocaleLowerCase('es'))
-    return asignacionesIniciales.filter(asignacion => {
+    return asignaciones.filter(asignacion => {
       const contenido = [asignacion.proyecto, asignacion.lider].join(' ').toLocaleLowerCase('es')
       return terminos.every(termino => contenido.includes(termino)) &&
         (estado === 'Todos' || asignacion.estado === estado)
     })
-  }, [busqueda, busquedaSuperior, estado])
+  }, [asignaciones, busqueda, busquedaSuperior, estado])
 
-  const activas = asignacionesIniciales.filter(item => item.estado === 'Activa')
+  const activas = asignaciones.filter(item => item.estado === 'Activa')
   const dedicacionTotal = activas.reduce((suma, item) => suma + item.dedicacion, 0)
   const horasAsignadas = activas.reduce((suma, item) => suma + item.horasAsignadas, 0)
   const horasCompletadas = activas.reduce((suma, item) => suma + item.horasCompletadas, 0)
@@ -110,6 +164,8 @@ export default function EmpleadoAsignaciones() {
         <section className="emp-content emp-assignments-content" aria-labelledby="assignments-title">
           <h2 className="emp-assignments-title" id="assignments-title">Mis asignaciones</h2>
 
+          {cargando && <p role="status">Consultando asignaciones...</p>}
+          {error && <p role="alert">{error}</p>}
           <div className="emp-assignments-metrics">
             <div className="emp-card">
               <p className="emp-card-label">Asignaciones activas</p>
@@ -235,7 +291,7 @@ export default function EmpleadoAsignaciones() {
               )}
             </div>
             <p className="emp-assignments-count">
-              Mostrando {visibles.length} de {asignacionesIniciales.length} asignaciones
+              Mostrando {visibles.length} de {asignaciones.length} asignaciones
             </p>
           </div>
         </section>

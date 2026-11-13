@@ -18,9 +18,11 @@ Gestión de talento humano. Almacena los perfiles profesionales de los empleados
 | dedicacionReservada | Sí | Number | Porcentaje reservado mediante transacciones de Asignaciones; inicia en 0. |
 | disponibilidad | Sí | String | Indicador inicial `DISPONIBLE`; la búsqueda calcula disponibilidad real como `100 - dedicacionReservada`. |
 | estado | Sí | String | ACTIVO o INACTIVO. |
-| observaciones | No | String | Notas adicionales del colaborador. |
+| observaciones | No | String | Notas adicionales opcionales. Si el formulario queda vacío, el frontend omite el atributo en lugar de enviar `null`. |
 | fechaAlta | Sí | String (ISO 8601) | Fecha de alta del perfil. |
-| fechaBaja | No | String (ISO 8601) o null | Fecha de baja lógica. |
+| fechaBaja | No | String (ISO 8601) o null | Fecha de la baja lógica vigente; se borra al reincorporarse. |
+| ultimaFechaBaja | No | String (ISO 8601) | Conserva la baja previa cuando el perfil se reincorpora. |
+| fechaReincorporacion | No | String (ISO 8601) | Fecha en que un perfil inactivo vuelve al estado `ACTIVO`. |
 | fechaActualizacion | Sí | String (ISO 8601) | Fecha de última modificación. |
 
 ## Claves e índices
@@ -39,6 +41,8 @@ Gestión de talento humano. Almacena los perfiles profesionales de los empleados
 
 - Un usuario puede tener como máximo un perfil de colaborador. Para las nuevas altas se crea transaccionalmente un ítem de reserva con PK `USUARIO#<usuarioId>` y `propietarioColaboradorId`; las consultas de perfiles excluyen estas reservas.
 - Los perfiles históricos sin ítem de reserva requieren reconciliación antes de que la protección transaccional abarque todo el histórico.
-- La baja será lógica, cambiando el estado a `INACTIVO`.
+- La baja es lógica, cambiando el estado a `INACTIVO`. RRHH puede filtrar perfiles dados de baja y reincorporarlos sin crear otro `colaboradorId` ni perder sus habilidades e historial de asignaciones. La reincorporación requiere que la cuenta de Usuario esté activa.
 - El `cargoId` debe corresponder a un cargo existente y activo en la tabla Cargos.
 - `rolProfesional` describe la especialidad y no sustituye al rol de acceso de Usuarios.
+- Los porcentajes de disponibilidad son derivados de `dedicacionReservada`, no de un selector de estado manual; las asignaciones activas reservan capacidad y su finalización/desvinculación la libera.
+- Un perfil ligado a un usuario `LIDER_PROYECTO` es elegible para proyectos ajenos, pero no para los proyectos donde ese mismo `usuarioId` coincide con `liderId`. El filtro administrativo oculta los perfiles dados de baja por defecto y permite consultarlos expresamente.

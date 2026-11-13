@@ -32,8 +32,8 @@ describe('Routing Permissions', () => {
       expect(canAccessRoute(ROLES.EMPLEADO, '/dashboards/administrador')).toBe(false)
     })
 
-    it('RRHH puede acceder a usuarios y colaboradores', () => {
-      expect(canAccessRoute(ROLES.RRHH, '/usuarios')).toBe(true)
+    it('RRHH puede acceder a colaboradores, pero no a usuarios de administración', () => {
+      expect(canAccessRoute(ROLES.RRHH, '/usuarios')).toBe(false)
       expect(canAccessRoute(ROLES.RRHH, '/colaboradores')).toBe(true)
     })
 

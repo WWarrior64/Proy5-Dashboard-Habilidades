@@ -38,6 +38,17 @@ describe('Validators', () => {
     })
   })
 
+  describe('validators.phone', () => {
+    it('acepta números, espacios, guiones, signo más y paréntesis', () => {
+      expect(validators.phone('+503 (2211)-2233')).toBeUndefined()
+      expect(validators.phone('')).toBeUndefined()
+    })
+
+    it('rechaza caracteres no permitidos', () => {
+      expect(validators.phone('1234abc')).toBe('Teléfono inválido')
+    })
+  })
+
   describe('validators.percentage', () => {
     it('debe aceptar 0', () => {
       expect(validators.percentage(0)).toBeUndefined()

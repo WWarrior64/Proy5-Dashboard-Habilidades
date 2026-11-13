@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { ArrowUpRight, CirclePlus, Clock3, LogIn, RefreshCw, Search, UserRound, X } from 'lucide-react'
+import { ArrowUpRight, CirclePlus, LogIn, RefreshCw, Search, UserRound, X } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
+import api from '../services/api.js'
+import { getApiErrorMessage } from '../utils/apiErrors.js'
+import { fetchAllPages } from '../utils/apiResponses.js'
 import './administrador-auditoria.css'
 
 const menu = [
@@ -19,9 +22,9 @@ const tipos = {
   INICIO_SESION: { nombre: 'Inicio de sesión', clase: 'sesion', Icono: LogIn },
 }
 
-const entidades = ['Usuarios', 'Proyectos', 'Colaboradores', 'Habilidades', 'Postulaciones', 'Asignaciones']
+const entidades = ['Usuarios', 'Proyectos', 'Colaboradores', 'Cargos', 'Habilidades', 'Postulaciones', 'Asignaciones', 'Administración']
 
-// Solo prototipo visual: el backend todavía no ofrece un registro de auditoría.
+// Ejemplos exclusivamente visuales, habilitados solo con VITE_DEMO_MODE=true.
 const eventosEjemplo = [
   { id: 'ej-01', diasAtras: 0, hora: '11:10', usuario: 'Luis Pérez', entidad: 'Usuarios', tipo: 'INICIO_SESION', accion: 'inició sesión', descripcion: 'Inicio de sesión de usuario en la plataforma.', detalle: 'Acceso de demostración registrado para ilustrar la bitácora.' },
   { id: 'ej-02', diasAtras: 0, hora: '10:25', usuario: 'Luis Pérez', entidad: 'Proyectos', tipo: 'CREACION', accion: 'creó el proyecto App móvil', descripcion: 'Creación de un nuevo proyecto interno.', detalle: 'Proyecto de ejemplo: App móvil.' },
@@ -37,18 +40,23 @@ const eventosEjemplo = [
   { id: 'ej-12', diasAtras: 2, hora: '09:00', usuario: 'Carlos Méndez', entidad: 'Usuarios', tipo: 'INICIO_SESION', accion: 'inició sesión', descripcion: 'Acceso a la plataforma.', detalle: 'Inicio de sesión de demostración.' },
 ]
 
-const formatoDia = dia => {
-  const d = new Date(dia.getFullYear(), dia.getMonth(), dia.getDate())
-  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
+const formatoDia = fecha => {
+  if (Number.isNaN(fecha.getTime())) return ''
+  const partes = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/El_Salvador', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(fecha)
+  const parte = tipo => partes.find(item => item.type === tipo)?.value
+  return `${parte('year')}-${parte('month')}-${parte('day')}`
 }
 
 function fechaAtras(dias) {
   const fecha = new Date()
-  fecha.setDate(fecha.getDate() - dias)
+  fecha.setUTCDate(fecha.getUTCDate() - dias)
   return formatoDia(fecha)
 }
 
 const fechaMostrada = cadena => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cadena || '')) return 'Fecha no disponible'
   const [anio, mes, dia] = cadena.split('-')
   return `${dia}/${mes}/${anio}`
 }
@@ -59,7 +67,12 @@ function nombreGrupo(fecha) {
   return fechaMostrada(fecha)
 }
 
+const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
+
 export default function AdministradorAuditoriaVista() {
+  const [actividad, setActividad] = useState([])
+  const [cargando, setCargando] = useState(!modoDemo)
+  const [error, setError] = useState('')
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [entidadFiltro, setEntidadFiltro] = useState('')
@@ -69,11 +82,53 @@ export default function AdministradorAuditoriaVista() {
   const [limite, setLimite] = useState(6)
   const [detalle, setDetalle] = useState(null)
 
-  // Las fechas se calculan respecto al día actual, sin atribuir estos eventos a usuarios reales.
-  const eventos = useMemo(() => eventosEjemplo.map(item => ({
-    ...item,
-    fecha: fechaAtras(item.diasAtras),
-  })).sort((a, b) => (b.fecha + b.hora).localeCompare(a.fecha + a.hora)), [])
+  useEffect(() => {
+    if (modoDemo) return undefined
+    let cancelado = false
+    const cargar = async () => {
+      setCargando(true)
+      setError('')
+      try {
+        const respuesta = await fetchAllPages(({ limit, cursor }) =>
+          api.get('/administracion/auditoria', {
+            params: { desde, hasta, limite: limit, ...(cursor && { cursor }) },
+          }))
+        const eventos = respuesta.data?.datos?.items
+        if (!Array.isArray(eventos)) throw new Error('La API no devolvió una lista de actividad válida.')
+        if (!cancelado) setActividad(eventos.map(item => {
+          const fecha = new Date(item.fecha)
+          const valida = !Number.isNaN(fecha.getTime())
+          return {
+            id: item.auditoriaId,
+            momento: valida ? fecha.getTime() : 0,
+            fecha: valida ? formatoDia(fecha) : '',
+            hora: valida ? fecha.toLocaleTimeString('es-SV', {
+              timeZone: 'America/El_Salvador', hour: '2-digit', minute: '2-digit',
+            }) : '—',
+            usuario: item.usuario || item.usuarioId || 'Identidad no disponible',
+            usuarioId: item.usuarioId || null,
+            entidad: item.entidad || 'Otros',
+            tipo: tipos[item.tipo] ? item.tipo : 'ACTUALIZACION',
+            accion: item.accion || 'realizó una operación',
+            descripcion: item.descripcion || 'Operación autenticada.',
+            detalle: item.detalle || 'Sin información complementaria',
+          }
+        }))
+      } catch (err) {
+        if (!cancelado) setError(getApiErrorMessage(err, 'No se pudo consultar la actividad.'))
+      } finally {
+        if (!cancelado) setCargando(false)
+      }
+    }
+    void cargar()
+    return () => { cancelado = true }
+  }, [desde, hasta])
+
+  const eventos = useMemo(() => modoDemo
+    ? eventosEjemplo.map(item => ({ ...item, fecha: fechaAtras(item.diasAtras) }))
+    : [...actividad], [actividad])
+    .sort((a, b) => (b.momento || 0) - (a.momento || 0) ||
+      (b.fecha + b.hora).localeCompare(a.fecha + a.hora))
 
   const hoy = fechaAtras(0)
   const eventosHoy = eventos.filter(item => item.fecha === hoy)
@@ -81,17 +136,19 @@ export default function AdministradorAuditoriaVista() {
     { titulo: 'Eventos de hoy', valor: eventosHoy.length },
     { titulo: 'Inicios de sesión', valor: eventos.filter(item => item.tipo === 'INICIO_SESION').length },
     { titulo: 'Cambios de estado', valor: eventos.filter(item => item.tipo === 'CAMBIO_ESTADO').length },
-    { titulo: 'Usuarios activos hoy', valor: new Set(eventosHoy.map(item => item.usuario)).size },
+    { titulo: 'Usuarios con actividad hoy', valor: new Set(eventosHoy.map(item => item.usuarioId || item.usuario)).size },
   ]
 
   const filtrados = useMemo(() => {
-    const terminos = [busqueda, busquedaSuperior].map(termino => termino.trim().toLocaleLowerCase('es'))
+    const usuarioBuscado = busqueda.trim().toLocaleLowerCase('es')
+    const textoGlobal = busquedaSuperior.trim().toLocaleLowerCase('es')
     return eventos.filter(item =>
       (!entidadFiltro || item.entidad === entidadFiltro) &&
       (!tipoFiltro || item.tipo === tipoFiltro) &&
       (!desde || item.fecha >= desde) && (!hasta || item.fecha <= hasta) &&
-      terminos.every(termino => [item.usuario, item.accion, item.entidad, item.descripcion]
-        .join(' ').toLocaleLowerCase('es').includes(termino)),
+      (!usuarioBuscado || [item.usuario, item.usuarioId].join(' ').toLocaleLowerCase('es').includes(usuarioBuscado)) &&
+      (!textoGlobal || [item.usuario, item.accion, item.entidad, item.descripcion, item.detalle]
+        .join(' ').toLocaleLowerCase('es').includes(textoGlobal)),
     )
   }, [eventos, busqueda, busquedaSuperior, entidadFiltro, tipoFiltro, desde, hasta])
 
@@ -145,8 +202,11 @@ export default function AdministradorAuditoriaVista() {
 
         <section className="emp-content admin-auditoria-content" aria-label="Registro de auditoría">
           <p className="admin-auditoria-nota" role="status">
-            Vista previa: el sistema aún no dispone de un historial de auditoría consultable.
-            Los eventos y las cifras mostrados son ejemplos, no registros reales.
+            {modoDemo
+              ? 'Modo demostración: eventos y cifras de ejemplo.'
+              : 'Bitácora de eventos autenticados desde su habilitación en AWS. Los eventos anteriores no pueden reconstruirse con un autor verificado.'}
+            {cargando && <span> Consultando actividad...</span>}
+            {error && <span role="alert"> {error}</span>}
           </p>
 
           <div className="admin-auditoria-metricas">
@@ -208,7 +268,8 @@ export default function AdministradorAuditoriaVista() {
             <div className="admin-auditoria-grupos">
               {grupos.map(([fecha, items]) => (
                 <section className="admin-auditoria-grupo" aria-label={'Eventos del ' + fechaMostrada(fecha)} key={fecha}>
-                  <h2>{nombreGrupo(fecha)} – {fechaMostrada(fecha)}</h2>
+                  <h2>{['Hoy', 'Ayer'].includes(nombreGrupo(fecha))
+                    ? `${nombreGrupo(fecha)} – ${fechaMostrada(fecha)}` : fechaMostrada(fecha)}</h2>
                   <ol className="admin-auditoria-eventos">
                     {items.map(item => {
                       const tipo = tipos[item.tipo]
@@ -235,10 +296,10 @@ export default function AdministradorAuditoriaVista() {
                   </ol>
                 </section>
               ))}
-              {!grupos.length && <p className="admin-auditoria-vacio">No hay eventos de ejemplo que coincidan con los filtros.</p>}
+              {!grupos.length && <p className="admin-auditoria-vacio">No hay eventos disponibles que coincidan con los filtros.</p>}
             </div>
             <div className="admin-auditoria-pie">
-              <p>Mostrando {visibles.length} de {filtrados.length} eventos de ejemplo</p>
+              <p>Mostrando {visibles.length} de {filtrados.length} eventos</p>
               {visibles.length < filtrados.length && (
                 <button type="button" onClick={() => setLimite(actual => actual + 6)}>Cargar más</button>
               )}
@@ -257,7 +318,7 @@ export default function AdministradorAuditoriaVista() {
               <h2 id="admin-auditoria-modal-title">Detalle del evento</h2>
               <button type="button" aria-label="Cerrar detalle" onClick={() => setDetalle(null)}><X size={18} /></button>
             </div>
-            <p className="admin-auditoria-modal-aviso">Evento de demostración, no obtenido del backend.</p>
+            <p className="admin-auditoria-modal-aviso">{modoDemo ? 'Evento de demostración.' : 'Evento guardado en DynamoDB con identidad autenticada por Cognito.'}</p>
             <dl>
               <dt>Usuario</dt><dd>{detalle.usuario}</dd>
               <dt>Entidad</dt><dd>{detalle.entidad}</dd>

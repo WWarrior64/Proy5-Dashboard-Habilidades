@@ -67,16 +67,51 @@ async function obtenerPerfil(event, context) {
   }
 }
 
+/** Se invoca una vez tras el inicio de sesión exitoso, no al consultar /usuarios/yo. */
+async function registrarAcceso(event, context) {
+  try {
+    // La identidad proviene exclusivamente del middleware Cognito autenticado.
+    const usuario = event.usuarioAutenticado;
+    if (!usuario?.usuarioId || usuario.estado !== 'ACTIVO') {
+      return error('Se requiere un usuario autenticado activo', 401, CODIGOS.NO_AUTORIZADO);
+    }
+    const actualizado = await usuariosRepository.registrarUltimoAcceso(usuario.usuarioId);
+    return exito(actualizado);
+  } catch (err) {
+    return error(err.message, err.codigo || 500, err.codigoError);
+  }
+}
+
 async function listarUsuarios(event, context) {
   try {
     const query = event.queryStringParameters || {};
     const filtros = {};
     if (query.rol) filtros.rol = query.rol;
     if (query.estado) filtros.estado = query.estado;
-    if (query.limit) filtros.limit = parseInt(query.limit, 10);
+    if (query.limit !== undefined) {
+      const limit = Number(query.limit);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+        return error('limit debe ser un entero entre 1 y 100', 400, CODIGOS.VALIDACION);
+      }
+      filtros.limit = limit;
+    }
+    if (query.cursor !== undefined) {
+      if (typeof query.cursor !== 'string' || query.cursor.length > 2048 || !/^[A-Za-z0-9_-]+$/.test(query.cursor)) {
+        return error('Cursor de paginación inválido', 400, CODIGOS.VALIDACION);
+      }
+      try {
+        const clave = JSON.parse(Buffer.from(query.cursor, 'base64url').toString('utf8'));
+        if (!clave || typeof clave.usuarioId !== 'string' || Array.isArray(clave)) {
+          return error('Cursor de paginación inválido', 400, CODIGOS.VALIDACION);
+        }
+        filtros.lastKey = clave;
+      } catch (_) {
+        return error('Cursor de paginación inválido', 400, CODIGOS.VALIDACION);
+      }
+    }
 
     const resultado = await usuariosRepository.listar(filtros);
-    return exito(resultado);
+    return exito({ ...resultado, nextCursor: resultado.lastKey ? Buffer.from(JSON.stringify(resultado.lastKey)).toString('base64url') : null });
   } catch (err) {
     return error(err.message, err.codigo || 500, err.codigoError);
   }
@@ -234,11 +269,13 @@ const handler = crearDespachador({
   'PATCH /api/v1/usuarios/{usuarioId}/rol': cambiarRol,
   'PATCH /api/v1/usuarios/{usuarioId}/estado': cambiarEstado,
   'GET /api/v1/usuarios/yo': obtenerPerfil,
+  'POST /api/v1/usuarios/yo/acceso': registrarAcceso,
 });
 
 module.exports = {
   obtenerUsuario,
   obtenerPerfil,
+  registrarAcceso,
   listarUsuarios,
   crearUsuario,
   actualizarUsuario,

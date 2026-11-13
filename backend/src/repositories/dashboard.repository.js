@@ -156,7 +156,7 @@ async function obtenerActividadReciente(parametros = {}) {
   }
 
   // Asignaciones activadas o desvinculadas recientemente (GSI3 por estado).
-  for (const estado of ['ACTIVA', 'DESVINCULADA']) {
+  for (const estado of ['ACTIVA', 'DESVINCULADA', 'FINALIZADA']) {
     const resultado = await consultarPaginas(QueryCommand, {
         TableName: tableAsignaciones,
         IndexName: 'GSI3',
@@ -165,7 +165,7 @@ async function obtenerActividadReciente(parametros = {}) {
         ExpressionAttributeValues: { ':est': estado },
     });
     for (const asignacion of resultado.Items || []) {
-      const fecha = asignacion.estado === 'DESVINCULADA' ? asignacion.fechaFin : asignacion.fechaAsignacion;
+      const fecha = asignacion.estado === 'ACTIVA' ? asignacion.fechaAsignacion : asignacion.fechaFin;
       if (fecha && fecha >= desde) {
         eventos.push({
           tipo: 'asignacion',

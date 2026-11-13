@@ -5,6 +5,7 @@ import {
   extractPaginated,
   isSuccess,
   extractErrorMessage,
+  fetchAllPages,
 } from '../utils/apiResponses.js'
 
 describe('API Responses Utility', () => {
@@ -48,6 +49,26 @@ describe('API Responses Utility', () => {
 
     it('debe devolver vacío para respuesta nula', () => {
       expect(extractPaginated(null)).toEqual({ items: [], lastKey: null })
+    })
+  })
+
+  describe('fetchAllPages', () => {
+    it('recorre todos los cursores sin perder elementos', async () => {
+      const vistos = []
+      const respuesta = await fetchAllPages(async params => {
+        vistos.push(params)
+        return { data: { datos: params.cursor
+          ? { items: [{ id: 2 }], nextCursor: null }
+          : { items: [{ id: 1 }], nextCursor: 'pagina-2' } } }
+      }, 25)
+      expect(respuesta.data.datos.items).toEqual([{ id: 1 }, { id: 2 }])
+      expect(vistos).toEqual([{ limit: 25 }, { limit: 25, cursor: 'pagina-2' }])
+    })
+
+    it('rechaza cursores repetidos para evitar peticiones infinitas', async () => {
+      await expect(fetchAllPages(async () => ({
+        data: { datos: { items: [], nextCursor: 'repetido' } },
+      }))).rejects.toThrow('cursor de paginación repetido')
     })
   })
 

@@ -14,7 +14,6 @@ export default function ColaboradorForm({ colaborador, onSave, onCancel, loading
 
   const validate = () => {
     const newErrors = {}
-    if (!editing && !form.colaboradorId.trim()) newErrors.colaboradorId = 'El ID de colaborador es obligatorio'
     if (!editing && !form.usuarioId.trim()) newErrors.usuarioId = 'El usuario es obligatorio'
     if (!form.cargoId.trim()) newErrors.cargoId = 'El cargo es obligatorio'
     if (!form.rolProfesional.trim()) newErrors.rolProfesional = 'El rol profesional es obligatorio'
@@ -25,13 +24,13 @@ export default function ColaboradorForm({ colaborador, onSave, onCancel, loading
   const handleSave = (e) => {
     e.preventDefault()
     if (!validate()) return
-    onSave(form)
+    onSave({ ...form, ...(!form.colaboradorId.trim() ? { colaboradorId: undefined } : {}) })
   }
 
   return (
     <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <div className="form-group">
-        <label className="label">ID de Colaborador <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+        <label className="label">ID de Colaborador (opcional)</label>
         <input
           type="text"
           disabled={editing}
@@ -85,7 +84,7 @@ export default function ColaboradorForm({ colaborador, onSave, onCancel, loading
         {errors.rolProfesional && <p className="error-text">{errors.rolProfesional}</p>}
       </div>
       <div className="form-group">
-        <label className="label">Observaciones</label>
+        <label className="label">Observaciones (opcional)</label>
         <textarea
           className="input"
           value={form.observaciones}

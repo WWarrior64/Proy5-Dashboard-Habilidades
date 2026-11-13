@@ -1,7 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { BriefcaseBusiness, CheckCircle2, Clock3, UserRound, UsersRound } from 'lucide-react'
 import EmpleadoLogoutButton from '../../components/layout/EmpleadoLogoutButton.jsx'
+import { colaboradoresService } from '../../services/colaboradores.service.js'
+import { habilidadesService } from '../../services/habilidades.service.js'
+import { usuariosService } from '../../services/usuarios.service.js'
+import { cargosService } from '../../services/cargos.service.js'
+import GestionCargosModal from '../../components/cargos/GestionCargosModal.jsx'
+import { proyectosService } from '../../services/proyectos.service.js'
+import { asignacionesService } from '../../services/asignaciones.service.js'
+import { extractItems } from '../../utils/apiResponses.js'
+import { getApiErrorMessage } from '../../utils/apiErrors.js'
 import './recursos-humanos-dashboard.css'
 
 // Resumen de demostración: los valores sirven para revisar el diseño del dashboard.
@@ -40,20 +49,115 @@ const menu = [
   ['Asignaciones', '/asignaciones'],
 ]
 
+const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
+const fechaVisible = valor => valor ? new Date(valor).toLocaleDateString('es-SV', { timeZone: 'UTC' }) : '—'
+
 export default function RecursosHumanosDashboard() {
+  const [resumen, setResumen] = useState(modoDemo ? resumenEjemplo : null)
+  const [recientes, setRecientes] = useState(modoDemo ? colaboradoresRecientes : [])
+  const [cargos, setCargos] = useState(modoDemo ? talentoPorCargo : [])
+  const [habilidades, setHabilidades] = useState(modoDemo ? habilidadesMasUsadas : [])
+  const [cargando, setCargando] = useState(!modoDemo)
+  const [error, setError] = useState('')
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
-  const [avisoCargos, setAvisoCargos] = useState(false)
+  const [cargosAbierto, setCargosAbierto] = useState(false)
+  const [versionCargos, setVersionCargos] = useState(0)
+
+  useEffect(() => {
+    if (modoDemo) return undefined
+    let cancelado = false
+    const cargar = async () => {
+      setCargando(true)
+      setError('')
+      try {
+        const [colaboradoresResp, proyectosResp, asignacionesResp, usuariosResp, cargosResp, habilidadesResp] = await Promise.all([
+          colaboradoresService.listAll(),
+          proyectosService.list({ estado: 'ACTIVO' }),
+          asignacionesService.list(),
+          usuariosService.listAll(),
+          cargosService.list({ estado: 'ACTIVO', limit: 100 }),
+          habilidadesService.listAll(),
+        ])
+        const colaboradores = extractItems(colaboradoresResp.data)
+        const proyectos = extractItems(proyectosResp.data)
+        const asignaciones = extractItems(asignacionesResp.data)
+        const usuarios = new Map(extractItems(usuariosResp.data).map(item => [item.usuarioId, item.nombre]))
+        const cargosCatalogo = new Map(extractItems(cargosResp.data).map(item => [item.cargoId, item.nombre]))
+        const habilidadesCatalogo = new Map(extractItems(habilidadesResp.data).map(item => [item.habilidadId, item]))
+        const resultadosHabilidades = await Promise.allSettled(colaboradores.map(item =>
+          colaboradoresService.listSkills(item.colaboradorId)))
+        if (resultadosHabilidades.some(item => item.status === 'rejected')) {
+          throw new Error('No se pudieron consultar todas las habilidades de los colaboradores.')
+        }
+        const cantidadesHabilidades = new Map()
+        resultadosHabilidades.forEach(result => {
+          const ids = new Set(extractItems(result.value.data).map(item => item.habilidadId))
+          ids.forEach(id => cantidadesHabilidades.set(id, (cantidadesHabilidades.get(id) || 0) + 1))
+        })
+        const cargoConteos = new Map()
+        colaboradores.filter(item => item.estado === 'ACTIVO').forEach(item => {
+          const nombre = cargosCatalogo.get(item.cargoId) || item.rolProfesional || 'Sin cargo'
+          cargoConteos.set(nombre, (cargoConteos.get(nombre) || 0) + 1)
+        })
+        const disponibilidad = item => {
+          if (item.estado !== 'ACTIVO') return { nombre: 'Inactivo', clase: 'no-disponible' }
+          if (!Number.isFinite(item.dedicacionReservada)) return { nombre: 'Sin datos', clase: 'no-disponible' }
+          if (item.dedicacionReservada === 0) return { nombre: 'Disponible', clase: 'disponible' }
+          if (item.dedicacionReservada < 100) return { nombre: 'Parcial', clase: 'parcial' }
+          return { nombre: 'No disponible', clase: 'no-disponible' }
+        }
+        const recientes = colaboradores.filter(item => item.estado === 'ACTIVO').sort((a, b) =>
+          (b.fechaAlta || '').localeCompare(a.fechaAlta || '')).slice(0, 3).map(item => {
+            const estado = disponibilidad(item)
+            return {
+              id: item.colaboradorId,
+              nombre: usuarios.get(item.usuarioId) || item.nombre || 'Sin nombre registrado',
+              cargo: cargosCatalogo.get(item.cargoId) || item.rolProfesional || 'Sin cargo',
+              ingreso: fechaVisible(item.fechaAlta),
+              disponibilidad: estado.nombre,
+              clase: estado.clase,
+            }
+          })
+        if (!cancelado) {
+          setResumen({
+            colaboradores: colaboradores.length,
+            disponibles: colaboradores.filter(item =>
+              item.estado === 'ACTIVO' && Number.isFinite(item.dedicacionReservada) && item.dedicacionReservada < 100).length,
+            proyectosActivos: proyectos.length,
+            asignaciones: asignaciones.filter(item => item.estado === 'ACTIVA').length,
+          })
+          setRecientes(recientes)
+          setCargos([...cargoConteos].sort((a, b) => b[1] - a[1]).map(([nombre, colaboradores], i) =>
+            ({ id: i, nombre, colaboradores })))
+          setHabilidades([...cantidadesHabilidades]
+             .filter(([id]) => habilidadesCatalogo.get(id)?.estado !== 'INACTIVO')
+             .sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id, cantidad]) => ({
+            id,
+            nombre: habilidadesCatalogo.get(id)?.nombre || id,
+            categoria: habilidadesCatalogo.get(id)?.categoria || 'Sin categoría',
+            colaboradores: cantidad,
+          })))
+        }
+      } catch (fallo) {
+        if (!cancelado) setError(getApiErrorMessage(fallo, 'No se pudo cargar el dashboard de RRHH.'))
+      } finally {
+        if (!cancelado) setCargando(false)
+      }
+    }
+    cargar()
+    return () => { cancelado = true }
+  }, [versionCargos])
 
   const termino = busquedaSuperior.trim().toLocaleLowerCase('es')
-  const recientesVisibles = useMemo(() => colaboradoresRecientes.filter(item =>
+  const recientesVisibles = useMemo(() => recientes.filter(item =>
     [item.nombre, item.cargo, item.disponibilidad].join(' ').toLocaleLowerCase('es').includes(termino)
-  ), [termino])
-  const cargosVisibles = useMemo(() => talentoPorCargo.filter(item =>
+  ), [recientes, termino])
+  const cargosVisibles = useMemo(() => cargos.filter(item =>
     item.nombre.toLocaleLowerCase('es').includes(termino)
-  ), [termino])
-  const habilidadesVisibles = useMemo(() => habilidadesMasUsadas.filter(item =>
+  ), [cargos, termino])
+  const habilidadesVisibles = useMemo(() => habilidades.filter(item =>
     [item.nombre, item.categoria].join(' ').toLocaleLowerCase('es').includes(termino)
-  ), [termino])
+  ), [habilidades, termino])
 
   return (
     <div className="emp-dashboard rrhh-dashboard">
@@ -101,14 +205,15 @@ export default function RecursosHumanosDashboard() {
         <section className="emp-content rrhh-dashboard-content" aria-labelledby="rrhh-dashboard-title">
           <div className="rrhh-dashboard-intro">
             <h2 id="rrhh-dashboard-title" className="rrhh-dashboard-section-title">Resumen general</h2>
-            <span className="rrhh-dashboard-preview">Datos de ejemplo</span>
+            <span className="rrhh-dashboard-preview">{modoDemo ? 'Datos de ejemplo' : cargando ? 'Cargando...' : 'Datos reales'}</span>
+            {error && <p role="alert">{error}</p>}
           </div>
 
           <div className="rrhh-dashboard-metrics">
             <div className="emp-card rrhh-dashboard-metric">
               <div className="rrhh-dashboard-metric-text">
                 <p className="emp-card-label">Colaboradores</p>
-                <p className="emp-card-value">{resumenEjemplo.colaboradores}</p>
+                <p className="emp-card-value">{resumen?.colaboradores ?? '—'}</p>
                 <p className="rrhh-dashboard-metric-note">Plantilla registrada</p>
               </div>
               <span className="rrhh-dashboard-metric-icon"><UsersRound size={19} aria-hidden="true" /></span>
@@ -116,7 +221,7 @@ export default function RecursosHumanosDashboard() {
             <div className="emp-card rrhh-dashboard-metric">
               <div className="rrhh-dashboard-metric-text">
                 <p className="emp-card-label">Disponibles</p>
-                <p className="emp-card-value">{resumenEjemplo.disponibles}</p>
+                <p className="emp-card-value">{resumen?.disponibles ?? '—'}</p>
                 <p className="rrhh-dashboard-metric-note">Con capacidad</p>
               </div>
               <span className="rrhh-dashboard-metric-icon"><CheckCircle2 size={19} aria-hidden="true" /></span>
@@ -124,7 +229,7 @@ export default function RecursosHumanosDashboard() {
             <div className="emp-card rrhh-dashboard-metric">
               <div className="rrhh-dashboard-metric-text">
                 <p className="emp-card-label">Proyectos activos</p>
-                <p className="emp-card-value">{resumenEjemplo.proyectosActivos}</p>
+                <p className="emp-card-value">{resumen?.proyectosActivos ?? '—'}</p>
                 <p className="rrhh-dashboard-metric-note">En ejecución</p>
               </div>
               <span className="rrhh-dashboard-metric-icon"><BriefcaseBusiness size={19} aria-hidden="true" /></span>
@@ -132,7 +237,7 @@ export default function RecursosHumanosDashboard() {
             <div className="emp-card rrhh-dashboard-metric">
               <div className="rrhh-dashboard-metric-text">
                 <p className="emp-card-label">Asignaciones</p>
-                <p className="emp-card-value">{resumenEjemplo.asignaciones}</p>
+                <p className="emp-card-value">{resumen?.asignaciones ?? '—'}</p>
                 <p className="rrhh-dashboard-metric-note">Vigentes</p>
               </div>
               <span className="rrhh-dashboard-metric-icon"><Clock3 size={19} aria-hidden="true" /></span>
@@ -160,7 +265,7 @@ export default function RecursosHumanosDashboard() {
               <h2 id="rrhh-cargos-titulo">Talento por cargo</h2>
               <div className="rrhh-dashboard-panel-list">
                 {cargosVisibles.map(item => {
-                  const porcentaje = Math.round(item.colaboradores / resumenEjemplo.colaboradores * 100)
+                  const porcentaje = resumen?.colaboradores ? Math.round(item.colaboradores / resumen.colaboradores * 100) : 0
                   return (
                     <div className="rrhh-dashboard-row rrhh-dashboard-cargo" key={item.id}>
                       <div className="rrhh-dashboard-row-copy">
@@ -186,15 +291,10 @@ export default function RecursosHumanosDashboard() {
               <h2 id="rrhh-acciones-titulo">Acciones rápidas</h2>
               <div className="rrhh-dashboard-quick-actions">
                 <Link to="/colaboradores">Gestionar colaboradores</Link>
-                <button type="button" onClick={() => setAvisoCargos(true)}>Gestionar cargos</button>
+                <button type="button" onClick={() => setCargosAbierto(true)}>Gestionar cargos</button>
                 <Link to="/habilidades">Gestionar habilidades</Link>
               </div>
-              {avisoCargos && (
-                <p className="rrhh-dashboard-action-note" role="status">
-                  La gestión de cargos aún no tiene una pantalla propia. Puedes consultar los cargos desde Colaboradores.
-                  <button type="button" onClick={() => setAvisoCargos(false)} aria-label="Cerrar aviso">×</button>
-                </p>
-              )}
+
             </section>
 
             <section className="rrhh-dashboard-panel" aria-labelledby="rrhh-habilidades-titulo">
@@ -215,6 +315,8 @@ export default function RecursosHumanosDashboard() {
           </div>
         </section>
       </main>
+      <GestionCargosModal abierto={cargosAbierto} onClose={() => setCargosAbierto(false)}
+        onUpdated={() => setVersionCargos(v => v + 1)} />
     </div>
   )
 }

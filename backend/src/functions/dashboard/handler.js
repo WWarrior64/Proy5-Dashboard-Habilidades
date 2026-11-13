@@ -49,6 +49,12 @@ async function obtenerDistribucionHabilidades(event, context) {
     const distribucion = await dashboardRepo.obtenerDistribucionHabilidades();
     return exito({ distribucion });
   } catch (e) {
+    // CloudWatch conserva la causa técnica; el cliente solo recibe el error genérico.
+    console.error('dashboard/habilidades falló', {
+      requestId: event.requestContext?.requestId,
+      nombre: e.name,
+      mensaje: e.message,
+    });
     return responderError(e);
   }
 }

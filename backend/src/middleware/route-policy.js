@@ -42,8 +42,13 @@ async function proteger(event, route) {
     const proyecto = await leer(env.tableProyectos, { proyectoId });
     if (proyecto.liderId !== usuario.usuarioId) denegar();
   }
-  if (path.startsWith('/api/v1/usuarios')) {
-    if (path.endsWith('/rol') || path.endsWith('/estado') || method === 'POST') {
+  if (path.startsWith('/api/v1/administracion/')) {
+    if (!admin) denegar();
+  } else if (path.startsWith('/api/v1/usuarios')) {
+    if (path === '/api/v1/usuarios/yo/acceso' && method === 'POST') {
+      // Cada usuario activo puede registrar únicamente su propio acceso autenticado.
+      // El handler toma el ID de event.usuarioAutenticado, nunca del body.
+    } else if (path.endsWith('/rol') || path.endsWith('/estado') || method === 'POST') {
       if (!admin) denegar();
     } else if (path.endsWith('/yo')) {
       // Perfil autenticado.
@@ -57,7 +62,19 @@ async function proteger(event, route) {
     else if (write || (proyectoId && !colaboradorId)) { if (!gestor) await liderPropio(); }
     else if (!gestor) { if (lider && proyectoId) await liderPropio(); else await propio(); }
   } else if (path.includes('/asignaciones')) {
-    if (!gestor) { if (write || lider) await liderPropio(); else await propio(); }
+    if (!gestor) {
+      if (write) await liderPropio();
+      else if (path === '/api/v1/asignaciones/mias' && method === 'GET') {
+        // Identidad resuelta dentro del handler mediante usuarioAutenticado.
+      } else if (path.startsWith('/api/v1/colaboradores/')) await propio();
+      else if (lider && params.asignacionId) {
+        // Un líder puede leer una asignación de su proyecto o una asignación propia
+        // en un proyecto ajeno. Esto no concede permisos de edición sobre ella.
+        const proyecto = await leer(env.tableProyectos, { proyectoId });
+        if (proyecto.liderId !== usuario.usuarioId) await propio();
+      } else if (lider) await liderPropio();
+      else await propio();
+    }
   } else if (path.startsWith('/api/v1/proyectos')) {
     if (write && !gestor) {
       if (method === 'POST' && !params.proyectoId) {
@@ -66,17 +83,33 @@ async function proteger(event, route) {
       } else { await liderPropio(); if (body.liderId && body.liderId !== usuario.usuarioId) denegar(); }
     }
   } else if (path.startsWith('/api/v1/colaboradores')) {
-    if (path.includes('/habilidades')) { if (write && !gestor) await propio(); }
-    else if (write && !gestor) denegar();
+    if (path.includes('/habilidades')) {
+      if (!gestor && (write || !lider)) await propio();
+    } else if (write && !gestor) denegar();
+    else if (method === 'GET' && !gestor && !lider && !path.endsWith('/yo')) {
+      // Empleado solo puede consultar su propia ficha, no el listado ni perfiles ajenos.
+      await propio();
+    }
   } else if (path.startsWith('/api/v1/cargos') || path.startsWith('/api/v1/habilidades')) {
     if (write && !gestor) denegar();
   } else if (path.startsWith('/api/v1/dashboard') || path.startsWith('/api/v1/busqueda/colaboradores')) {
     if (!gestor && !lider) denegar();
   } else if (!path.startsWith('/api/v1/busqueda/')) denegar();
   if (write) {
-    body.creadoPor = usuario.usuarioId;
-    body.revisadoPor = usuario.usuarioId;
-    body.actualizadoPor = usuario.usuarioId;
+    // Los campos de auditoría son responsabilidad del servidor, nunca del cliente.
+    // Los esquemas Joi de las demás entidades rechazan campos no reconocidos.
+    delete body.creadoPor;
+    delete body.revisadoPor;
+    delete body.actualizadoPor;
+
+    if (method === 'POST' &&
+      (path === '/api/v1/proyectos' || path === '/api/v1/asignaciones')) {
+      body.creadoPor = usuario.usuarioId;
+    }
+    if (method === 'PATCH' && path.includes('/postulaciones/') &&
+      (path.endsWith('/estado') || path.endsWith('/retirar'))) {
+      body.revisadoPor = usuario.usuarioId;
+    }
     event.body = JSON.stringify(body);
   }
 }
