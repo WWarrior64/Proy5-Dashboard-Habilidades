@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.js'
-import Button from '../components/common/Button.jsx'
 
 const ROUTE_BY_ROLE = {
   ADMINISTRADOR: '/dashboards/administrador',
@@ -15,9 +14,9 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [requiresNewPassword, setRequiresNewPassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [passwordChallenge, setPasswordChallenge] = useState(false)
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
   const { login, completePasswordChange } = useAuth()
   const navigate = useNavigate()
 
@@ -38,90 +37,169 @@ export default function Login() {
         navigate(ROUTE_BY_ROLE[demoUser.rol], { replace: true })
         return
       }
-      let result
-      if (passwordChallenge) {
-        if (newPassword.length < 8) throw new Error('La contraseña nueva debe tener al menos 8 caracteres.')
-        if (newPassword !== confirmPassword) throw new Error('Las contraseñas nuevas no coinciden.')
-        result = await completePasswordChange(newPassword)
-      } else {
-        result = await login(email, password)
-      }
+      const result = await login(email, password)
       navigate(ROUTE_BY_ROLE[result.user.rol] || '/dashboards/empleado', { replace: true })
     } catch (err) {
-      if (err.code === 'NEW_PASSWORD_REQUIRED') setPasswordChallenge(true)
-      setError(err.message || 'Error al iniciar sesión')
+      if (err.code === 'NEW_PASSWORD_REQUIRED') {
+        setRequiresNewPassword(true)
+        setPassword('')
+      } else {
+        setError(err.message || 'Error al iniciar sesión')
+      }
     } finally {
       setLoading(false)
     }
   }
 
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#d8e4ef' }}>
-      <div style={{ background: '#ffffff', padding: '2rem', borderRadius: '0.75rem', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)', width: '100%', maxWidth: '400px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <div style={{ width: '48px', height: '48px', background: '#2563eb', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
-            <span style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 'bold' }}>IM</span>
+  const handleNewPassword = async (event) => {
+    event.preventDefault()
+    setError('')
+    if (newPassword.length < 8) {
+      setError('La nueva contraseña debe contener al menos 8 caracteres.')
+      return
+    }
+    if (newPassword !== confirmNewPassword) {
+      setError('Las contraseñas no coinciden.')
+      return
+    }
+    setLoading(true)
+    try {
+      const result = await completePasswordChange(newPassword)
+      setNewPassword('')
+      setConfirmNewPassword('')
+      navigate(ROUTE_BY_ROLE[result.user.rol] || '/dashboards/empleado', { replace: true })
+    } catch (err) {
+      setError(err.message || 'No se pudo guardar la nueva contraseña.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const volverAlLogin = () => {
+    setRequiresNewPassword(false)
+    setNewPassword('')
+    setConfirmNewPassword('')
+    setError('')
+  }
+
+  if (requiresNewPassword) {
+    return (
+      <main className="login-page">
+        <section className="login-card password-change-card" aria-labelledby="password-change-title">
+          <div className="login-header password-change-header">
+            <div className="login-logo" aria-hidden="true" />
+            <h1 className="login-title" id="password-change-title">Establecer nueva contraseña</h1>
+            <p className="password-change-description">
+              Reemplaza la contraseña temporal que recibiste por correo electrónico.
+            </p>
           </div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: '600', color: '#172554', margin: 0 }}>Internal Marketplace</h1>
-          <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '0.25rem 0 0' }}>
-            {passwordChallenge ? 'Cambie la contraseña temporal para activar su cuenta' : 'Inicie sesión para continuar'}
-          </p>
+
+          {error && <div className="error-message" role="alert">{error}</div>}
+
+          <form className="login-form password-change-form" onSubmit={handleNewPassword}>
+            <div className="login-field">
+              <label className="login-label" htmlFor="new-password">Nueva contraseña</label>
+              <input
+                className="login-input"
+                id="new-password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Mínimo 8 caracteres"
+                minLength={8}
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                disabled={loading}
+                required
+              />
+            </div>
+            <div className="login-field">
+              <label className="login-label" htmlFor="confirm-new-password">Confirmar contraseña</label>
+              <input
+                className="login-input"
+                id="confirm-new-password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Repite tu contraseña"
+                minLength={8}
+                value={confirmNewPassword}
+                onChange={(event) => setConfirmNewPassword(event.target.value)}
+                disabled={loading}
+                required
+              />
+            </div>
+            <p className="password-change-hint">
+              Utiliza una contraseña segura que cumpla las reglas de tu organización.
+            </p>
+            <button className="login-btn" type="submit" disabled={loading}>
+              {loading ? 'Guardando...' : 'Guardar contraseña'}
+            </button>
+          </form>
+          <button
+            className="password-change-back"
+            type="button"
+            onClick={volverAlLogin}
+            disabled={loading}
+          >
+            Volver a iniciar sesión
+          </button>
+        </section>
+      </main>
+    )
+  }
+
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-header">
+          <div className="login-logo" />
+          <h1 className="login-title">Internal Marketplace</h1>
         </div>
 
         {error && (
-          <div style={{ background: '#fee2e2', color: '#991b1b', padding: '0.75rem', borderRadius: '0.5rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
+          <div className="error-message">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {!passwordChallenge && <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: '#172554', marginBottom: '0.25rem' }}>Correo electrónico</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="correo@empresa.com"
-              style={{ width: '100%', padding: '0.6rem 0.875rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.95rem' }}
-              required
-            />
-          </div>}
-          {!passwordChallenge && <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: '#172554', marginBottom: '0.25rem' }}>Contraseña</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              style={{ width: '100%', padding: '0.6rem 0.875rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.95rem' }}
-              required
-            />
-          </div>}
-          {passwordChallenge && <>
-            <div>
-              <label className="label">Contraseña nueva</label>
-              <input className="input" type="password" autoComplete="new-password" value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)} minLength={8} required />
+        <form onSubmit={handleSubmit} className="login-form">
+          <div className="login-field">
+              <label className="login-label" htmlFor="email">Correo Electrónico</label>
+              <input
+                id="email"
+                type="email"
+                className="login-input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="correo@empresa.com"
+                required
+              />
             </div>
-            <div>
-              <label className="label">Confirmar contraseña nueva</label>
-              <input className="input" type="password" autoComplete="new-password" value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)} minLength={8} required />
+            <div className="login-field">
+              <label className="login-label" htmlFor="password">Contraseña</label>
+              <input
+                id="password"
+                type="password"
+                className="login-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
             </div>
-          </>}
-          <Button type="submit" variant="primary" disabled={loading}>
-            {loading ? 'Procesando...' : passwordChallenge ? 'Establecer contraseña' : 'Iniciar sesión'}
-          </Button>
-          {passwordChallenge && <button type="button" onClick={() => { setPasswordChallenge(false); setNewPassword(''); setConfirmPassword(''); setError('') }}
-            style={{ color: '#2563eb', border: 'none', background: 'transparent', cursor: 'pointer' }}>
-            Volver a iniciar sesión
-          </button>}
+          <div className="login-forgot-password">
+              <a href="#" onClick={(e) => { e.preventDefault(); navigate('/forgot-password') }}>
+                ¿Olvidaste tu contraseña?
+              </a>
+            </div>
+            <button type="submit" className="login-btn" disabled={loading}>
+              {loading ? 'Procesando...' : 'Iniciar sesión'}
+            </button>
         </form>
 
         {import.meta.env.VITE_DEMO_MODE === 'true' && (
-          <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0' }}>
-            <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.5rem' }}>Modo demostración</p>
-            <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>Cualquier credencial funciona en modo demo.</p>
+          <div className="demo-mode">
+            <p className="demo-label">Modo demostración</p>
+            <p className="demo-text">Cualquier credencial funciona en modo demo.</p>
           </div>
         )}
       </div>

@@ -1,14 +1,14 @@
 const {
   dynamoDb,
   GetCommand,
-  PutCommand,
+  TransactWriteCommand,
   UpdateCommand,
-  DeleteCommand,
   QueryCommand,
   ScanCommand,
 } = require('../config/dynamodb');
-const { tableColaboradores, tableUsuarios, tableCargos } = require('../config/environment');
+const { tableColaboradores } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
+const { randomUUID } = require('node:crypto');
 const usuariosRepository = require('./usuarios.repository');
 const cargosRepository = require('./cargos.repository');
 
@@ -16,6 +16,9 @@ async function validarReglas(data, colaboradorIdExcluir = null) {
   const usuario = await usuariosRepository.obtenerPorId(data.usuarioId);
   if (!usuario) {
     throw new ErrorApp('El usuarioId no corresponde a un usuario existente', 400, CODIGOS.VALIDACION);
+  }
+  if (usuario.estado !== 'ACTIVO') {
+    throw new ErrorApp('El usuario debe estar activo para crear un colaborador', 400, CODIGOS.VALIDACION);
   }
 
   const cargo = await cargosRepository.obtenerPorId(data.cargoId);
@@ -30,18 +33,23 @@ async function validarReglas(data, colaboradorIdExcluir = null) {
   if (existentePorUsuario && existentePorUsuario.colaboradorId !== colaboradorIdExcluir) {
     throw new ErrorApp('El usuario ya tiene un perfil de colaborador asociado', 409, CODIGOS.CONFLICTO);
   }
+  return usuario;
 }
 
 async function crear(data) {
-  await validarReglas(data);
+  const usuario = await validarReglas(data);
+  const nombre = usuario?.nombre || data.nombre || data.rolProfesional;
+  if (data.colaboradorId?.startsWith('USUARIO#')) {
+    throw new ErrorApp('Identificador de colaborador reservado', 400, CODIGOS.VALIDACION);
+  }
 
   const item = {
-    colaboradorId: data.colaboradorId,
+    colaboradorId: data.colaboradorId || randomUUID(),
     usuarioId: data.usuarioId,
     cargoId: data.cargoId,
     rolProfesional: data.rolProfesional,
-    nombre: data.nombre || data.rolProfesional,
-    'rolProfesional#nombre': `${data.rolProfesional}#${data.nombre || data.rolProfesional}`,
+    nombre,
+    'rolProfesional#nombre': `${data.rolProfesional}#${nombre}`,
     dedicacionReservada: 0,
     disponibilidad: data.disponibilidad || 'DISPONIBLE',
     estado: data.estado || 'ACTIVO',
@@ -51,23 +59,32 @@ async function crear(data) {
     observaciones: data.observaciones || null,
   };
 
-  await dynamoDb.send(
-    new PutCommand({
-      TableName: tableColaboradores,
-      Item: item,
-      ConditionExpression: 'attribute_not_exists(colaboradorId)',
-    })
-  );
-
+  try {
+    // Guardar la reserva de usuario en la misma transacción impide que dos
+    // solicitudes simultáneas creen perfiles para una misma cuenta.
+    await dynamoDb.send(new TransactWriteCommand({ TransactItems: [
+      { Put: { TableName: tableColaboradores, Item: item,
+        ConditionExpression: 'attribute_not_exists(colaboradorId)' } },
+      { Put: { TableName: tableColaboradores,
+        Item: { colaboradorId: `USUARIO#${data.usuarioId}`, propietarioColaboradorId: item.colaboradorId },
+        ConditionExpression: 'attribute_not_exists(colaboradorId)' } },
+    ] }));
+  } catch (err) {
+    if (['ConditionalCheckFailedException', 'TransactionCanceledException'].includes(err.name)) {
+      throw new ErrorApp('Ya existe un colaborador con ese identificador o usuario', 409, CODIGOS.CONFLICTO);
+    }
+    throw err;
+  }
   return item;
 }
 
 async function listar(filtros = {}) {
   const { estado, cargoId, rolProfesional, limit = 25, lastKey } = filtros;
 
-  const filterParts = [];
+  // Los ítems USUARIO# son reservas de unicidad, no perfiles visibles.
+  const filterParts = ['attribute_exists(#usuarioIdReal)'];
   const expressionAttributeValues = {};
-  const expressionAttributeNames = {};
+  const expressionAttributeNames = { '#usuarioIdReal': 'usuarioId' };
 
   if (estado) {
     filterParts.push('#estado = :estado');
@@ -92,7 +109,9 @@ async function listar(filtros = {}) {
 
   if (filterParts.length > 0) {
     params.FilterExpression = filterParts.join(' AND ');
-    params.ExpressionAttributeValues = expressionAttributeValues;
+    if (Object.keys(expressionAttributeValues).length > 0) {
+      params.ExpressionAttributeValues = expressionAttributeValues;
+    }
     params.ExpressionAttributeNames = expressionAttributeNames;
   }
 
@@ -106,16 +125,26 @@ async function listar(filtros = {}) {
 }
 
 async function obtenerPorId(colaboradorId) {
-  const result = await dynamoDb.send(
-    new GetCommand({
-      TableName: tableColaboradores,
-      Key: { colaboradorId },
-    })
-  );
+  if (String(colaboradorId).startsWith('USUARIO#')) return null;
+  const result = await dynamoDb.send(new GetCommand({
+    TableName: tableColaboradores,
+    Key: { colaboradorId },
+  }));
   return result.Item || null;
 }
 
 async function obtenerPorUsuarioId(usuarioId) {
+  // Las altas nuevas guardan una reserva única en la tabla base. Consultarla
+  // consistentemente evita depender de la propagación eventual del GSI.
+  const reserva = await dynamoDb.send(new GetCommand({
+    TableName: tableColaboradores,
+    Key: { colaboradorId: `USUARIO#${usuarioId}` },
+    ConsistentRead: true,
+  }));
+  if (reserva.Item?.propietarioColaboradorId) {
+    return obtenerPorId(reserva.Item.propietarioColaboradorId);
+  }
+  // Compatibilidad con perfiles históricos que todavía no tienen reserva.
   const result = await dynamoDb.send(
     new QueryCommand({
       TableName: tableColaboradores,
@@ -130,9 +159,23 @@ async function obtenerPorUsuarioId(usuarioId) {
 }
 
 async function actualizar(colaboradorId, data) {
+  if (data.estado !== undefined && !['ACTIVO', 'INACTIVO'].includes(data.estado)) {
+    throw new ErrorApp('Estado de colaborador inválido', 400, CODIGOS.VALIDACION);
+  }
+  if (data.rolProfesional !== undefined &&
+      (typeof data.rolProfesional !== 'string' || !data.rolProfesional.trim())) {
+    throw new ErrorApp('rolProfesional debe ser un texto no vacío', 400, CODIGOS.VALIDACION);
+  }
   const existente = await obtenerPorId(colaboradorId);
   if (!existente) {
     throw new ErrorApp('Colaborador no encontrado', 404, CODIGOS.NO_ENCONTRADO);
+  }
+
+  if (data.estado === 'ACTIVO' && existente.estado === 'INACTIVO') {
+    const cuenta = await usuariosRepository.obtenerPorId(existente.usuarioId);
+    if (!cuenta || cuenta.estado !== 'ACTIVO') {
+      throw new ErrorApp('La cuenta del usuario debe estar activa para reincorporar al colaborador', 409, CODIGOS.CONFLICTO);
+    }
   }
 
   if (data.cargoId && data.cargoId !== existente.cargoId) {
@@ -170,6 +213,14 @@ async function actualizar(colaboradorId, data) {
     expressionAttributeValues[':fechaBaja'] = new Date().toISOString();
   }
   if (data.estado === 'ACTIVO' && existente.estado === 'INACTIVO') {
+    updateParts.push('#fechaReincorporacion = :fechaReincorporacion');
+    expressionAttributeNames['#fechaReincorporacion'] = 'fechaReincorporacion';
+    expressionAttributeValues[':fechaReincorporacion'] = new Date().toISOString();
+    if (existente.fechaBaja) {
+      updateParts.push('#ultimaFechaBaja = :ultimaFechaBaja');
+      expressionAttributeNames['#ultimaFechaBaja'] = 'ultimaFechaBaja';
+      expressionAttributeValues[':ultimaFechaBaja'] = existente.fechaBaja;
+    }
     updateParts.push('#fechaBaja = :fechaBaja');
     expressionAttributeNames['#fechaBaja'] = 'fechaBaja';
     expressionAttributeValues[':fechaBaja'] = null;
@@ -184,6 +235,7 @@ async function actualizar(colaboradorId, data) {
       TableName: tableColaboradores,
       Key: { colaboradorId },
       UpdateExpression: `SET ${updateParts.join(', ')}`,
+      ConditionExpression: 'attribute_exists(colaboradorId)',
       ExpressionAttributeNames: expressionAttributeNames,
       ExpressionAttributeValues: expressionAttributeValues,
       ReturnValues: 'ALL_NEW',

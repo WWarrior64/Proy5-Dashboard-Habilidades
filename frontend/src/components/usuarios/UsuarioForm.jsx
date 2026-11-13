@@ -41,6 +41,7 @@ export default function UsuarioForm({ usuario, onSave, onCancel, loading = false
         <label className="label">Correo <span style={{ color: 'var(--color-danger)' }}>*</span></label>
         <input
           type="email"
+          disabled={Boolean(usuario)}
           className={`input ${errors.email ? 'input-error' : ''}`}
           value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}

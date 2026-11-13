@@ -5,10 +5,7 @@ const {
   GetCommand,
   PutCommand,
   UpdateCommand,
-  DeleteCommand,
   QueryCommand,
-  ScanCommand,
-  TransactWriteCommand,
 } = require('../../src/config/dynamodb.js');
 const {
   tablePostulaciones,
@@ -26,6 +23,20 @@ function skPostulacion(colaboradorId) {
 
 function ahoraISO() {
   return new Date().toISOString();
+}
+
+async function consultarTodasPaginas(parametros) {
+  const items = [];
+  let lastKey;
+  do {
+    const pagina = await dynamoDb.send(new QueryCommand({
+      ...parametros,
+      ...(lastKey && { ExclusiveStartKey: lastKey }),
+    }));
+    items.push(...(pagina.Items || []));
+    lastKey = pagina.LastEvaluatedKey;
+  } while (lastKey);
+  return items;
 }
 
 function validarEstadoPostulacion(estado) {
@@ -79,8 +90,9 @@ async function crearPostulacion(datos) {
     throw new ErrorApp('proyectoId y colaboradorId son obligatorios', 400, CODIGOS.VALIDACION);
   }
 
-  await validarColaboradorActivo(colaboradorId);
-  await validarProyectoActivo(proyectoId);
+  const colaborador = await validarColaboradorActivo(colaboradorId);
+  const proyecto = await validarProyectoActivo(proyectoId);
+  dedicacion.verificarLiderDistinto(proyecto, colaborador);
 
   const id = postulacionId || uuidv4();
   const ahora = ahoraISO();
@@ -122,28 +134,22 @@ async function crearPostulacion(datos) {
 }
 
 async function consultarPostulacionesProyecto(proyectoId) {
-  const resultado = await dynamoDb.send(
-    new QueryCommand({
-      TableName: tablePostulaciones,
-      KeyConditionExpression: '#p = :p',
-      ExpressionAttributeNames: { '#p': 'proyectoId' },
-      ExpressionAttributeValues: { ':p': proyectoId },
-    })
-  );
-  return resultado.Items || [];
+  return consultarTodasPaginas({
+    TableName: tablePostulaciones,
+    KeyConditionExpression: '#p = :p',
+    ExpressionAttributeNames: { '#p': 'proyectoId' },
+    ExpressionAttributeValues: { ':p': proyectoId },
+  });
 }
 
 async function consultarPostulacionesColaborador(colaboradorId) {
-  const resultado = await dynamoDb.send(
-    new QueryCommand({
-      TableName: tablePostulaciones,
-      IndexName: 'GSI1',
-      KeyConditionExpression: '#c = :c',
-      ExpressionAttributeNames: { '#c': 'colaboradorId' },
-      ExpressionAttributeValues: { ':c': colaboradorId },
-    })
-  );
-  return resultado.Items || [];
+  return consultarTodasPaginas({
+    TableName: tablePostulaciones,
+    IndexName: 'GSI1',
+    KeyConditionExpression: '#c = :c',
+    ExpressionAttributeNames: { '#c': 'colaboradorId' },
+    ExpressionAttributeValues: { ':c': colaboradorId },
+  });
 }
 
 async function obtenerPostulacion(proyectoId, colaboradorId) {
@@ -184,37 +190,33 @@ async function aceptarPostulacion(proyectoId, colaboradorId, datosRevision) {
   if (postulacion.estado !== 'PENDIENTE') {
     throw new ErrorApp('La postulación ya fue procesada', 409, CODIGOS.CONFLICTO);
   }
-  await validarProyectoActivo(proyectoId);
+  const proyecto = await validarProyectoActivo(proyectoId);
 
   const colaborador = await validarColaboradorActivo(colaboradorId);
-  if (colaborador.disponibilidad !== 'DISPONIBLE') {
-    throw new ErrorApp('El colaborador no está disponible', 400, CODIGOS.VALIDACION);
+  dedicacion.verificarLiderDistinto(proyecto, colaborador);
+  const reservaPrevia = colaborador.dedicacionReservada;
+  if (!Number.isFinite(reservaPrevia) || reservaPrevia < 0 || reservaPrevia > 100) {
+    throw new ErrorApp('El colaborador requiere inicializar su dedicación reservada antes de aceptar la postulación',
+      409, CODIGOS.CONFLICTO);
   }
+  // Los registros anteriores sin dedicación inicializada requieren revisión de sus asignaciones
+  // activas antes de regularizarse; no se puede suponer que su dedicación sea cero.
 
-  if (typeof porcentajeDedicacion !== 'number' || porcentajeDedicacion <= 0 || porcentajeDedicacion > 100) {
+  if (typeof porcentajeDedicacion !== 'number' || !Number.isFinite(porcentajeDedicacion) || porcentajeDedicacion <= 0 || porcentajeDedicacion > 100) {
     throw new ErrorApp('El porcentaje de dedicación debe estar entre 1 y 100', 400, CODIGOS.VALIDACION);
   }
   if (typeof horasAsignadas !== 'number' || !Number.isFinite(horasAsignadas) || horasAsignadas <= 0) {
     throw new ErrorApp('Las horas asignadas deben ser un número positivo', 400, CODIGOS.VALIDACION);
   }
 
-  const asignacionesActivas = await dynamoDb.send(new QueryCommand({
-    TableName: tableAsignaciones,
-    IndexName: 'GSI1',
-    KeyConditionExpression: '#c = :c AND begins_with(#s, :prefijo)',
-    ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'colaboradorFechaKey' },
-    ExpressionAttributeValues: { ':c': colaboradorId, ':prefijo': 'ACTIVA#' },
-    ProjectionExpression: 'porcentajeDedicacion',
-  }));
-  const sumaActual = (asignacionesActivas.Items || []).reduce(
-    (acc, item) => acc + (item.porcentajeDedicacion || 0),
-    0
-  );
-  if (sumaActual + porcentajeDedicacion > 100) {
-    throw new ErrorApp('La dedicación acumulada del colaborador superaría el 100 %', 400, CODIGOS.VALIDACION);
+  // La reserva transaccional es la fuente de verdad, sin depender de un GSI eventual.
+  // DynamoDB verificará el límite de 100 % de forma atómica durante la aceptación.
+  if ((reservaPrevia ?? 0) + porcentajeDedicacion > 100) {
+    throw new ErrorApp('La dedicación acumulada del colaborador superaría el 100 %', 409, CODIGOS.CONFLICTO);
   }
 
-  const asignacionId = uuidv4();
+  await dedicacion.verificarAsignacionUnica(proyectoId, colaboradorId);
+  const asignacionId = dedicacion.idAsignacionUnica(proyectoId, colaboradorId);
   const ahora = ahoraISO();
   const asignacion = {
     asignacionId,
@@ -237,15 +239,7 @@ async function aceptarPostulacion(proyectoId, colaboradorId, datosRevision) {
   try {
     await dedicacion.ejecutar([
         dedicacion.reserva(colaboradorId, porcentajeDedicacion),
-        {
-          ConditionCheck: {
-            TableName: tableProyectos,
-            Key: { proyectoId },
-            ConditionExpression: '#est = :activo',
-            ExpressionAttributeNames: { '#est': 'estado' },
-            ExpressionAttributeValues: { ':activo': 'ACTIVO' },
-          },
-        },
+        dedicacion.condicionProyectoAsignable(proyectoId, colaborador.usuarioId, tableProyectos),
         {
           Update: {
             TableName: tablePostulaciones,
@@ -273,12 +267,9 @@ async function aceptarPostulacion(proyectoId, colaboradorId, datosRevision) {
         },
       ]);
   } catch (e) {
+    // dedicacion.ejecutar convierte condiciones fallidas en ErrorApp(409).
     if (e.name === 'ConditionalCheckFailedException') {
-      throw new ErrorApp(
-        'La postulación ya fue procesada o el proyecto/colaborador ya no son válidos',
-        409,
-        CODIGOS.CONFLICTO
-      );
+      throw new ErrorApp('La postulación ya fue procesada o las condiciones cambiaron', 409, CODIGOS.CONFLICTO);
     }
     throw e;
   }

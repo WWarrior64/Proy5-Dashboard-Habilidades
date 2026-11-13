@@ -11,13 +11,13 @@ Administración de cargos profesionales. Contiene el catálogo de cargos que RR.
 |-------|-------------|------|-------------|
 | cargoId | Sí | String (UUID) | Identificador único del cargo. |
 | nombre | Sí | String | Nombre del cargo, ejemplo: Desarrollador, Diseñador, Analista. |
-| descripcion | Sí | String | Descripción de las responsabilidades del cargo. |
+| descripcion | No | String o null | Descripción de las responsabilidades del cargo. |
 | categoria | No | String | Agrupación del cargo, ejemplo: Tecnología, Diseño, Análisis. |
 | estado | Sí | String | ACTIVO o INACTIVO. |
 | fechaCreacion | Sí | String (ISO 8601) | Fecha de creación del cargo. |
 | fechaActualizacion | Sí | String (ISO 8601) | Fecha de última modificación. |
-| creadoPor | Sí | String | Usuario de RR. HH. que registró el cargo. |
-| actualizadoPor | No | String | Usuario que realizó la última modificación. |
+
+El campo `cargoId` es generado por el backend mediante UUID cuando no se incluye en la solicitud.
 
 ## Claves e índices
 
@@ -29,9 +29,9 @@ Administración de cargos profesionales. Contiene el catálogo de cargos que RR.
 
 ## Patrones de consulta
 
-1. `GET /cargos/{cargoId}` → Query por clave primaria `cargoId`.
-2. `GET /cargos?estado=ACTIVO` → Query GSI1 con partición `estado = 'ACTIVO'`.
-3. `GET /cargos?estado=ACTIVO&nombreLike=Dev` → Query GSI1 con `estado = 'ACTIVO'` y filtro sobre `nombre`.
+1. `GET /cargos/{cargoId}` → GetItem por clave primaria `cargoId`.
+2. `GET /cargos?estado=ACTIVO` → Query al GSI1 con `estado = 'ACTIVO'`.
+3. `GET /cargos` sin estado → Scan paginado; el endpoint no implementa el parámetro `nombreLike`.
 
 ## Reglas de negocio
 
@@ -39,3 +39,4 @@ Administración de cargos profesionales. Contiene el catálogo de cargos que RR.
 - No se permite eliminar físicamente un cargo que tenga colaboradores relacionados.
 - Si deja de utilizarse, se cambia su estado a `INACTIVO`.
 - No se asignan nuevos colaboradores a cargos inactivos.
+- El modal administrativo de RRHH muestra los cargos activos por defecto; permite consultar los desactivados o todos mediante el filtro de estado y confirmar explícitamente su activación/desactivación.

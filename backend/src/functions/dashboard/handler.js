@@ -4,14 +4,17 @@ const dashboardRepo = require('../../repositories/dashboard.repository.js');
 
 function responderError(e) {
   if (e instanceof ErrorApp) return error(e.message, e.codigo, e.codigoError);
-  return error(e.message || 'Error interno del servidor', 500, CODIGOS.INTERNO);
+  return error('Error interno del servidor', 500, CODIGOS.INTERNO);
 }
 
-function obtenerNumerico(query, nombre, valorPorDefecto) {
-  const raw = query && query[nombre];
+function obtenerNumerico(query, nombre, valorPorDefecto, maximo) {
+  const raw = query?.[nombre];
   if (raw === undefined || raw === '') return valorPorDefecto;
   const valor = Number(raw);
-  return Number.isFinite(valor) ? valor : valorPorDefecto;
+  if (!Number.isInteger(valor) || valor < 1 || valor > maximo) {
+    throw new ErrorApp(`${nombre} debe ser un entero entre 1 y ${maximo}`, 400, CODIGOS.VALIDACION);
+  }
+  return valor;
 }
 
 async function obtenerColaboradoresActivos(event, context) {
@@ -46,6 +49,12 @@ async function obtenerDistribucionHabilidades(event, context) {
     const distribucion = await dashboardRepo.obtenerDistribucionHabilidades();
     return exito({ distribucion });
   } catch (e) {
+    // CloudWatch conserva la causa técnica; el cliente solo recibe el error genérico.
+    console.error('dashboard/habilidades falló', {
+      requestId: event.requestContext?.requestId,
+      nombre: e.name,
+      mensaje: e.message,
+    });
     return responderError(e);
   }
 }
@@ -63,8 +72,8 @@ async function obtenerActividadReciente(event, context) {
   try {
     const query = event.queryStringParameters || {};
     const eventos = await dashboardRepo.obtenerActividadReciente({
-      dias: obtenerNumerico(query, 'dias', 7),
-      limite: obtenerNumerico(query, 'limite', 50),
+      dias: obtenerNumerico(query, 'dias', 7, 365),
+      limite: obtenerNumerico(query, 'limite', 50, 100),
     });
     return exito({ total: eventos.length, eventos });
   } catch (e) {

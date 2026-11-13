@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { Clock3, ShieldCheck, UserCheck, UserRound, UsersRound } from 'lucide-react'
+import EmpleadoLogoutButton from '../../components/layout/EmpleadoLogoutButton.jsx'
+import './administrador-dashboard.css'
 import { usuariosService } from '../../services/usuarios.service.js'
+import api from '../../services/api.js'
 import { proyectosService } from '../../services/proyectos.service.js'
 import Statistics from '../../components/dashboard/Statistics.jsx'
 import ActivityList from '../../components/dashboard/ActivityList.jsx'
@@ -11,12 +15,23 @@ import EmptyState from '../../components/common/EmptyState.jsx'
 import { DEMO_USUARIOS, DEMO_ACTIVIDADES } from '../../data/demoData.js'
 import { getApiErrorMessage } from '../../utils/apiErrors.js'
 
+const menu = [
+  ['Dashboard', '/dashboards/administrador'],
+  ['Usuarios', '/usuarios'],
+  ['Roles y permisos', '/roles-permisos'],
+  ['Configuración', '/configuracion'],
+  ['Auditoría', '/auditoria'],
+]
+
 export default function AdministradorDashboard() {
   const navigate = useNavigate()
   const [usuarios, setUsuarios] = useState([])
   const [proyectos, setProyectos] = useState([])
+  const [actividadReciente, setActividadReciente] = useState([])
+  const [datosCargados, setDatosCargados] = useState({ usuarios: false, proyectos: false, actividad: false })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const demoMode = import.meta.env.VITE_DEMO_MODE === 'true'
 
   const loadDashboardData = useCallback(async () => {
@@ -24,13 +39,27 @@ export default function AdministradorDashboard() {
     setLoading(true)
     setError(null)
     try {
-      const [usuariosResp, proyectosResp] = await Promise.allSettled([
-        usuariosService.list({}),
+      const [usuariosResp, proyectosResp, actividadResp] = await Promise.allSettled([
+        usuariosService.listAll(),
         proyectosService.list({}),
+        api.get('/dashboard/actividad', { params: { dias: 30, limite: 30 } }),
       ])
 
+      setDatosCargados({
+        usuarios: usuariosResp.status === 'fulfilled',
+        proyectos: proyectosResp.status === 'fulfilled',
+        actividad: actividadResp.status === 'fulfilled',
+      })
       if (usuariosResp.status === 'rejected') setError(getApiErrorMessage(usuariosResp.reason))
       if (proyectosResp.status === 'rejected') setError(getApiErrorMessage(proyectosResp.reason))
+      if (actividadResp.status === 'rejected') setError(getApiErrorMessage(actividadResp.reason))
+      if (actividadResp.status === 'fulfilled') {
+        const eventos = actividadResp.value.data?.datos?.eventos || []
+        setActividadReciente(eventos.map(item => ({
+          ...item,
+          nombre: item.nombre || item.proyectoId || item.id || 'Evento sin nombre',
+        })))
+      }
 
       if (usuariosResp.status === 'fulfilled') {
         const data = usuariosResp.value.data
@@ -59,17 +88,24 @@ export default function AdministradorDashboard() {
     loadDashboardData()
   }, [loadDashboardData])
 
-  const totalUsuarios = demoMode ? DEMO_USUARIOS.length : usuarios.length
-  const activosUsuarios = demoMode ? DEMO_USUARIOS.filter((u) => u.estado === 'ACTIVO').length : usuarios.filter((u) => u.estado === 'ACTIVO').length
+  const totalUsuarios = demoMode ? DEMO_USUARIOS.length : datosCargados.usuarios ? usuarios.length : '—'
+  const activosUsuarios = demoMode ? DEMO_USUARIOS.filter((u) => u.estado === 'ACTIVO').length
+    : datosCargados.usuarios ? usuarios.filter((u) => u.estado === 'ACTIVO').length : '—'
 
   const stats = [
-    { title: 'Usuarios', value: totalUsuarios, subtitle: `${activosUsuarios} activos`, icon: '👥' },
-    { title: 'Activos', value: activosUsuarios, subtitle: 'Usuarios con acceso', icon: '✓' },
-    { title: 'Roles', value: 4, subtitle: 'Empleado, RRHH, Líder, Admin', icon: '🎭' },
-    { title: 'Pendientes', value: demoMode ? 0 : proyectos.filter((p) => p.estado === 'BORRADOR').length, subtitle: 'Proyectos por iniciar', icon: '⏳' },
+    { title: 'Usuarios', value: totalUsuarios, subtitle: `${activosUsuarios} activos`, icon: <UsersRound size={19} /> },
+    { title: 'Activos', value: activosUsuarios, subtitle: 'Usuarios con acceso', icon: <UserCheck size={19} /> },
+    { title: 'Roles', value: 4, subtitle: 'Empleado, RRHH, Líder, Admin', icon: <ShieldCheck size={19} /> },
+    { title: 'Pendientes', value: demoMode ? 0 : datosCargados.proyectos ? proyectos.filter((p) => p.estado === 'BORRADOR').length : '—', subtitle: 'Proyectos por iniciar', icon: <Clock3 size={19} /> },
   ]
 
-  const actividades = demoMode ? DEMO_ACTIVIDADES : []
+  const actividades = demoMode ? DEMO_ACTIVIDADES : actividadReciente
+  const termino = busquedaSuperior.trim().toLocaleLowerCase('es')
+  const actividadesVisibles = actividades.filter(item =>
+    [item.tipo, item.nombre, item.fecha, item.estado].join(' ').toLocaleLowerCase('es').includes(termino))
+  const usuariosVisibles = (demoMode ? DEMO_USUARIOS : usuarios).filter(item =>
+    [item.nombre, item.email, item.rol, item.estado].join(' ').toLocaleLowerCase('es').includes(termino))
+    .sort((a, b) => (b.fechaCreacion || '').localeCompare(a.fechaCreacion || '')).slice(0, 3)
 
   const quickActions = [
     { label: 'Gestionar usuarios', onClick: () => navigate('/usuarios') },
@@ -78,50 +114,78 @@ export default function AdministradorDashboard() {
   ]
 
   return (
-    <>
-    <div className="page-header">
-      <div>
-        <h1 className="page-title">Resumen</h1>
-        <p className="page-subtitle">Panel de control para administradores</p>
-      </div>
-      {demoMode && (
-        <div style={{ background: '#dbeafe', color: '#1e40af', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontSize: '0.875rem', marginBottom: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span>📋</span> Modo demostración - Datos de ejemplo
+    <div className="emp-dashboard admin-dashboard-page">
+      <aside className="emp-sidebar">
+        <div className="emp-sidebar-top">
+          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-divider" />
+          <nav className="emp-sidebar-menu" aria-label="Menú de administrador">
+            {menu.map(([nombre, ruta]) => ruta ? (
+              <NavLink key={nombre} to={ruta} end className={({ isActive }) =>
+                'emp-sidebar-item' + (isActive ? ' active' : '')
+              }>{nombre}</NavLink>
+            ) : (
+              <span key={nombre} className="emp-sidebar-item" aria-disabled="true" title="Próximamente" style={{ cursor: 'default' }}>
+                {nombre}
+              </span>
+            ))}
+          </nav>
         </div>
-      )}
-    </div>
+        <div className="emp-sidebar-bottom">
+          <span className="emp-sidebar-user">Administrador</span>
+          <EmpleadoLogoutButton />
+        </div>
+      </aside>
+
+      <main className="emp-main">
+        <header className="emp-header">
+          <h1 className="emp-header-title">Dashboard</h1>
+          <div className="emp-header-right">
+            <input className="emp-search" type="search" placeholder="Buscar..."
+              aria-label="Buscar usuarios y actividad desde el encabezado"
+              value={busquedaSuperior} onChange={evento => setBusquedaSuperior(evento.target.value)} />
+            <NavLink to="/perfil" className="emp-user-icon" aria-label="Abrir mi perfil" title="Mi perfil">
+              <UserRound size={22} aria-hidden="true" />
+            </NavLink>
+          </div>
+        </header>
+        <section className="emp-content admin-dashboard-content" aria-labelledby="admin-dashboard-title">
+          <h2 id="admin-dashboard-title" className="admin-dashboard-title">Resumen general</h2>
+          {demoMode && <p className="admin-dashboard-preview">Modo demostración · Datos de ejemplo</p>}
 
     {loading ? (
-      <Loading />
-    ) : error ? (
-      <div className="empty-state" style={{ textAlign: 'center', padding: '2rem' }}>
-        <span style={{ fontSize: '3rem' }}>⚠</span>
-        <p>{error}</p>
-        <Button variant="outline" onClick={loadDashboardData}>Reintentar</Button>
-      </div>
+      <div className="admin-dashboard-loading"><Loading /></div>
     ) : (
       <>
-        <Statistics stats={stats} />
+        {error && (
+          <div className="admin-dashboard-error" role="alert">
+            <p>{error}</p>
+            <Button variant="outline" onClick={loadDashboardData}>Reintentar</Button>
+          </div>
+        )}
+        <div className="admin-dashboard-statistics"><Statistics stats={stats} /></div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-          <ActivityList activities={actividades} />
+        <div className="admin-dashboard-columns">
+          <div className="admin-dashboard-panel admin-dashboard-activity">
+            <ActivityList activities={actividadesVisibles} />
+          </div>
 
           <div className="card-section">
             <div className="card-section-header">
               <h2 className="card-section-title">Usuarios recientes</h2>
             </div>
             <div className="card-section-body">
-              {(demoMode ? DEMO_USUARIOS : usuarios).length > 0 ? (
+              {usuariosVisibles.length > 0 ? (
                 <>
-                  {(demoMode ? DEMO_USUARIOS : usuarios).slice(0, 3).map((u) => (
-                    <div key={u.usuarioId} style={{ padding: '0.75rem 0', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  {usuariosVisibles.map((u) => (
+                    <div key={u.usuarioId} className="admin-dashboard-user-row">
                       <div>
-                        <p style={{ fontSize: '0.95rem', fontWeight: '500', margin: 0, color: 'var(--color-text)' }}>{u.nombre}</p>
-                        <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0' }}>{u.email}</p>
+                        <p className="admin-dashboard-user-name">{u.nombre}</p>
+                        <p className="admin-dashboard-user-email">{u.email}</p>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <span className="badge" style={{ background: u.rol === 'ADMINISTRADOR' || u.rol === 'RRHH' ? '#dbeafe' : '#dcfce7', color: u.rol === 'ADMINISTRADOR' || u.rol === 'RRHH' ? '#1e40af' : '#166534' }}>{u.rol}</span>
-                        <p style={{ fontSize: '0.75rem', color: u.estado === 'ACTIVO' ? '#166534' : '#991b1b', margin: '0.25rem 0 0' }}>{u.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'}</p>
+                      <div className="admin-dashboard-user-meta">
+                        <span className={'admin-dashboard-role' + (u.rol === 'ADMINISTRADOR' || u.rol === 'RRHH' ? ' manager' : '')}>{u.rol}</span>
+                        <p className={'admin-dashboard-user-state' + (u.estado === 'ACTIVO' ? ' active' : '')}>{u.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'}</p>
                       </div>
                     </div>
                   ))}
@@ -133,22 +197,26 @@ export default function AdministradorDashboard() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '1.5rem' }}>
-          <QuickActions actions={quickActions} />
+        <div className="admin-dashboard-columns admin-dashboard-lower">
+          <div className="admin-dashboard-panel admin-dashboard-quick-actions">
+            <QuickActions actions={quickActions} />
+          </div>
 
           <div className="card-section">
             <div className="card-section-header">
               <h2 className="card-section-title">Acceso rápido</h2>
             </div>
             <div className="card-section-body">
-              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', textAlign: 'center' }}>
-                Utilice el menú lateral para navegar a Usuarios, Colaboradores o Proyectos.
+              <p className="admin-dashboard-access-text">
+                Utiliza las acciones rápidas para gestionar usuarios, colaboradores y proyectos. El menú lateral conserva las herramientas del Administrador.
               </p>
             </div>
           </div>
         </div>
       </>
     )}
-    </>
+        </section>
+      </main>
+    </div>
   )
 }

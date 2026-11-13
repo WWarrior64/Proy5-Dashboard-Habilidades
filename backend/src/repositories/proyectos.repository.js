@@ -4,11 +4,9 @@ const {
   GetCommand,
   PutCommand,
   UpdateCommand,
-  DeleteCommand,
   QueryCommand,
-  ScanCommand,
 } = require('../../src/config/dynamodb.js');
-const { tableProyectos, tableUsuarios } = require('../../src/config/environment.js');
+const { tableProyectos, tableUsuarios, tableAsignaciones, tableProyectoHabilidad } = require('../../src/config/environment.js');
 const { ErrorApp, CODIGOS } = require('../../src/utils/errors.js');
 const cache = require('../../src/services/cache.service.js');
 
@@ -17,6 +15,20 @@ const ESTADOS_VALIDOS = ['BORRADOR', 'ACTIVO', 'PAUSADO', 'COMPLETADO', 'CANCELA
 
 function ahoraISO() {
   return new Date().toISOString();
+}
+
+async function consultarTodasPaginas(parametros) {
+  const items = [];
+  let lastKey;
+  do {
+    const pagina = await dynamoDb.send(new QueryCommand({
+      ...parametros,
+      ...(lastKey && { ExclusiveStartKey: lastKey }),
+    }));
+    items.push(...(pagina.Items || []));
+    lastKey = pagina.LastEvaluatedKey;
+  } while (lastKey);
+  return items;
 }
 
 function claveProyecto(proyectoId) {
@@ -76,6 +88,47 @@ function validarEstado(estado) {
   }
 }
 
+async function verificarHabilidadesParaPublicar(proyectoId) {
+  const respuesta = await dynamoDb.send(new QueryCommand({
+    TableName: tableProyectoHabilidad,
+    KeyConditionExpression: '#proyecto = :proyecto',
+    ExpressionAttributeNames: { '#proyecto': 'proyectoId' },
+    ExpressionAttributeValues: { ':proyecto': proyectoId },
+    ConsistentRead: true,
+    Limit: 1,
+  }));
+  if (!respuesta.Items?.length) {
+    throw new ErrorApp('Selecciona al menos una habilidad requerida antes de publicar el proyecto',
+      400, CODIGOS.VALIDACION);
+  }
+}
+
+async function comprobarPrimeraPublicacion(proyectoId, estado) {
+  if (estado !== 'ACTIVO') return false;
+  await verificarHabilidadesParaPublicar(proyectoId);
+  const resultado = await dynamoDb.send(new GetCommand({
+    TableName: tableProyectos,
+    Key: { proyectoId },
+    ConsistentRead: true,
+  }));
+  if (!resultado.Item) {
+    throw new ErrorApp('Proyecto no encontrado', 404, CODIGOS.NO_ENCONTRADO);
+  }
+  return resultado.Item.estado === 'BORRADOR';
+}
+
+function validarFechas(inicio, fin) {
+  for (const valor of [inicio, fin]) {
+    if (valor !== undefined && valor !== null &&
+      (typeof valor !== 'string' || !Number.isFinite(Date.parse(valor)))) {
+      throw new ErrorApp('Las fechas deben ser cadenas de fecha válidas', 400, CODIGOS.VALIDACION);
+    }
+  }
+  if (inicio && fin && Date.parse(fin) < Date.parse(inicio)) {
+    throw new ErrorApp('fechaFin no puede ser anterior a fechaInicio', 400, CODIGOS.VALIDACION);
+  }
+}
+
 function itemBaseProyecto(proyectoId, datos, ahora) {
   const { estado, objetivo, fechaInicio, fechaFin, fechaPublicacion } = datos;
   return {
@@ -85,7 +138,7 @@ function itemBaseProyecto(proyectoId, datos, ahora) {
     liderId: datos.liderId,
     horasRequeridas: datos.horasRequeridas,
     estado,
-    fechaPublicacion: fechaPublicacion || ahora,
+    ...(estado === 'ACTIVO' && { fechaPublicacion: fechaPublicacion || ahora }),
     fechaCreacion: ahora,
     fechaActualizacion: ahora,
     creadoPor: datos.creadoPor,
@@ -120,7 +173,14 @@ async function crearProyecto(datos) {
     throw new ErrorApp('Las horas requeridas deben ser un número positivo', 400, CODIGOS.VALIDACION);
   }
 
-  const estado = datos.estado && ESTADOS_VALIDOS.includes(datos.estado) ? datos.estado : 'BORRADOR';
+  const estado = datos.estado || 'BORRADOR';
+  validarEstado(estado);
+  if (estado === 'ACTIVO') {
+    throw new ErrorApp('Crea el proyecto como BORRADOR, registra sus habilidades requeridas y luego publícalo',
+      400, CODIGOS.VALIDACION);
+  }
+  validarFechas(datos.fechaInicio, datos.fechaFin);
+  if (datos.fechaPublicacion !== undefined) validarFechas(datos.fechaPublicacion);
   await validarLider(liderId);
 
   const proyectoId = proyectoIdEntrada || uuidv4();
@@ -193,8 +253,7 @@ async function listarProyectos(filtros = {}) {
     if (condicionesFiltro.length > 0) {
       params.FilterExpression = condicionesFiltro.join(' AND ');
     }
-    const resultado = await dynamoDb.send(new QueryCommand(params));
-    items = resultado.Items || [];
+    items = await consultarTodasPaginas(params);
   } else if (estado) {
     nombresAtributos['#est'] = 'estado';
     valoresAtributos[':est'] = estado;
@@ -210,22 +269,55 @@ async function listarProyectos(filtros = {}) {
       valoresAtributos[':fecha'] = fecha;
       params.FilterExpression = '#fp >= :fecha';
     }
-    const resultado = await dynamoDb.send(new QueryCommand(params));
-    items = resultado.Items || [];
+    items = await consultarTodasPaginas(params);
   } else {
-    throw new ErrorApp('Se requiere al menos un filtro: estado o liderId', 400, CODIGOS.VALIDACION);
+    // Listado general: consultar cada partición del GSI1 evita un Scan de proyectos.
+    const paginas = await Promise.all(ESTADOS_VALIDOS.map(estadoActual => consultarTodasPaginas({
+      TableName: tableProyectos,
+      IndexName: 'GSI1',
+      KeyConditionExpression: '#est = :est',
+      ...(fecha && { FilterExpression: '#fp >= :fecha' }),
+      ExpressionAttributeNames: {
+        '#est': 'estado',
+        ...(fecha && { '#fp': 'fechaPublicacion' }),
+      },
+      ExpressionAttributeValues: {
+        ':est': estadoActual,
+        ...(fecha && { ':fecha': fecha }),
+      },
+    })));
+    items = paginas.flat();
   }
 
   cache.guardar(clave, items, CACHE_TTL_MS);
   return items;
 }
 
+async function verificarSinAsignacionesActivas(proyectoId) {
+  const resultado = await dynamoDb.send(new QueryCommand({
+    TableName: tableAsignaciones,
+    IndexName: 'GSI2',
+    KeyConditionExpression: '#p = :p AND begins_with(#s, :activa)',
+    ExpressionAttributeNames: { '#p': 'proyectoId', '#s': 'proyectoFechaKey' },
+    ExpressionAttributeValues: { ':p': proyectoId, ':activa': 'ACTIVA#' },
+    Limit: 1,
+  }));
+  if (resultado?.Items?.length) {
+    throw new ErrorApp('Desvincule o finalice las asignaciones activas antes de cerrar el proyecto', 409, CODIGOS.CONFLICTO);
+  }
+}
+
 async function actualizarProyecto(proyectoId, cambios) {
   const { nombre, descripcion, liderId, horasRequeridas, fechaInicio, fechaFin, estado } = cambios;
+  if (fechaInicio !== undefined || fechaFin !== undefined) {
+    const actual = await obtenerProyecto(proyectoId);
+    validarFechas(fechaInicio ?? actual.fechaInicio, fechaFin ?? actual.fechaFin);
+  }
   const sets = [];
   const nombresAtributos = {};
   const valoresAtributos = {};
   const ahora = ahoraISO();
+  const primeraPublicacion = estado === 'ACTIVO' && await comprobarPrimeraPublicacion(proyectoId, estado);
 
   if (nombre !== undefined) {
     nombresAtributos['#n'] = 'nombre';
@@ -263,12 +355,20 @@ async function actualizarProyecto(proyectoId, cambios) {
   }
   if (estado !== undefined) {
     validarEstado(estado);
+    if (['CANCELADO', 'COMPLETADO'].includes(estado)) await verificarSinAsignacionesActivas(proyectoId);
     nombresAtributos['#est'] = 'estado';
     valoresAtributos[':est'] = estado;
     sets.push('#est = :est');
     nombresAtributos['#s2'] = 'estadoFechaKey';
     valoresAtributos[':s2'] = `${estado}#${ahora}`;
     sets.push('#s2 = :s2');
+    if (primeraPublicacion) {
+      nombresAtributos['#fp'] = 'fechaPublicacion';
+      nombresAtributos['#fpk'] = 'fechaPublicacionKey';
+      valoresAtributos[':fp'] = ahora;
+      valoresAtributos[':fpk'] = `${ahora}#${proyectoId}`;
+      sets.push('#fp = :fp', '#fpk = :fpk');
+    }
   }
 
   nombresAtributos['#ua'] = 'fechaActualizacion';
@@ -304,17 +404,23 @@ async function actualizarProyecto(proyectoId, cambios) {
 
 async function cambiarEstado(proyectoId, estado) {
   validarEstado(estado);
+  const primeraPublicacion = await comprobarPrimeraPublicacion(proyectoId, estado);
+  if (['CANCELADO', 'COMPLETADO'].includes(estado)) await verificarSinAsignacionesActivas(proyectoId);
   const ahora = ahoraISO();
   try {
     const resultado = await dynamoDb.send(new UpdateCommand({
       TableName: tableProyectos,
       Key: { proyectoId },
-      UpdateExpression: 'SET #est = :est, #s2 = :s2, #ua = :ua',
-      ExpressionAttributeNames: { '#est': 'estado', '#s2': 'estadoFechaKey', '#ua': 'fechaActualizacion' },
+      UpdateExpression: `SET #est = :est, #s2 = :s2, #ua = :ua${primeraPublicacion ? ', #fp = :fp, #fpk = :fpk' : ''}`,
+      ExpressionAttributeNames: {
+        '#est': 'estado', '#s2': 'estadoFechaKey', '#ua': 'fechaActualizacion',
+        ...(primeraPublicacion && { '#fp': 'fechaPublicacion', '#fpk': 'fechaPublicacionKey' }),
+      },
       ExpressionAttributeValues: {
         ':est': estado,
         ':s2': `${estado}#${ahora}`,
         ':ua': ahora,
+        ...(primeraPublicacion && { ':fp': ahora, ':fpk': `${ahora}#${proyectoId}` }),
       },
       ConditionExpression: 'attribute_exists(proyectoId)',
       ReturnValues: 'ALL_NEW',
@@ -340,16 +446,13 @@ async function listarProyectosActivos() {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.send(
-    new QueryCommand({
+  const items = await consultarTodasPaginas({
       TableName: tableProyectos,
       IndexName: 'GSI1',
       KeyConditionExpression: '#est = :est',
       ExpressionAttributeNames: { '#est': 'estado' },
       ExpressionAttributeValues: { ':est': 'ACTIVO' },
-    })
-  );
-  const items = resultado.Items || [];
+  });
 
   cache.guardar(clave, items, CACHE_TTL_MS);
   return items;

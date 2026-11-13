@@ -1,4 +1,3 @@
-const Joi = require('joi');
 const { error } = require('../utils/responses');
 const { CODIGOS } = require('../utils/errors');
 
@@ -21,17 +20,14 @@ function validar(schema) {
         }
       }
 
-      const { valor, error: errorValidacion } = schema.validate(body, { abortEarly: false });
+      const { value, error: errorValidacion } = schema.validate(body, { abortEarly: false });
 
       if (errorValidacion) {
-        const detalles = errorValidacion.details.map((d) => ({
-          campo: d.path.join('.'),
-          mensaje: d.message,
-        }));
-        return error('Error de validación', 400, CODIGOS.VALIDACION);
+        const detalles = errorValidacion.details.map((detalle) => detalle.message).join('; ');
+        return error(`Error de validación: ${detalles}`, 400, CODIGOS.VALIDACION);
       }
 
-      event.bodyValidado = valor;
+      event.bodyValidado = value;
       return await handler(event, {});
     } catch (err) {
       return error(err.message, err.codigo || 500, err.codigoError);
@@ -39,6 +35,13 @@ function validar(schema) {
   };
 }
 
-module.exports = { validar };
+function validarDatos(schema, datos) {
+  const { value, error: fallo } = schema.validate(datos, { abortEarly: false, noDefaults: true });
+  if (fallo) {
+    const { ErrorApp } = require('../utils/errors');
+    throw new ErrorApp(`Error de validación: ${fallo.details.map((detalle) => detalle.message).join('; ')}`, 400, CODIGOS.VALIDACION);
+  }
+  return value;
+}
 
-module.exports = { validar };
+module.exports = { validar, validarDatos };

@@ -33,11 +33,13 @@ Solicitudes de participación. Registra las solicitudes de los colaboradores que
 
 1. `GET /proyectos/{proyectoId}/postulaciones` → Query por clave primaria con `proyectoId = :id`.
 2. `GET /colaboradores/{colaboradorId}/postulaciones` → Query GSI1 con `colaboradorId = :id`.
-3. `GET /postulaciones/{proyectoId}/{colaboradorId}` → Query por clave primaria con `proyectoId` y `postulacionKey`.
+3. `GET /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}` → GetItem por `proyectoId` y `postulacionKey`.
+4. `PATCH /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/estado` → Aceptar, rechazar o retirar según el estado y los permisos.
 
 ## Reglas de negocio
 
 - Un colaborador no puede postularse dos veces al mismo proyecto mientras exista su registro de postulación.
-- Solo se puede postular a proyectos activos.
-- La aceptación de una postulación debe gestionar la creación de la asignación correspondiente.
-- Se conserva el historial de las postulaciones rechazadas, aceptadas o retiradas.
+- Solo se puede postular a proyectos activos. Un usuario con rol `LIDER_PROYECTO` puede postularse como colaborador a proyectos de otros líderes, pero no a un proyecto que dirige; se compara `Colaboradores.usuarioId` con `Proyectos.liderId`.
+- La aceptación crea la asignación y reserva la dedicación mediante una transacción atómica; el porcentaje acumulado se comprueba en `Colaboradores.dedicacionReservada`, sin depender de lecturas eventualmente consistentes del GSI. La misma transacción vuelve a comprobar que el proyecto siga activo y que el colaborador no sea el propio líder.
+- Las consultas de postulaciones recorren todas las páginas de DynamoDB.
+- Se conserva el historial de las postulaciones rechazadas, aceptadas o retiradas. No se crean asignaciones duplicadas para el mismo colaborador y proyecto aunque exista una relación histórica desvinculada.

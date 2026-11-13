@@ -12,9 +12,8 @@ Matriz N:M de colaboradores y habilidades. Relaciona los colaboradores con sus h
 | colaboradorId | Sí | String (UUID) | Identificador del colaborador. |
 | habilidadId | Sí | String (UUID) | Identificador de la habilidad. |
 | nivel | Sí | String | Nivel de dominio: JUNIOR, MID o SENIOR. |
-| aniosExperiencia | No | Number | Años de experiencia en la habilidad. |
-| fechaUltimoUso | No | String (ISO 8601) | Fecha en que utilizó la habilidad por última vez. |
-| observaciones | No | String | Comentarios sobre el dominio de la habilidad. |
+| anosExperiencia | Sí | Number | Años de experiencia, por defecto 0; la API admite temporalmente `aniosExperiencia` como alias de entrada. |
+| observaciones | No | String | Comentarios opcionales sobre la habilidad; los formularios omiten este atributo cuando queda vacío. |
 | fechaCreacion | Sí | String (ISO 8601) | Fecha en que se agregó la habilidad al perfil. |
 | fechaActualizacion | Sí | String (ISO 8601) | Fecha de última actualización del nivel o experiencia. |
 
@@ -30,8 +29,8 @@ Matriz N:M de colaboradores y habilidades. Relaciona los colaboradores con sus h
 ## Patrones de consulta
 
 1. `GET /colaboradores/{colaboradorId}/habilidades` → Query por clave primaria con `colaboradorId = :id`.
-2. `GET /habilidades/{habilidadId}/colaboradores?nivel=SENIOR` → Query GSI1 con `habilidadId = :id` y filtro sobre `nivel`.
-3. `GET /buscar-colaboradores?habilidadId=X&nivelMinimo=MID` → Query GSI1 con `habilidadId = :id`, ordenación `nivelColaboradorKey` comienza con el nivel requerido.
+2. `GET /api/v1/busqueda/colaboradores?habilidades=X&nivelMinimo=MID` → Usa el GSI1 de ColaboradorHabilidad y compara los niveles en la lógica de búsqueda.
+3. La consulta interna `listarPorHabilidad(habilidadId)` admite paginación y filtros de nivel; no hay un endpoint público `GET /habilidades/{habilidadId}/colaboradores`.
 
 ## Reglas de negocio
 
@@ -39,3 +38,4 @@ Matriz N:M de colaboradores y habilidades. Relaciona los colaboradores con sus h
 - El nivel debe pertenecer a JUNIOR, MID o SENIOR.
 - El nivel puede actualizarse sin crear un nuevo registro (UpdateItem sobre la misma clave).
 - Para buscar candidatos se consulta por habilidad y se compara el nivel requerido con el nivel del colaborador.
+- Las relaciones del colaborador se conservan cuando el perfil se da de baja y pueden seguir utilizándose tras su reincorporación; los perfiles inactivos quedan excluidos por defecto de la selección de talento.

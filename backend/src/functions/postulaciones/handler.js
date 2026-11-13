@@ -6,10 +6,17 @@ function obtenerBody(event) {
   if (!event.body) return {};
   if (typeof event.body === 'string') {
     try {
-      return JSON.parse(event.body);
+      const body = JSON.parse(event.body);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        throw new ErrorApp('Se requiere un objeto JSON', 400, CODIGOS.VALIDACION);
+      }
+      return body;
     } catch (_) {
-      return {};
+      throw new ErrorApp('JSON inválido', 400, CODIGOS.VALIDACION);
     }
+  }
+  if (typeof event.body !== 'object' || Array.isArray(event.body)) {
+    throw new ErrorApp('Se requiere un objeto JSON', 400, CODIGOS.VALIDACION);
   }
   return event.body;
 }
@@ -25,7 +32,8 @@ function obtenerParametro(event, nombre) {
 
 function responderError(e) {
   if (e instanceof ErrorApp) return error(e.message, e.codigo, e.codigoError);
-  return error(e.message || 'Error interno del servidor', 500, CODIGOS.INTERNO);
+  console.error('Error no controlado en postulaciones', { tipo: e.name, mensaje: e.message });
+  return error('Error interno del servidor', 500, CODIGOS.INTERNO);
 }
 
 async function crearPostulacion(event, context) {
@@ -132,13 +140,15 @@ const handler = crearDespachador({
   'GET /api/v1/colaboradores/{colaboradorId}/postulaciones': consultarPostulacionesColaborador,
   'GET /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}': obtenerPostulacion,
   'PATCH /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/estado': (event, context) => {
-    // Determinar si es aceptar o rechazar basado en el body o query
-    const body = event.body ? (typeof event.body === 'string' ? JSON.parse(event.body) : event.body) : {};
-    const estado = body.estado;
-    if (estado === 'ACEPTADA') return aceptarPostulacion(event, context);
-    if (estado === 'RETIRADA') return retirarPostulacion(event, context);
-    if (estado === 'RECHAZADA') return rechazarPostulacion(event, context);
-    return error('Estado no válido', 400, CODIGOS.VALIDACION);
+    try {
+      const { estado } = obtenerBody(event);
+      if (estado === 'ACEPTADA') return aceptarPostulacion(event, context);
+      if (estado === 'RETIRADA') return retirarPostulacion(event, context);
+      if (estado === 'RECHAZADA') return rechazarPostulacion(event, context);
+      return error('Estado no válido', 400, CODIGOS.VALIDACION);
+    } catch (e) {
+      return responderError(e);
+    }
   },
 });
 

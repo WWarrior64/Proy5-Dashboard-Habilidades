@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
@@ -11,5 +12,13 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: './src/tests/setup.js',
+    include: ['src/tests/**/*.{test,spec}.{js,jsx,mjs,cjs}'],
+    exclude: ['**/backend/**', '**/node_modules/**', '**/dist/**'],
+    root: path.resolve(__dirname),
   },
 })

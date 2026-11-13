@@ -1,6 +1,6 @@
 # Modelo de Datos
 
-## Resumen de las nueve tablas DynamoDB
+## Resumen de las once tablas DynamoDB
 
 | N.º | Tabla | Función principal | Tipo de clave primaria |
 |-----|-------|-------------------|------------------------|
@@ -13,10 +13,12 @@
 | 7 | `internal-marketplace-proyecto-habilidad-dev` | Relación proyecto-habilidad requerida. | Compuesta (`proyectoId`, `habilidadId`) |
 | 8 | `internal-marketplace-postulaciones-dev` | Solicitudes de participación en proyectos. | Compuesta (`proyectoId`, `postulacionKey`) |
 | 9 | `internal-marketplace-asignaciones-dev` | Vinculación efectiva de colaboradores con proyectos. | Simple (`asignacionId`) |
+| 10 | `internal-marketplace-administracion-dev` | Configuración y catálogos administrativos complementarios. | Simple (`configuracionId`) |
+| 11 | `internal-marketplace-auditoria-dev` | Eventos de cambios y accesos autenticados, consultables por fecha. | Simple (`auditoriaId`), GSI (`tipoRegistro`, `fechaId`) |
 
 ## Relaciones entre las tablas
 
-- **Usuario 1:N Colaborador**: Una cuenta de usuario puede tener un perfil de colaborador (`internal-marketplace-usuarios-dev.usuarioId → internal-marketplace-colaboradores-dev.usuarioId`).
+- **Usuario 1:0..1 Colaborador**: Una cuenta puede tener un único perfil de colaborador (`Usuarios.usuarioId → Colaboradores.usuarioId`). Una transacción crea una reserva `USUARIO#<usuarioId>` para impedir duplicados entre nuevas solicitudes concurrentes.
 - **Colaborador N:M Habilidad**: Mediante `internal-marketplace-colaborador-habilidad-dev` (`colaboradorId` + `habilidadId`).
 - **Colaborador 1:1 Cargo**: Un colaborador tiene un cargo (`internal-marketplace-colaboradores-dev.cargoId → internal-marketplace-cargos-dev.cargoId`).
 - **Proyecto N:M Habilidad**: Mediante `internal-marketplace-proyecto-habilidad-dev` (`proyectoId` + `habilidadId`).
@@ -31,3 +33,5 @@ Este esquema es conceptual. En DynamoDB las relaciones se implementan mediante i
 
 1. El nivel Junior/Mid/Senior pertenece a `internal-marketplace-colaborador-habilidad-dev`, porque un colaborador puede tener diferentes niveles en distintas habilidades. No se guarda un único `nivelHabilidad` en `internal-marketplace-colaboradores-dev`.
 2. El rol de acceso a la plataforma tiene una única fuente de verdad en `internal-marketplace-usuarios-dev`. El cargo laboral se relaciona mediante `cargoId` con `internal-marketplace-cargos-dev`. No se confunde el rol del sistema con el cargo profesional.
+3. Los colaboradores con rol de usuario `LIDER_PROYECTO` pueden participar en proyectos ajenos; no pueden ser asignados ni postularse a los proyectos que ellos mismos lideran. Las asignaciones persisten el historial y solo son editables por roles autorizados.
+4. La auditoría registra eventos nuevos con el usuario autenticado en una tabla independiente. El último acceso se conserva en Usuarios. La disponibilidad de Colaboradores es un cálculo basado en `dedicacionReservada`, no un estado manual que sustituya las transacciones.

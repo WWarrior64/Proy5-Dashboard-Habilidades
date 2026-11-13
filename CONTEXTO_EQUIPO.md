@@ -1,6 +1,8 @@
 # Contexto del Proyecto para el Equipo
 
-Este documento describe en tercera persona el estado actual del proyecto, los archivos creados, las ubicaciones clave y los próximos pasos. Su propósito es permitir que cualquier miembro del equipo sin contexto previo entienda qué se ha hecho, dónde buscar cada cosa y qué queda por realizar.
+Este documento describe el estado del proyecto, los archivos creados, las ubicaciones clave y los próximos pasos. Su propósito es permitir que cualquier miembro del equipo sin contexto previo entienda qué se ha hecho, dónde buscar cada cosa y qué queda por realizar.
+
+> **Guía de lectura:** las secciones iniciales conservan hitos y recuentos históricos (incluidas referencias a 9 tablas y 10 Lambdas). Para el estado técnico vigente consultar la sección final **«Actualización consolidada — 13 de noviembre de 2026»**, donde se documentan 11 tablas y 11 Lambdas. No debe interpretarse una evidencia antigua como una validación del último código o de su despliegue.
 
 ## 1. Estado General del Proyecto
 
@@ -442,4 +444,101 @@ Todos los doce puntos de la auditoría sobre `becef13` están corregidos y verif
 - Despliegue en AWS real y validación con Postman contra la API desplegada (requiere credenciales y SAM CLI funcionando en el entorno de CI/CD).
 - Revisión de las advertencias de lint (no bloqueantes).
 
+## Actualización de contexto — 10 de noviembre de 2026 — Rama 3 (WALTER)
+
+**Rama de trabajo:** `fix/backend-logica-apis-dynamodb`. **Destino de integración previsto:** `develop`. La rama comprende lógica de negocio, repositorios DynamoDB, contratos REST, búsqueda, asignaciones y coordinación de `infrastructure/template.yaml`. Los cambios de autenticación/seguridad deben coordinarse con la rama responsable; las vistas y su integración con frontend corresponden a los otros integrantes.
+
+### Evidencia comprobada antes de las últimas correcciones
+
+- Se ejecutó `npm test --prefix backend`, con **155 pruebas aprobadas y 1 omitida; 15 suites aprobadas y 1 omitida**.
+- `npm run lint --prefix backend`: **0 errores, 64 advertencias** (principalmente parámetros/imports no utilizados).
+- `npm test --prefix backend -- --runTestsByPath tests/validation.test.js`: **3 pruebas aprobadas**.
+- `sam validate --template-file infrastructure/template.yaml --lint` y `sam build --template-file infrastructure/template.yaml`: ambos exitosos; **10 funciones Lambda** empaquetadas con Node.js 24.
+- Se realizó el despliegue en AWS mediante SAM sobre la pila existente **`internal-marketplace-stack`**, región **`us-east-2`**, etapa **`prod`**, resultado CloudFormation **`UPDATE_COMPLETE`**. API de referencia: `https://hcy3yy7u7c.execute-api.us-east-2.amazonaws.com/prod/api/v1`. La actualización incluyó funciones Lambda, API Gateway, permisos para rutas nuevas y cambios en S3/CloudFront.
+- `GET /api/v1/health` respondió correctamente con `success: true`, `status: ok` y `entorno: prod`. También se reportó la ejecución satisfactoria de las demás comprobaciones de Postman, aunque no se dispone de un registro individual de resultados por ruta.
+- `docker` no estaba disponible en PowerShell; por ello `sam local start-api` no se pudo iniciar y la prueba `RUN_LOCAL_INTEGRATION=true` **no se ejecutó en esta ronda**. La evidencia histórica de DynamoDB Local del 6 de noviembre está en su apartado anterior y no debe confundirse con la ejecución actual.
+
+**Estado de validación:** las evidencias anteriores corresponden a una versión previa a las últimas modificaciones. Después de dichas modificaciones no consta una nueva ejecución de Jest, ESLint, compilación SAM ni despliegue en AWS. Los cambios realizados en los archivos existentes permanecen en los búferes de VS Code hasta su guardado. Durante esta actualización no se efectuaron operaciones de commit, push ni merge.
+
+### Cambios de la rama 3 aplicados en el código
+
+| Archivo | Estado funcional y cambios |
+|---|---|
+| `backend/src/middleware/validation.js` | Joi obtiene `value` correctamente, propaga `bodyValidado` y devuelve 400 ante JSON inválido/esquema incorrecto. Se agregó `validarDatos(schema, datos)` para reutilizar la validación en handlers sin introducir valores por defecto en actualizaciones parciales. |
+| `backend/src/utils/validators.js` | `crearUsuarioSchema` define solo campos de entrada del cliente (`nombre`, `email`, `rol` opcional); `cognitoSub`, `usuarioId` y estado los resuelve el backend. `actualizarUsuarioSchema` admite actualizaciones parciales sin exigir correo y tolera los límites de longitud del handler. `validarColaborador` admite ID opcional al crear. **No se modificó el handler de Usuarios de la rama de seguridad.** |
+| `backend/src/functions/colaboradores/handler.js` | Se integra Joi en creación y actualización y en asociación/actualización de habilidades; JSON inválido retorna 400. La consulta `GET /api/v1/colaboradores` soporta `cursor` base64url, valida el cursor y devuelve `datos.nextCursor` además de `items` y `lastKey`. `GET /colaboradores/yo` consulta el perfil ligado al usuario autenticado. |
+| `backend/src/repositories/colaboradores.repository.js` | Genera UUID si falta `colaboradorId`, mantiene reserva transaccional `USUARIO#` para unicidad, admite `lastKey` y no envía `ExpressionAttributeValues` vacío en ScanCommand. |
+| `backend/src/functions/cargos/handler.js` y `backend/src/functions/habilidades/handler.js` | Integran Joi en creación y actualización; un cuerpo JSON malformado o no objeto se rechaza con 400. Se conservan las operaciones de estado y categorías. |
+| `backend/src/functions/proyectos/handler.js`, `backend/src/functions/postulaciones/handler.js`, `backend/src/functions/asignaciones/handler.js` | Se corrigió el parseo de JSON de entrada para no convertir cuerpos inválidos en datos silenciosos ni en errores 500. |
+| `backend/src/services/cache.service.js` | Se conserva la caché TTL local fuera de AWS Lambda; con `AWS_LAMBDA_FUNCTION_NAME` se omiten lecturas/escrituras de caché por proceso, evitando datos reutilizados por una Lambda tras escrituras de otra. Esto incrementa potencialmente lecturas/costos de DynamoDB y **no** elimina la consistencia eventual de los GSI. |
+| `backend/src/repositories/asignaciones.repository.js`, `backend/src/services/dedicacion.service.js`, `backend/src/repositories/postulaciones.repository.js` | Se conservan las operaciones condicionales/transaccionales existentes para crear, aceptar, modificar o desvincular asignaciones con límite de dedicación 0–100 %. No se sustituyeron por escrituras simples. |
+| `backend/src/functions/busqueda/handler.js`, `backend/src/repositories/dashboard.repository.js` | Se verificó la lógica existente: búsqueda con relaciones, niveles, filtros y dedicación real; métricas con paginación de consultas DynamoDB. |
+| `infrastructure/template.yaml` | Incluye las rutas `/colaboradores/yo`, `/habilidades/categorias` y PATCH de estado de Asignaciones. La versión anterior se validó, compiló y desplegó; los cambios de código posteriores requieren volver a compilar y desplegar para reflejarse en AWS. |
+
+### Pruebas añadidas o ampliadas
+
+- `backend/tests/validation.test.js`: comportamiento de Joi, JSON inválido, defaults, validación directa, contrato de creación de Usuarios sin `cognitoSub`, actualización parcial de Usuarios y creación de Colaborador sin ID.
+- `backend/tests/colaboradores.test.js`: cuerpos inválidos, estado no permitido, cursor aceptado/rechazado y devolución de `nextCursor`.
+- `backend/tests/cache.test.js`: la caché no sirve ni guarda entradas cuando detecta AWS Lambda.
+- `backend/tests/asignaciones.test.js`: validación de JSON y caso simulado de `TransactionCanceledException` transformado en conflicto 409, sin invalidación de caché tras fallo.
+- `backend/tests/cargos.test.js`, `backend/tests/habilidades.test.js`, `backend/tests/proyectos.test.js` y `backend/tests/postulaciones.test.js`: regresiones para JSON malformado y error 400 antes de operaciones de escritura.
+- La prueba `backend/tests/integration/local.integration.test.js` crea nueve tablas temporales en DynamoDB Local y valida unicidad y concurrencia real; está preparada, pero requiere Docker/DynamoDB Local y activación explícita. **No existe evidencia de su ejecución en la ronda del 10 de noviembre.**
+
+### Documentación alineada y limitaciones conocidas
+
+- `docs/api/api-documentation.md`: contrato de paginación de Colaboradores (`limit`, `cursor`, `nextCursor`), alcance de la creación de Usuarios y distinción de nombres de tablas `dev`/`prod`. Una página de Scan puede devolver cero elementos y aún tener cursor de continuación.
+- `docs/architecture/architecture.md`: nombres físicos reales de claves usadas por los GSIs, caché local fuera de Lambda y bypass de caché dentro de Lambda; los nombres con `-dev` son ejemplos del entorno de desarrollo.
+- `database/README.md`: convención `internal-marketplace-<entidad>-<StageName>` y aclaración del despliegue `prod`.
+- `infrastructure/README.md`: resultados registrados de pruebas y despliegue, distinción respecto de las modificaciones posteriores todavía no validadas y comprobaciones pendientes de AWS/DynamoDB.
+- La validación `crearUsuarioSchema` define el contrato, pero su adopción en el handler de Usuarios corresponde a la rama de seguridad. La ausencia de caché de proceso no equivale a consistencia fuerte de los GSIs ni a una caché compartida distribuida.
+
+### Actividades pendientes para la integración de la rama
+
+1. Se requiere guardar los archivos modificados en VS Code y revisar `git status`/`git diff` antes de registrar los cambios en Git.
+2. Corresponde repetir desde la raíz `npm test --prefix backend`, `npm run lint --prefix backend`, `sam validate --template-file infrastructure/template.yaml --lint` y `sam build --template-file infrastructure/template.yaml`. El último diagnóstico estático del espacio de trabajo informó **0 errores**, pero no sustituye estas comprobaciones.
+3. Una vez superadas las comprobaciones, se deberá actualizar la pila existente de AWS (`internal-marketplace-stack`, `us-east-2`, etapa `prod`) y verificar mediante Postman los endpoints modificados, especialmente Colaboradores, Cargos, Habilidades, comportamiento de caché y errores de validación.
+4. La prueba de integración con DynamoDB Local deberá repetirse cuando se disponga de Docker, con el fin de comprobar las transacciones concurrentes. Las pruebas en AWS deberán utilizar registros aislados para evitar modificaciones en la información del equipo.
+5. Será necesaria la coordinación del contrato de Usuarios con la rama de seguridad y la integración del cursor `nextCursor` con la rama de frontend. También corresponde evaluar el costo adicional de lecturas DynamoDB al desactivar la caché en Lambda. Una futura necesidad de invalidación distribuida requeriría el diseño de una solución compartida.
+6. El Pull Request de `fix/backend-logica-apis-dynamodb` hacia `develop` deberá prepararse después de completar la validación de las últimas modificaciones.
+
+Las secciones anteriores, incluido el cierre de la auditoría histórica `becef13`, documentan etapas previas. **Este apartado prevalece como resumen temporal del estado de la rama 3 al 10 de noviembre de 2026.**
+
 Este archivo debe mantenerse actualizado conforme avance el proyecto.
+
+---
+
+## Actualización consolidada — 13 de noviembre de 2026 — Integración frontend, backend y AWS
+
+Este apartado registra el estado **más reciente del código local** y complementa, sin sustituir ni reescribir, la evidencia histórica documentada hasta el 10 de noviembre.
+
+### Arquitectura actual
+
+La plantilla `infrastructure/template.yaml` define **11 funciones Lambda** (incluida `AdministracionFunction`) y **11 tablas DynamoDB**. Las dos tablas adicionales respecto al modelo inicial de nueve son `AdministracionTable` y `AuditoriaTable`. La auditoría utiliza GSI1 por `tipoRegistro` y `fechaId`. Los recursos son declarativos: su presencia en SAM no demuestra que una pila de producción ya se haya actualizado. La SPA sigue implementada en React/Vite y la API emplea Cognito, API Gateway y el prefijo `/api/v1`.
+
+### Cambios de negocio implementados en el código
+
+| Área | Comportamiento vigente y archivos clave |
+| --- | --- |
+| Proyectos y requisitos | `backend/src/repositories/proyectos.repository.js` impide crear proyectos directamente como `ACTIVO` y exige al menos una habilidad en ProyectoHabilidad al publicarlos. `frontend/src/pages/LiderProyectosVista.jsx` guarda los requisitos antes de activar el proyecto. `fechaPublicacion` se establece al pasar de `BORRADOR` a `ACTIVO`. |
+| Fechas visibles | `frontend/src/utils/proyectoFechas.js` prioriza fechas planificadas; si faltan, toma la fecha de publicación (o la fecha histórica disponible) como inicio y estima el fin con jornadas de 8 horas de lunes a viernes, sin feriados. La estimación no equivale a una fecha contractual guardada en DynamoDB. |
+| Colaboradores y disponibilidad | La dedicación ocupada se almacena en `Colaboradores.dedicacionReservada`. La disponibilidad visible se deriva de ese porcentaje. RRHH puede filtrar perfiles inactivos y reincorporarlos si la cuenta sigue activa; la baja es lógica, conserva el perfil e historial y se registran `ultimaFechaBaja` y `fechaReincorporacion` cuando corresponda. |
+| Observaciones | Los formularios de colaboradores y de habilidades consideran `observaciones` opcionales y omiten el campo al quedar vacío para evitar errores de validación en APIs anteriores. |
+| Asignaciones y postulaciones | Se conserva la protección frente a asignaciones repetidas y dedicaciones superiores al 100 %, con transacciones DynamoDB. Se rechaza que un líder sea colaborador de un proyecto que dirige, pero **puede participar en proyectos de otro líder**; la validación se aplica tanto a asignaciones directas como a postulaciones y aceptaciones. |
+| Participaciones personales del líder | `frontend/src/components/asignaciones/MisParticipaciones.jsx` añade una sección separada y de solo lectura dentro de Asignaciones. `GET /api/v1/asignaciones/mias` resuelve el perfil desde el usuario Cognito autenticado, sin recibir el ID del colaborador en la URL. La política de rutas permite consultar registros propios y no otorga edición sobre proyectos ajenos. |
+| Filtrado visual | Las vistas de Usuarios, Colaboradores, Cargos, Habilidades, Proyectos y Asignaciones muestran activos o vigentes por defecto. Los registros dados de baja, cancelados, completados, finalizados y desvinculados permanecen consultables al seleccionar el filtro adecuado. |
+| Último acceso | `POST /api/v1/usuarios/yo/acceso` actualiza `Usuarios.ultimoAcceso` tras autenticación correcta; `GET /usuarios/yo` y el refresco de página no lo modifican. La interfaz presenta el horario de El Salvador. |
+| Auditoría | `backend/src/repositories/auditoria.repository.js` registra nuevas operaciones exitosas e inicios de sesión con actor autenticado, fecha y tipo, sin copiar credenciales. `GET /api/v1/administracion/auditoria` restringe la lectura a administradores. La pantalla ya no reconstruye falsamente autores desde proyectos/asignaciones. Los registros anteriores sin identidad verificable no se reconstruyen. |
+| Cargos | El modal de RRHH incorpora confirmación en pantalla y filtros por estado; se evita depender del diálogo nativo del navegador. |
+
+### Contratos y archivos de documentación
+
+Se actualizaron `README.md`, `infrastructure/README.md`, `database/README.md`, `docs/api/api-documentation.md`, `docs/architecture/architecture.md`, `docs/database/database-design.md`, `docs/figma/prototype-guide.md`, `docs/team/responsibilities.md`, `postman/README.md` y los esquemas que requerían aclaraciones. `database/schemas/data-model.md` y `database/schemas/auditoria.md` ya describían el modelo de once tablas y la bitácora persistente. La colección Postman JSON original puede requerir actualizaciones posteriores: cambiar su README **no** agrega solicitudes nuevas a dicha colección.
+
+### Validaciones y despliegue pendientes
+
+- En la revisión de diagnósticos del editor no se detectaron errores de análisis estático. Este dato no sustituye la ejecución de Jest, Vitest, linters, compilaciones de frontend ni validación de SAM.
+- El error observado en producción al consultar asignaciones personales (HTTP 403 y, en otra respuesta, `{"message":"Unauthorized"}`) motivó el nuevo endpoint `/asignaciones/mias`. El código y la plantilla locales lo incorporan, pero **no existe confirmación de despliegue de esa ruta** en la API publicada.
+- Antes de la entrega corresponde guardar los archivos, revisar `git diff`, ejecutar las suites automatizadas, validar/compilar SAM y desplegar las Lambdas, rutas, IAM y tablas que hayan cambiado. Después es necesario reconstruir/publicar React en S3/CloudFront y probar los cuatro roles con tokens Cognito vigentes.
+- En AWS deben comprobarse especialmente la publicación con habilidades, autoasignación prohibida pero colaboración entre líderes permitida, historial de asignaciones, reincorporación, `ultimoAcceso`, auditoría y filtros. Se requiere respaldo/control de costos antes de cualquier despliegue.
+- La actualización de Markdown constituye documentación del estado del código, **no una certificación de que el entorno remoto esté actualizado ni de que las pruebas hayan pasado**.
+

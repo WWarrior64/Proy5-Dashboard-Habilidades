@@ -1,34 +1,38 @@
 const {
   dynamoDb,
   GetCommand,
-  PutCommand,
-  UpdateCommand,
-  DeleteCommand,
-  QueryCommand,
   ScanCommand,
   TransactWriteCommand,
 } = require('../config/dynamodb');
 const { tableHabilidades } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
+const { randomUUID } = require('node:crypto');
 
 function normalizarNombre(nombre) {
   return nombre.trim().toLowerCase();
 }
 
 async function crear(data) {
+  if (typeof data.nombre !== 'string' || !data.nombre.trim()) {
+    throw new ErrorApp('nombre de habilidad obligatorio', 400, CODIGOS.VALIDACION);
+  }
+  if (data.estado !== undefined && !['ACTIVO', 'INACTIVO'].includes(data.estado)) {
+    throw new ErrorApp('Estado de habilidad inválido', 400, CODIGOS.VALIDACION);
+  }
   const nombreNormalizado = normalizarNombre(data.nombre);
 
   const item = {
-    habilidadId: data.habilidadId,
+    habilidadId: data.habilidadId || randomUUID(),
     nombre: data.nombre.trim(),
     nombreNormalizado,
     categoria: data.categoria || 'GENERAL',
+    ...(data.descripcion !== undefined && { descripcion: data.descripcion }),
     estado: data.estado || 'ACTIVO',
     fechaCreacion: new Date().toISOString(),
     fechaActualizacion: new Date().toISOString(),
   };
 
-  if (data.habilidadId.startsWith('UNIQUE#')) throw new ErrorApp('Identificador reservado', 400, CODIGOS.VALIDACION);
+  if (item.habilidadId.startsWith('UNIQUE#')) throw new ErrorApp('Identificador reservado', 400, CODIGOS.VALIDACION);
   await escribir([
     { Put: { TableName: tableHabilidades, Item: item, ConditionExpression: 'attribute_not_exists(habilidadId)' } },
     { Put: { TableName: tableHabilidades, Item: { habilidadId: `UNIQUE#${nombreNormalizado}`, propietarioId: item.habilidadId },
@@ -85,6 +89,7 @@ async function listar(filtros = {}) {
 }
 
 async function obtenerPorId(habilidadId) {
+  if (String(habilidadId).startsWith('UNIQUE#')) return null;
   const result = await dynamoDb.send(
     new GetCommand({
       TableName: tableHabilidades,
@@ -95,13 +100,19 @@ async function obtenerPorId(habilidadId) {
 }
 
 async function actualizar(habilidadId, data) {
+  if (data.nombre !== undefined && (typeof data.nombre !== 'string' || !data.nombre.trim())) {
+    throw new ErrorApp('nombre de habilidad obligatorio', 400, CODIGOS.VALIDACION);
+  }
+  if (data.estado !== undefined && !['ACTIVO', 'INACTIVO'].includes(data.estado)) {
+    throw new ErrorApp('Estado de habilidad inválido', 400, CODIGOS.VALIDACION);
+  }
   const existente = await obtenerPorId(habilidadId);
   if (!existente) {
     throw new ErrorApp('Habilidad no encontrada', 404, CODIGOS.NO_ENCONTRADO);
   }
 
   const siguiente = { ...existente, fechaActualizacion: new Date().toISOString() };
-  for (const campo of ['nombre', 'categoria', 'estado']) {
+  for (const campo of ['nombre', 'categoria', 'descripcion', 'estado']) {
     if (data[campo] !== undefined) siguiente[campo] = data[campo];
   }
   siguiente.nombreNormalizado = normalizarNombre(siguiente.nombre);

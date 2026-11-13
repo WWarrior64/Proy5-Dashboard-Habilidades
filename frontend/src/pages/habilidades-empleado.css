@@ -1,0 +1,39 @@
+.emp-skills-page { width: 100%; }
+.emp-skills-page .emp-content.skills-content { padding: 16px 24px 24px; overflow-y: auto; }
+.skills-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.skills-heading h2 { margin: 0; color: #16255a; font-size: 17px; font-weight: 700; line-height: 1.4; }
+.skills-add { display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: var(--color-primary); color: white; border-radius: 6px; padding: 9px 15px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.skills-add:hover { background: var(--color-primary-dark); }
+.skills-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 14px; }
+.skills-metrics .emp-card { width: auto; min-width: 0; height: 90px; padding: 13px 15px; }
+.skills-metrics .emp-card-value { font-size: 30px; }
+.skills-filters { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 12px; }
+.skills-search { display: flex; align-items: center; gap: 6px; background: #eef2f8; border: 1px solid #c9d4e0; border-radius: 6px; padding: 0 10px; height: 35px; min-width: 0; width: 220px; color: #64748b; }
+.skills-search input { background: transparent; border: none; outline: none; width: 100%; min-width: 0; font-size: 12px; }
+.skills-selects { display: flex; gap: 10px; min-width: 0; }
+.skills-selects select { width: 160px; min-width: 0; height: 34px; padding: 0 9px; background: #eef2f8; border: 1px solid #c9d4e0; border-radius: 6px; color: #333; font-size: 12px; }
+.skills-selects select:last-child { width: 110px; }
+.skills-table-wrap { background: #eef2f8; border: 1px solid #c9d4e0; border-radius: 6px; overflow-x: auto; }
+.skills-table { width: 100%; border: 0; border-radius: 0; background: transparent; table-layout: auto; }
+.skills-table th { background: #cfddec; color: #222; font-size: 12px; text-transform: none; font-weight: 700; padding: 10px 12px; line-height: 1.2; }
+.skills-table td { color: #333; font-size: 12px; padding: 9px 12px; border-bottom: 1px solid #c9d4e0; white-space: nowrap; }
+.skills-table tbody tr:last-child td { border-bottom: 0; }
+.skills-table th:nth-child(4) { max-width: 105px; white-space: normal; }
+.skills-level { display: inline-block; border-radius: 3px; padding: 3px 7px; font-size: 11px; font-weight: 600; }
+.skills-level.senior { background: #16255a; color: #fff; }
+.skills-level.mid { background: #dbeafe; color: #2563eb; }
+.skills-level.junior { background: #e2e8f0; color: #64748b; }
+.skills-actions { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.skills-actions button:first-child { color: #2563eb; }
+.skills-actions button:last-child { color: #ef4444; }
+.skills-actions button:hover { opacity: .7; }
+.skills-count { text-align: center; font-size: 12px; color: #8b939f; padding: 13px 8px; }
+.skills-no-results { padding: 25px; text-align: center; color: #64748b; font-size: 13px; }
+.skills-modal-backdrop { position: fixed; inset: 0; z-index: 100; background: #101b36a8; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.skills-modal { background: #fff; border-radius: 10px; padding: 24px; width: min(440px, 100%); max-height: 95vh; overflow-y: auto; display: grid; gap: 12px; box-shadow: 0 12px 30px #0003; }
+.skills-modal h2 { font-size: 20px; }
+.skills-modal label { display: grid; gap: 4px; font-size: 13px; color: #16255a; }
+.skills-modal input, .skills-modal select { width: 100%; border: 1px solid #c9d4e0; border-radius: 5px; padding: 8px; font-size: 13px; }
+.skills-modal-buttons { display: flex; justify-content: flex-end; gap: 12px; align-items: center; margin-top: 8px; }
+@media (max-width: 900px) { .skills-filters { align-items: stretch; flex-direction: column; } .skills-search { width: 100%; } .skills-selects select, .skills-selects select:last-child { flex: 1; width: auto; } .emp-skills-page .emp-content.skills-content { padding: 14px; } }
+@media (max-width: 620px) { .emp-skills-page .emp-sidebar { width: 145px; } .emp-skills-page .emp-sidebar-top { padding-left: 12px; } .emp-skills-page .emp-sidebar-brand { font-size: 14px; width: 120px; } .emp-skills-page .emp-sidebar-divider { width: 115px; } .emp-skills-page .emp-sidebar-menu { padding-left: 0; } .emp-skills-page .emp-sidebar-item, .emp-skills-page .emp-sidebar-item.active { width: 125px; font-size: 11px; padding-left: 5px; white-space: normal; } .emp-skills-page .emp-sidebar-bottom { padding-left: 12px; } .skills-metrics { gap: 6px; } .skills-metrics .emp-card { padding: 8px; height: 78px; } .skills-metrics .emp-card-label { font-size: 10px; line-height: 1.2; } .skills-metrics .emp-card-value { font-size: 20px; } .skills-heading { flex-wrap: wrap; } .skills-selects { flex-wrap: wrap; } .emp-skills-page .emp-header-right { gap: 8px; } .emp-skills-page .emp-user-icon { margin-right: 0; } }

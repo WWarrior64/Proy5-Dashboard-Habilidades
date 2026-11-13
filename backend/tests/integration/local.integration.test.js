@@ -62,23 +62,27 @@ suite('Contratos y concurrencia con DynamoDB Local', () => {
     const postulaciones = require('../../src/repositories/postulaciones.repository');
     const asignaciones = require('../../src/repositories/asignaciones.repository');
     await usuarios.crear({ usuarioId: 'u1', cognitoSub: 'sub1', nombre: 'Líder', email: 'LIDER@example.com', rol: 'LIDER_PROYECTO' });
+    await usuarios.crear({ usuarioId: 'u2', cognitoSub: 'sub2', nombre: 'Colaborador', email: 'colaborador@example.com', rol: 'EMPLEADO' });
+    await usuarios.crear({ usuarioId: 'u3', cognitoSub: 'sub3', nombre: 'Postulante', email: 'postulante@example.com', rol: 'EMPLEADO' });
     expect((await usuarios.obtenerPorCognitoSub('sub1')).usuarioId).toBe('u1');
     await cargos.crear({ cargoId: 'c1', nombre: 'Dev' });
     expect((await cargos.listar({ estado: 'ACTIVO' })).items).toHaveLength(1);
-    await colaboradores.crear({ colaboradorId: 'col1', usuarioId: 'u1', cargoId: 'c1', rolProfesional: 'Dev' });
-    expect((await colaboradores.obtenerPorUsuarioId('u1')).colaboradorId).toBe('col1');
+    await colaboradores.crear({ colaboradorId: 'col1', usuarioId: 'u2', cargoId: 'c1', rolProfesional: 'Dev' });
+    await colaboradores.crear({ colaboradorId: 'col2', usuarioId: 'u3', cargoId: 'c1', rolProfesional: 'Dev' });
+    expect((await colaboradores.obtenerPorUsuarioId('u2')).colaboradorId).toBe('col1');
     await habilidades.crear({ habilidadId: 'h1', nombre: 'JavaScript' });
     await expect(habilidades.crear({ habilidadId: 'h2', nombre: ' javascript ' })).rejects.toMatchObject({ codigo: 409 });
     await habilidades.actualizar('h1', { nombre: 'Node' });
     expect((await habilidades.obtenerPorNombreNormalizado('node')).habilidadId).toBe('h1');
     await relaciones.asociar({ colaboradorId: 'col1', habilidadId: 'h1', nivel: 'SENIOR' });
     expect((await relaciones.listarPorHabilidad('h1')).items).toHaveLength(1);
-    await proyectos.crearProyecto({ proyectoId: 'p1', nombre: 'Proyecto', descripcion: 'Prueba', liderId: 'u1', horasRequeridas: 100, creadoPor: 'u1', estado: 'ACTIVO' });
-    expect(await proyectos.listarProyectos({ estado: 'ACTIVO' })).toHaveLength(1);
+    await proyectos.crearProyecto({ proyectoId: 'p1', nombre: 'Proyecto', descripcion: 'Prueba', liderId: 'u1', horasRequeridas: 100, creadoPor: 'u1', estado: 'BORRADOR' });
     await proyectoHabilidad.asociarHabilidad({ proyectoId: 'p1', habilidadId: 'h1', nivelMinimo: 'JUNIOR', esObligatoria: true, peso: 1 });
+    await proyectos.cambiarEstado('p1', 'ACTIVO');
+    expect(await proyectos.listarProyectos({ estado: 'ACTIVO' })).toHaveLength(1);
     expect(await proyectoHabilidad.consultarProyectosPorHabilidad('h1')).toHaveLength(1);
-    await postulaciones.crearPostulacion({ proyectoId: 'p1', colaboradorId: 'col1' });
-    expect(await postulaciones.consultarPostulacionesColaborador('col1')).toHaveLength(1);
+    await postulaciones.crearPostulacion({ proyectoId: 'p1', colaboradorId: 'col2' });
+    expect(await postulaciones.consultarPostulacionesColaborador('col2')).toHaveLength(1);
     const results = await Promise.allSettled(['a1', 'a2'].map((asignacionId) => asignaciones.crearAsignacion({
       asignacionId, colaboradorId: 'col1', proyectoId: 'p1', porcentajeDedicacion: 60, horasAsignadas: 50, creadoPor: 'u1',
     })));
@@ -90,8 +94,8 @@ suite('Contratos y concurrencia con DynamoDB Local', () => {
     await asignaciones.desvincularAsignacion(winner.asignacionId);
     const released = await colaboradores.obtenerPorId('col1');
     expect(released.dedicacionReservada).toBe(0);
-    await postulaciones.aceptarPostulacion('p1', 'col1', { revisadoPor: 'u1', porcentajeDedicacion: 50, horasAsignadas: 20 });
-    expect((await colaboradores.obtenerPorId('col1')).dedicacionReservada).toBe(50);
+    await postulaciones.aceptarPostulacion('p1', 'col2', { revisadoPor: 'u1', porcentajeDedicacion: 50, horasAsignadas: 20 });
+    expect((await colaboradores.obtenerPorId('col2')).dedicacionReservada).toBe(50);
     await relaciones.retirar('col1', 'h1');
     expect(await relaciones.listarPorColaborador('col1')).toEqual([]);
   }, 60000);

@@ -1,14 +1,8 @@
 const dedicacion = require('../services/dedicacion.service');
-const { v4: uuidv4 } = require('uuid');
 const {
   dynamoDb,
   GetCommand,
-  PutCommand,
-  UpdateCommand,
-  DeleteCommand,
   QueryCommand,
-  ScanCommand,
-  TransactWriteCommand,
 } = require('../../src/config/dynamodb.js');
 const {
   tableAsignaciones,
@@ -48,6 +42,20 @@ function ahoraISO() {
   return new Date().toISOString();
 }
 
+async function consultarTodasPaginas(parametros) {
+  const items = [];
+  let lastKey;
+  do {
+    const pagina = await dynamoDb.send(new QueryCommand({
+      ...parametros,
+      ...(lastKey && { ExclusiveStartKey: lastKey }),
+    }));
+    items.push(...(pagina.Items || []));
+    lastKey = pagina.LastEvaluatedKey;
+  } while (lastKey);
+  return items;
+}
+
 async function validarColaboradorActivo(colaboradorId) {
   const resultado = await dynamoDb.send(
     new GetCommand({
@@ -83,7 +91,10 @@ async function validarProyectoActivo(proyectoId) {
 }
 
 async function obtenerSumaDedicacionActiva(colaboradorId, asignacionIdExcluir) {
-  const resultado = await dynamoDb.send(
+  let lastKey;
+  let suma = 0;
+  do {
+    const resultado = await dynamoDb.send(
     new QueryCommand({
       TableName: tableAsignaciones,
       IndexName: 'GSI1',
@@ -91,11 +102,15 @@ async function obtenerSumaDedicacionActiva(colaboradorId, asignacionIdExcluir) {
       ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'colaboradorFechaKey' },
       ExpressionAttributeValues: { ':c': colaboradorId, ':prefijo': 'ACTIVA#' },
       ProjectionExpression: 'porcentajeDedicacion, asignacionId',
+      ...(lastKey && { ExclusiveStartKey: lastKey }),
     })
   );
-  return (resultado.Items || [])
-    .filter((item) => item.asignacionId !== asignacionIdExcluir)
-    .reduce((acc, item) => acc + (item.porcentajeDedicacion || 0), 0);
+    suma += (resultado.Items || [])
+      .filter((item) => item.asignacionId !== asignacionIdExcluir)
+      .reduce((acc, item) => acc + (item.porcentajeDedicacion || 0), 0);
+    lastKey = resultado.LastEvaluatedKey;
+  } while (lastKey);
+  return suma;
 }
 
 async function crearAsignacion(datos) {
@@ -107,7 +122,6 @@ async function crearAsignacion(datos) {
     horasAsignadas,
     fechaInicio,
     creadoPor,
-    asignacionId: asignacionIdEntrada,
   } = datos;
 
   if (!colaboradorId || !proyectoId) {
@@ -129,9 +143,15 @@ async function crearAsignacion(datos) {
     throw new ErrorApp('Las horas asignadas deben ser un número positivo', 400, CODIGOS.VALIDACION);
   }
 
-  await validarColaboradorActivo(colaboradorId);
-  await validarProyectoActivo(proyectoId);
+  const colaborador = await validarColaboradorActivo(colaboradorId);
+  const proyecto = await validarProyectoActivo(proyectoId);
+  if (!Number.isFinite(colaborador.dedicacionReservada) ||
+    colaborador.dedicacionReservada < 0 || colaborador.dedicacionReservada > 100) {
+    throw new ErrorApp('El colaborador requiere inicializar su dedicación reservada antes de asignarlo',
+      409, CODIGOS.CONFLICTO);
+  }
 
+  dedicacion.verificarLiderDistinto(proyecto, colaborador);
   const sumaActual = await obtenerSumaDedicacionActiva(colaboradorId);
   if (sumaActual + porcentajeDedicacion > 100) {
     throw new ErrorApp(
@@ -141,7 +161,8 @@ async function crearAsignacion(datos) {
     );
   }
 
-  const asignacionId = asignacionIdEntrada || uuidv4();
+  await dedicacion.verificarAsignacionUnica(proyectoId, colaboradorId);
+  const asignacionId = dedicacion.idAsignacionUnica(proyectoId, colaboradorId);
   const ahora = ahoraISO();
   const item = {
     asignacionId,
@@ -163,9 +184,7 @@ async function crearAsignacion(datos) {
 
   await dedicacion.ejecutar([
     dedicacion.reserva(colaboradorId, porcentajeDedicacion),
-    { ConditionCheck: { TableName: tableProyectos, Key: { proyectoId },
-      ConditionExpression: '#e = :e', ExpressionAttributeNames: { '#e': 'estado' },
-      ExpressionAttributeValues: { ':e': 'ACTIVO' } } },
+    dedicacion.condicionProyectoAsignable(proyectoId, colaborador.usuarioId, tableProyectos),
     { Put: { TableName: tableAsignaciones, Item: item,
       ConditionExpression: 'attribute_not_exists(asignacionId)' } },
   ]);
@@ -179,16 +198,13 @@ async function listarAsignacionesActivas() {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.send(
-    new QueryCommand({
+  const items = await consultarTodasPaginas({
       TableName: tableAsignaciones,
       IndexName: 'GSI3',
       KeyConditionExpression: '#est = :est',
       ExpressionAttributeNames: { '#est': 'estado' },
       ExpressionAttributeValues: { ':est': 'ACTIVA' },
-    })
-  );
-  const items = resultado.Items || [];
+  });
 
   cache.guardar(clave, items, CACHE_TTL_MS);
   return items;
@@ -199,16 +215,13 @@ async function listarAsignacionesColaborador(colaboradorId) {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.send(
-    new QueryCommand({
+  const items = await consultarTodasPaginas({
       TableName: tableAsignaciones,
       IndexName: 'GSI1',
-      KeyConditionExpression: '#c = :c AND begins_with(#s, :prefijo)',
-      ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'colaboradorFechaKey' },
-      ExpressionAttributeValues: { ':c': colaboradorId, ':prefijo': 'ACTIVA#' },
-    })
-  );
-  const items = resultado.Items || [];
+      KeyConditionExpression: '#c = :c',
+      ExpressionAttributeNames: { '#c': 'colaboradorId' },
+      ExpressionAttributeValues: { ':c': colaboradorId },
+  });
 
   cache.guardar(clave, items, CACHE_TTL_MS);
   return items;
@@ -219,16 +232,13 @@ async function listarAsignacionesProyecto(proyectoId) {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.send(
-    new QueryCommand({
+  const items = await consultarTodasPaginas({
       TableName: tableAsignaciones,
       IndexName: 'GSI2',
-      KeyConditionExpression: '#p = :p AND begins_with(#s, :prefijo)',
-      ExpressionAttributeNames: { '#p': 'proyectoId', '#s': 'proyectoFechaKey' },
-      ExpressionAttributeValues: { ':p': proyectoId, ':prefijo': 'ACTIVA#' },
-    })
-  );
-  const items = resultado.Items || [];
+      KeyConditionExpression: '#p = :p',
+      ExpressionAttributeNames: { '#p': 'proyectoId' },
+      ExpressionAttributeValues: { ':p': proyectoId },
+  });
 
   cache.guardar(clave, items, CACHE_TTL_MS);
   return items;
@@ -358,10 +368,13 @@ async function actualizarAsignacion(asignacionId, cambios) {
   return resultado;
 }
 
-async function desvincularAsignacion(asignacionId) {
+async function cambiarEstadoFinal(asignacionId, estadoFinal) {
+  if (!['DESVINCULADA', 'FINALIZADA'].includes(estadoFinal)) {
+    throw new ErrorApp('Estado final inválido', 400, CODIGOS.VALIDACION);
+  }
   const existente = await obtenerAsignacion(asignacionId);
-  if (existente.estado === 'DESVINCULADA') {
-    throw new ErrorApp('La asignación ya está desvinculada', 409, CODIGOS.CONFLICTO);
+  if (existente.estado !== 'ACTIVA') {
+    throw new ErrorApp('La asignación ya no está activa', 409, CODIGOS.CONFLICTO);
   }
   const ahora = ahoraISO();
   await dedicacion.ejecutar([
@@ -371,12 +384,20 @@ async function desvincularAsignacion(asignacionId) {
       UpdateExpression: 'SET #est = :estado, fechaFin = :fecha, fechaActualizacion = :fecha, colaboradorFechaKey = :key, proyectoFechaKey = :key',
       ConditionExpression: '#est = :activa AND porcentajeDedicacion = :anterior',
       ExpressionAttributeNames: { '#est': 'estado' },
-      ExpressionAttributeValues: { ':estado': 'DESVINCULADA', ':activa': 'ACTIVA',
-        ':anterior': existente.porcentajeDedicacion, ':fecha': ahora, ':key': `DESVINCULADA#${ahora}` },
+      ExpressionAttributeValues: { ':estado': estadoFinal, ':activa': 'ACTIVA',
+        ':anterior': existente.porcentajeDedicacion, ':fecha': ahora, ':key': `${estadoFinal}#${ahora}` },
     } },
   ]);
   invalidarCachéAsignacion(asignacionId, existente.colaboradorId, existente.proyectoId);
-  return { ...existente, estado: 'DESVINCULADA', fechaFin: ahora, fechaActualizacion: ahora };
+  return { ...existente, estado: estadoFinal, fechaFin: ahora, fechaActualizacion: ahora };
+}
+
+async function desvincularAsignacion(asignacionId) {
+  return cambiarEstadoFinal(asignacionId, 'DESVINCULADA');
+}
+
+async function finalizarAsignacion(asignacionId) {
+  return cambiarEstadoFinal(asignacionId, 'FINALIZADA');
 }
 
 module.exports = {
@@ -387,6 +408,7 @@ module.exports = {
   obtenerAsignacion,
   actualizarAsignacion,
   desvincularAsignacion,
+  finalizarAsignacion,
   validarColaboradorActivo,
   validarProyectoActivo,
   obtenerSumaDedicacionActiva,

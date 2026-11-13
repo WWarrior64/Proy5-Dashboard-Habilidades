@@ -1,15 +1,23 @@
 const { exito, creado, error } = require('../../utils/responses.js');
 const { ErrorApp, CODIGOS } = require('../../utils/errors.js');
 const asignacionesRepo = require('../../repositories/asignaciones.repository.js');
+const colaboradoresRepo = require('../../repositories/colaboradores.repository.js');
 
 function obtenerBody(event) {
   if (!event.body) return {};
   if (typeof event.body === 'string') {
     try {
-      return JSON.parse(event.body);
+      const body = JSON.parse(event.body);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        throw new ErrorApp('Se requiere un objeto JSON', 400, CODIGOS.VALIDACION);
+      }
+      return body;
     } catch (_) {
-      return {};
+      throw new ErrorApp('JSON inválido', 400, CODIGOS.VALIDACION);
     }
+  }
+  if (typeof event.body !== 'object' || Array.isArray(event.body) || event.body === null) {
+    throw new ErrorApp('Se requiere un objeto JSON', 400, CODIGOS.VALIDACION);
   }
   return event.body;
 }
@@ -25,7 +33,8 @@ function obtenerParametro(event, nombre) {
 
 function responderError(e) {
   if (e instanceof ErrorApp) return error(e.message, e.codigo, e.codigoError);
-  return error(e.message || 'Error interno del servidor', 500, CODIGOS.INTERNO);
+  console.error('Error no controlado en asignaciones', { tipo: e.name, mensaje: e.message });
+  return error('Error interno del servidor', 500, CODIGOS.INTERNO);
 }
 
 async function crearAsignacion(event, context) {
@@ -42,6 +51,22 @@ async function listarAsignacionesActivas(event, context) {
   try {
     const asignaciones = await asignacionesRepo.listarAsignacionesActivas();
     return exito(asignaciones);
+  } catch (e) {
+    return responderError(e);
+  }
+}
+
+/** Consulta personal: colaboradorId se resuelve desde Cognito, nunca desde la URL. */
+async function listarMisAsignaciones(event, context) {
+  try {
+    const usuarioId = event.usuarioAutenticado?.usuarioId;
+    if (!usuarioId) {
+      throw new ErrorApp('Se requiere una sesión autenticada', 401, CODIGOS.NO_AUTORIZADO);
+    }
+    const colaborador = await colaboradoresRepo.obtenerPorUsuarioId(usuarioId);
+    if (!colaborador) return exito({ items: [], tienePerfil: false });
+    const items = await asignacionesRepo.listarAsignacionesColaborador(colaborador.colaboradorId);
+    return exito({ items, tienePerfil: true });
   } catch (e) {
     return responderError(e);
   }
@@ -113,14 +138,32 @@ async function desvincularAsignacion(event, context) {
   }
 }
 
+async function finalizarAsignacion(event) {
+  try {
+    const asignacionId = obtenerParametro(event, 'asignacionId');
+    if (!asignacionId) return error('asignacionId es requerido', 400, CODIGOS.VALIDACION);
+    return exito(await asignacionesRepo.finalizarAsignacion(asignacionId));
+  } catch (e) {
+    return responderError(e);
+  }
+}
+
 const { crearDespachador } = require('../../utils/lambda-dispatcher');
 
 const handler = crearDespachador({
   'PATCH /api/v1/asignaciones/{asignacionId}/estado': (event, context) => {
-    if (JSON.parse(event.body).estado !== 'DESVINCULADA') return error('Solo se permite DESVINCULADA', 400, CODIGOS.VALIDACION);
-    return desvincularAsignacion(event, context);
+    let body;
+    try {
+      body = obtenerBody(event);
+    } catch (_) {
+      return error('JSON inválido', 400, CODIGOS.VALIDACION);
+    }
+    if (body?.estado === 'FINALIZADA') return finalizarAsignacion(event, context);
+    if (body?.estado === 'DESVINCULADA') return desvincularAsignacion(event, context);
+    return error('El estado debe ser FINALIZADA o DESVINCULADA', 400, CODIGOS.VALIDACION);
   },
   'GET /api/v1/asignaciones/activas': listarAsignacionesActivas,
+  'GET /api/v1/asignaciones/mias': listarMisAsignaciones,
   'GET /api/v1/asignaciones': listarAsignacionesActivas,
   'POST /api/v1/asignaciones': crearAsignacion,
   'GET /api/v1/asignaciones/{asignacionId}': obtenerAsignacion,
@@ -133,10 +176,12 @@ const handler = crearDespachador({
 module.exports = {
   crearAsignacion,
   listarAsignacionesActivas,
+  listarMisAsignaciones,
   listarAsignacionesColaborador,
   listarAsignacionesProyecto,
   obtenerAsignacion,
   actualizarAsignacion,
   desvincularAsignacion,
+  finalizarAsignacion,
   handler,
 };

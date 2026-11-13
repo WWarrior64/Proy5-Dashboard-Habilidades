@@ -25,17 +25,20 @@ Matriz N:M de proyectos y habilidades. Relaciona los proyectos con las habilidad
   - Ordenación: `habilidadId`
 - **GSI1:**
   - Partición: `habilidadId`
-  - Ordenación: `proyectoHabilidadKey` — atributo físico sencillo que guarda el valor compuesto (por ejemplo `proyectoId`). Permite consultar proyectos por habilidad.
+  - Ordenación: `proyectoId` directamente; no se define `proyectoHabilidadKey` en AWS SAM.
 
 ## Patrones de consulta
 
 1. `GET /proyectos/{proyectoId}/habilidades` → Query por clave primaria con `proyectoId = :id`.
-2. `GET /habilidades/{habilidadId}/proyectos` → Query GSI1 con `habilidadId = :id`.
-3. `GET /proyectos/{proyectoId}/habilidades-requeridas` → Query por clave primaria con filtro `esObligatoria = true`.
+2. El repositorio `consultarProyectosPorHabilidad(habilidadId)` utiliza el GSI1 para búsquedas internas; no está expuesto como `GET /habilidades/{habilidadId}/proyectos`.
+3. El endpoint publicado permite `POST`, `PUT` y `DELETE` en `/api/v1/proyectos/{proyectoId}/habilidades`; `GET` devuelve sus relaciones.
 
 ## Reglas de negocio
 
 - Un proyecto no debe tener duplicada una misma habilidad requerida (clave compuesta única).
 - El nivel mínimo debe pertenecer a JUNIOR, MID o SENIOR.
 - `esObligatoria` permite distinguir entre habilidades indispensables y deseables.
-- `peso` puede utilizarse en el algoritmo de coincidencia para dar mayor importancia a ciertos requisitos.
+- `peso` se valida como número no negativo y queda almacenado para una futura ponderación; la búsqueda actual calcula coincidencias sin ponderarlo.
+- La asociación requiere un proyecto no finalizado y una habilidad activa.
+- Un proyecto `BORRADOR` debe asociar al menos una habilidad requerida antes de poder cambiar a `ACTIVO`; el backend comprueba la existencia de requisitos directamente en esta tabla.
+- La interfaz de publicación permite seleccionar habilidades con `nivelMinimo` y guarda las relaciones antes de activar el proyecto. Los datos del requisito deben persistir aunque se cierre y reabra el formulario.

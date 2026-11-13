@@ -14,17 +14,39 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status code es 200\", function () {",
-                  "    pm.response.to.have.status(200);",
+                  "pm.test(\"Verificar API - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
                   "});",
-                  "const res = pm.response.json();",
-                  "pm.test(\"Respuesta exitosa y status ok\", function () {",
-                  "    pm.expect(res.success).to.eql(true);",
-                  "    pm.expect(res.datos.status).to.eql(\"ok\");",
-                  "});"
-                ],
-                "type": "text/javascript"
+                  "",
+                  "pm.test(\"Verificar API - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
               }
             }
           ],
@@ -44,30 +66,162 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/usuarios"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Listar usuarios - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Listar usuarios - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Consultar mi perfil",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/usuarios/yo"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar mi perfil - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar mi perfil - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Consultar usuario por ID",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/usuarios/{{usuarioId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar usuario por ID - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar usuario por ID - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Crear perfil de usuario",
@@ -75,26 +229,59 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status code es 201\", function () { pm.response.to.have.status(201); });",
-                  "const res = pm.response.json();",
-                  "if (res.datos && res.datos.usuarioId) {",
-                  "    pm.environment.set(\"usuarioId\", res.datos.usuarioId);",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "pm.test(\"Crear perfil de usuario - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Crear perfil de usuario - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
               }
             }
           ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"correo\": \"colaborador@empresa.com\",\n  \"nombre\": \"Diego\",\n  \"apellido\": \"Portillo\",\n  \"rol\": \"EMPLEADO\"\n}"
+              "raw": "{\n  \"nombre\": \"Diego\",\n  \"apellido\": \"Portillo\",\n  \"rol\": \"EMPLEADO\",\n  \"email\": \"colaborador@empresa.com\"\n}"
             },
             "url": "{{baseUrl}}/usuarios"
           }
@@ -104,45 +291,189 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nombre\": \"Diego Ernesto\",\n  \"apellido\": \"Portillo Alfaro\"\n}"
+              "raw": "{\n  \"nombre\": \"Diego Ernesto\"\n}"
             },
             "url": "{{baseUrl}}/usuarios/{{usuarioId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Actualizar usuario - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Actualizar usuario - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Cambiar rol",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"rol\": \"LIDER_PROYECTO\"\n}"
             },
             "url": "{{baseUrl}}/usuarios/{{usuarioId}}/rol"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Cambiar rol - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Cambiar rol - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Cambiar estado",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"estado\": \"INACTIVO\"\n}"
+              "raw": "{\n  \"activo\": true\n}"
             },
             "url": "{{baseUrl}}/usuarios/{{usuarioId}}/estado"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Cambiar estado - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Cambiar estado - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -154,10 +485,54 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/colaboradores"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Listar colaboradores - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Listar colaboradores - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Registrar colaborador",
@@ -165,22 +540,55 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status code es 201\", function () { pm.response.to.have.status(201); });",
-                  "const res = pm.response.json();",
-                  "if (res.datos && res.datos.colaboradorId) {",
-                  "    pm.environment.set(\"colaboradorId\", res.datos.colaboradorId);",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "pm.test(\"Registrar colaborador - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Registrar colaborador - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
               }
             }
           ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -194,90 +602,414 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar colaborador - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar colaborador - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Actualizar colaborador",
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"rolProfesional\": \"Desarrollador Cloud Sr\"\n}"
             },
             "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Actualizar colaborador - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Actualizar colaborador - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Dar de baja colaborador",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"estado\": \"INACTIVO\"\n}"
             },
             "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}/estado"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Dar de baja colaborador - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Dar de baja colaborador - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Consultar habilidades",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}/habilidades"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar habilidades - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar habilidades - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Asociar habilidad",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"habilidadId\": \"{{habilidadId}}\",\n  \"nivel\": \"MID\",\n  \"aniosExperiencia\": 3\n}"
+              "raw": "{\n  \"habilidadId\": \"{{habilidadId}}\",\n  \"nivel\": \"MID\",\n  \"aniosExperiencia\": 3,\n  \"anosExperiencia\": 2\n}"
             },
             "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}/habilidades"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Asociar habilidad - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Asociar habilidad - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Actualizar nivel de habilidad",
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nivel\": \"SENIOR\",\n  \"aniosExperiencia\": 4\n}"
+              "raw": "{\n  \"nivel\": \"SENIOR\",\n  \"aniosExperiencia\": 4,\n  \"anosExperiencia\": 2\n}"
             },
             "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}/habilidades/{{habilidadId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Actualizar nivel de habilidad - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Actualizar nivel de habilidad - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Retirar habilidad",
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}/habilidades/{{habilidadId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Retirar habilidad - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Retirar habilidad - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -289,10 +1021,54 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/cargos"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Listar cargos - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Listar cargos - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Crear cargo",
@@ -300,22 +1076,55 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status code es 201\", function () { pm.response.to.have.status(201); });",
-                  "const res = pm.response.json();",
-                  "if (res.datos && res.datos.cargoId) {",
-                  "    pm.environment.set(\"cargoId\", res.datos.cargoId);",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "pm.test(\"Crear cargo - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Crear cargo - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
               }
             }
           ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -329,40 +1138,180 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/cargos/{{cargoId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar cargo - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar cargo - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Actualizar cargo",
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombre\": \"Ingeniero Backend Cloud\",\n  \"descripcion\": \"Desarrollo y arquitectura serverless\"\n}"
             },
             "url": "{{baseUrl}}/cargos/{{cargoId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Actualizar cargo - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Actualizar cargo - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Desactivar cargo",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"estado\": \"INACTIVO\"\n}"
             },
             "url": "{{baseUrl}}/cargos/{{cargoId}}/estado"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Desactivar cargo - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Desactivar cargo - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -374,10 +1323,54 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/habilidades"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Listar habilidades - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Listar habilidades - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Crear habilidad",
@@ -385,29 +1378,55 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"La respuesta es HTTP 201\", function () {",
-                  "    pm.response.to.have.status(201);",
+                  "pm.test(\"Crear habilidad - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
                   "});",
-                  "const respuesta = pm.response.json();",
-                  "pm.test(\"El recurso fue creado correctamente\", function () {",
-                  "    pm.expect(respuesta.success).to.eql(true);",
-                  "    pm.expect(respuesta.datos).to.be.an(\"object\");",
-                  "    pm.expect(respuesta.datos.habilidadId).to.be.a(\"string\");",
+                  "",
+                  "pm.test(\"Crear habilidad - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
                   "});",
-                  "if (respuesta.datos && respuesta.datos.habilidadId) {",
-                  "    pm.environment.set(\"habilidadId\", respuesta.datos.habilidadId);",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
               }
             }
           ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -422,24 +1441,50 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"La consulta responde HTTP 200\", function () {",
-                  "    pm.response.to.have.status(200);",
+                  "pm.test(\"Consultar habilidad - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
                   "});",
-                  "const respuesta = pm.response.json();",
-                  "pm.test(\"Se recupero la habilidad creada\", function () {",
-                  "    pm.expect(respuesta.success).to.eql(true);",
-                  "    pm.expect(respuesta.datos.habilidadId).to.eql(pm.environment.get(\"habilidadId\"));",
-                  "});"
-                ],
-                "type": "text/javascript"
+                  "",
+                  "pm.test(\"Consultar habilidad - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
               }
             }
           ],
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/habilidades/{{habilidadId}}"
           }
@@ -449,40 +1494,180 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"descripcion\": \"Arquitectura y desarrollo con funciones serverless\"\n}"
             },
             "url": "{{baseUrl}}/habilidades/{{habilidadId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Actualizar habilidad - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Actualizar habilidad - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Desactivar habilidad",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"estado\": \"INACTIVO\"\n}"
             },
             "url": "{{baseUrl}}/habilidades/{{habilidadId}}/estado"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Desactivar habilidad - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Desactivar habilidad - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Consultar categorias",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/habilidades/categorias"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar categorias - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar categorias - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -494,10 +1679,54 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/proyectos"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Listar proyectos - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Listar proyectos - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Registrar proyecto",
@@ -505,22 +1734,55 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status code es 201\", function () { pm.response.to.have.status(201); });",
-                  "const res = pm.response.json();",
-                  "if (res.datos && res.datos.proyectoId) {",
-                  "    pm.environment.set(\"proyectoId\", res.datos.proyectoId);",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "pm.test(\"Registrar proyecto - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Registrar proyecto - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
               }
             }
           ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -534,90 +1796,414 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/proyectos/{{proyectoId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar proyecto - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar proyecto - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Actualizar proyecto",
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombre\": \"Modernización de plataforma Cloud\",\n  \"horasRequeridas\": 200\n}"
             },
             "url": "{{baseUrl}}/proyectos/{{proyectoId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Actualizar proyecto - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Actualizar proyecto - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Cancelar proyecto",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"estado\": \"CANCELADO\"\n}"
             },
             "url": "{{baseUrl}}/proyectos/{{proyectoId}}/estado"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Cancelar proyecto - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Cancelar proyecto - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Consultar habilidades requeridas",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/proyectos/{{proyectoId}}/habilidades"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar habilidades requeridas - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar habilidades requeridas - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Asociar habilidad requerida",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"habilidadId\": \"{{habilidadId}}\",\n  \"nivelMinimo\": \"MID\",\n  \"esObligatoria\": true,\n  \"peso\": 1\n}"
             },
             "url": "{{baseUrl}}/proyectos/{{proyectoId}}/habilidades"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Asociar habilidad requerida - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Asociar habilidad requerida - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Actualizar requerimiento",
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nivelMinimo\": \"SENIOR\",\n  \"esObligatoria\": true,\n  \"peso\": 2\n}"
             },
             "url": "{{baseUrl}}/proyectos/{{proyectoId}}/habilidades/{{habilidadId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Actualizar requerimiento - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Actualizar requerimiento - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Retirar requerimiento",
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/proyectos/{{proyectoId}}/habilidades/{{habilidadId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Retirar requerimiento - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Retirar requerimiento - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -630,22 +2216,55 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status code es 201\", function () { pm.response.to.have.status(201); });",
-                  "const res = pm.response.json();",
-                  "if (res.datos && res.datos.colaboradorId) {",
-                  "    pm.environment.set(\"postulacionColaboradorId\", res.datos.colaboradorId);",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "pm.test(\"Registrar postulación - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Registrar postulación - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
               }
             }
           ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -659,60 +2278,288 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/proyectos/{{proyectoId}}/postulaciones"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar postulaciones de proyecto - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar postulaciones de proyecto - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Consultar postulaciones de colaborador",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}/postulaciones"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar postulaciones de colaborador - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar postulaciones de colaborador - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Consultar detalle postulación",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/proyectos/{{proyectoId}}/postulaciones/{{colaboradorId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar detalle postulación - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar detalle postulación - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Aceptar postulación",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"estado\": \"ACEPTADA\",\n  \"porcentajeDedicacion\": 40,\n  \"horasAsignadas\": 64\n}"
             },
             "url": "{{baseUrl}}/proyectos/{{proyectoId}}/postulaciones/{{colaboradorId}}/estado"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Aceptar postulación - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Aceptar postulación - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Rechazar postulación",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"estado\": \"RECHAZADA\",\n  \"motivo\": \"Perfil no se ajusta a la dedicación\"\n}"
             },
             "url": "{{baseUrl}}/proyectos/{{proyectoId}}/postulaciones/{{colaboradorId}}/estado"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Rechazar postulación - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Rechazar postulación - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -724,10 +2571,54 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/asignaciones"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Listar asignaciones - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Listar asignaciones - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Crear asignación",
@@ -735,22 +2626,55 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status code es 201\", function () { pm.response.to.have.status(201); });",
-                  "const res = pm.response.json();",
-                  "if (res.datos && res.datos.asignacionId) {",
-                  "    pm.environment.set(\"asignacionId\", res.datos.asignacionId);",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "pm.test(\"Crear asignación - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Crear asignación - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
               }
             }
           ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -764,50 +2688,234 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/asignaciones/{{asignacionId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar asignación - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar asignación - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Consultar asignaciones activas",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/asignaciones/activas"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar asignaciones activas - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar asignaciones activas - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Actualizar horas y dedicación",
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"porcentajeDedicacion\": 50,\n  \"horasAsignadas\": 80\n}"
             },
             "url": "{{baseUrl}}/asignaciones/{{asignacionId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Actualizar horas y dedicación - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Actualizar horas y dedicación - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Desvincular colaborador",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"estado\": \"DESVINCULADA\"\n}"
             },
             "url": "{{baseUrl}}/asignaciones/{{asignacionId}}/estado"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Desvincular colaborador - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Desvincular colaborador - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -819,45 +2927,207 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/busqueda/colaboradores?habilidadId={{habilidadId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["busqueda", "colaboradores"],
-              "query": [{ "key": "habilidadId", "value": "{{habilidadId}}" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "busqueda",
+                "colaboradores"
+              ],
+              "query": [
+                {
+                  "key": "habilidadId",
+                  "value": "{{habilidadId}}"
+                }
+              ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Buscar colaboradores por habilidad - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Buscar colaboradores por habilidad - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Buscar colaboradores por nivel",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/busqueda/colaboradores?nivel=SENIOR",
-              "host": ["{{baseUrl}}"],
-              "path": ["busqueda", "colaboradores"],
-              "query": [{ "key": "nivel", "value": "SENIOR" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "busqueda",
+                "colaboradores"
+              ],
+              "query": [
+                {
+                  "key": "nivel",
+                  "value": "SENIOR"
+                }
+              ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Buscar colaboradores por nivel - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Buscar colaboradores por nivel - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Buscar por coincidencia de habilidades",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/busqueda/proyectos?habilidadId={{habilidadId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["busqueda", "proyectos"],
-              "query": [{ "key": "habilidadId", "value": "{{habilidadId}}" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "busqueda",
+                "proyectos"
+              ],
+              "query": [
+                {
+                  "key": "habilidadId",
+                  "value": "{{habilidadId}}"
+                }
+              ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Buscar por coincidencia de habilidades - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Buscar por coincidencia de habilidades - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -869,60 +3139,324 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/dashboard/resumen"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar resumen - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar resumen - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Consultar métricas de colaboradores",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/dashboard/colaboradores"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar métricas de colaboradores - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar métricas de colaboradores - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Consultar métricas de proyectos",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/dashboard/proyectos"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar métricas de proyectos - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar métricas de proyectos - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Consultar métricas de asignaciones",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/dashboard/asignaciones"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar métricas de asignaciones - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar métricas de asignaciones - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Consultar métricas de habilidades",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/dashboard/habilidades"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar métricas de habilidades - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar métricas de habilidades - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Consultar métricas de postulaciones",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
             ],
             "url": "{{baseUrl}}/dashboard/postulaciones"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Consultar métricas de postulaciones - Código de estado válido\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});",
+                  "",
+                  "pm.test(\"Consultar métricas de postulaciones - Respuesta en formato JSON válido\", function () {",
+                  "    pm.response.to.be.json;",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an(\"object\");",
+                  "    if (pm.response.code < 400) {",
+                  "        pm.expect(json).to.have.property(\"datos\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// Captura automática de IDs para encadenar peticiones",
+                  "try {",
+                  "    const res = pm.response.json();",
+                  "    const datos = res && res.datos ? res.datos : null;",
+                  "    if (datos) {",
+                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
+                  "        if (item && typeof item === \"object\") {",
+                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
+                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
+                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
+                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
+                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
+                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
+                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

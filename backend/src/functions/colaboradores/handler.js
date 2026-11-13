@@ -1,15 +1,25 @@
 const { exito, creado, error } = require('../../utils/responses');
-const { CODIGOS } = require('../../utils/errors');
+const { ErrorApp, CODIGOS } = require('../../utils/errors');
 const colaboradoresRepository = require('../../repositories/colaboradores.repository');
+const usuariosRepository = require('../../repositories/usuarios.repository');
+const { validarDatos } = require('../../middleware/validation');
+const { crearColaboradorSchema, actualizarColaboradorSchema, asociarHabilidadSchema, actualizarNivelHabilidadSchema } = require('../../utils/validators');
 
 function obtenerBody(event) {
   if (!event.body) return {};
   if (typeof event.body === 'string') {
     try {
-      return JSON.parse(event.body);
+      const body = JSON.parse(event.body);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        throw new ErrorApp('Se requiere un objeto JSON', 400, CODIGOS.VALIDACION);
+      }
+      return body;
     } catch (e) {
-      return {};
+      throw new ErrorApp('JSON inválido', 400, CODIGOS.VALIDACION);
     }
+  }
+  if (typeof event.body !== 'object' || Array.isArray(event.body) || event.body === null) {
+    throw new ErrorApp('Se requiere un objeto JSON', 400, CODIGOS.VALIDACION);
   }
   return event.body;
 }
@@ -20,11 +30,11 @@ function obtenerPathParam(event, nombre) {
 
 async function crearColaborador(event, context) {
   try {
-    const body = obtenerBody(event);
-    const { colaboradorId, usuarioId, cargoId, rolProfesional, estado, observaciones } = body;
+    const body = validarDatos(crearColaboradorSchema, obtenerBody(event));
+    const { colaboradorId, usuarioId, cargoId, rolProfesional, nombre, estado, observaciones } = body;
 
-    if (!colaboradorId || !usuarioId || !cargoId || !rolProfesional) {
-      return error('colaboradorId, usuarioId, cargoId y rolProfesional son requeridos', 400, CODIGOS.VALIDACION);
+    if (!usuarioId || !cargoId || !rolProfesional) {
+      return error('usuarioId, cargoId y rolProfesional son requeridos', 400, CODIGOS.VALIDACION);
     }
 
     const colaborador = await colaboradoresRepository.crear({
@@ -32,6 +42,7 @@ async function crearColaborador(event, context) {
       usuarioId,
       cargoId,
       rolProfesional,
+      nombre,
       estado,
       observaciones,
     });
@@ -42,6 +53,19 @@ async function crearColaborador(event, context) {
   }
 }
 
+function mostrarIdentidadPublica(item, nombreUsuario) {
+  const nombreValido = typeof nombreUsuario === 'string' && nombreUsuario.trim()
+    ? nombreUsuario.trim() : null;
+  const esNombreProfesional = item.nombre?.trim().toLocaleLowerCase('es') ===
+    item.rolProfesional?.trim().toLocaleLowerCase('es');
+  return {
+    ...item,
+    nombreUsuario: nombreValido,
+    nombre: nombreValido || (esNombreProfesional
+      ? `Colaborador ${item.colaboradorId}` : item.nombre || `Colaborador ${item.colaboradorId}`),
+  };
+}
+
 async function listarColaboradores(event, context) {
   try {
     const query = event.queryStringParameters || {};
@@ -49,10 +73,44 @@ async function listarColaboradores(event, context) {
     if (query.estado) filtros.estado = query.estado;
     if (query.cargoId) filtros.cargoId = query.cargoId;
     if (query.rolProfesional) filtros.rolProfesional = query.rolProfesional;
-    if (query.limit) filtros.limit = parseInt(query.limit, 10);
+    if (query.limit !== undefined) {
+      const limit = Number(query.limit);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+        return error('limit debe ser un entero entre 1 y 100', 400, CODIGOS.VALIDACION);
+      }
+      filtros.limit = limit;
+    }
 
+    if (query.cursor !== undefined) {
+      if (typeof query.cursor !== 'string' || query.cursor.length > 2048 || !/^[A-Za-z0-9_-]+$/.test(query.cursor)) {
+        return error('Cursor de paginación inválido', 400, CODIGOS.VALIDACION);
+      }
+      try {
+        const clave = JSON.parse(Buffer.from(query.cursor, 'base64url').toString('utf8'));
+        if (!clave || typeof clave.colaboradorId !== 'string' || !clave.colaboradorId || Array.isArray(clave)) {
+          return error('Cursor de paginación inválido', 400, CODIGOS.VALIDACION);
+        }
+        filtros.lastKey = clave;
+      } catch (_) {
+        return error('Cursor de paginación inválido', 400, CODIGOS.VALIDACION);
+      }
+    }
     const resultado = await colaboradoresRepository.listar(filtros);
-    return exito(resultado);
+    let items = resultado.items;
+    if (event.usuarioAutenticado?.rol === 'LIDER_PROYECTO') {
+      // El Líder puede ver nombres profesionales, pero no consultar la API privada de Usuarios.
+      const ids = [...new Set(items.map(item => item.usuarioId).filter(Boolean))];
+      const nombres = new Map();
+      for (let inicio = 0; inicio < ids.length; inicio += 10) {
+        const lote = await Promise.all(ids.slice(inicio, inicio + 10).map(async id => {
+          const usuario = await usuariosRepository.obtenerPorId(id);
+          return [id, usuario?.nombre || null];
+        }));
+        lote.forEach(([id, nombre]) => nombres.set(id, nombre));
+      }
+      items = items.map(item => mostrarIdentidadPublica(item, nombres.get(item.usuarioId)));
+    }
+    return exito({ ...resultado, items, nextCursor: resultado.lastKey ? Buffer.from(JSON.stringify(resultado.lastKey)).toString('base64url') : null });
   } catch (err) {
     return error(err.message, err.codigo || 500, err.codigoError);
   }
@@ -70,6 +128,23 @@ async function obtenerColaborador(event, context) {
       return error('Colaborador no encontrado', 404, CODIGOS.NO_ENCONTRADO);
     }
 
+    if (event.usuarioAutenticado?.rol === 'LIDER_PROYECTO') {
+      const usuario = colaborador.usuarioId
+        ? await usuariosRepository.obtenerPorId(colaborador.usuarioId) : null;
+      return exito(mostrarIdentidadPublica(colaborador, usuario?.nombre));
+    }
+    return exito(colaborador);
+  } catch (err) {
+    return error(err.message, err.codigo || 500, err.codigoError);
+  }
+}
+
+async function obtenerMiColaborador(event) {
+  try {
+    const usuarioId = event.usuarioAutenticado?.usuarioId;
+    if (!usuarioId) return error('Autenticación requerida', 401, CODIGOS.NO_AUTORIZADO);
+    const colaborador = await colaboradoresRepository.obtenerPorUsuarioId(usuarioId);
+    if (!colaborador) return error('El usuario no tiene un perfil de colaborador', 404, CODIGOS.NO_ENCONTRADO);
     return exito(colaborador);
   } catch (err) {
     return error(err.message, err.codigo || 500, err.codigoError);
@@ -90,7 +165,7 @@ async function actualizarColaborador(event, context) {
       if (body[campo] !== undefined) data[campo] = body[campo];
     });
 
-    const colaborador = await colaboradoresRepository.actualizar(colaboradorId, data);
+    const colaborador = await colaboradoresRepository.actualizar(colaboradorId, validarDatos(actualizarColaboradorSchema, data));
     return exito(colaborador);
   } catch (err) {
     return error(err.message, err.codigo || 500, err.codigoError);
@@ -121,10 +196,11 @@ const handler = crearDespachador({
     return exito(await colaboradoresRepository.actualizar(event.pathParameters.colaboradorId, { estado: body.activo ? 'ACTIVO' : 'INACTIVO' }));
   },
   'GET /api/v1/colaboradores/{colaboradorId}/habilidades': async (event) => exito(await relaciones.listarPorColaborador(event.pathParameters.colaboradorId)),
-  'POST /api/v1/colaboradores/{colaboradorId}/habilidades': async (event) => creado(await relaciones.asociar({ ...obtenerBody(event), colaboradorId: event.pathParameters.colaboradorId })),
-  'PUT /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}': async (event) => exito(await relaciones.actualizarNivel(event.pathParameters.colaboradorId, event.pathParameters.habilidadId, obtenerBody(event))),
+  'POST /api/v1/colaboradores/{colaboradorId}/habilidades': async (event) => creado(await relaciones.asociar(validarDatos(asociarHabilidadSchema, { ...obtenerBody(event), colaboradorId: event.pathParameters.colaboradorId }))),
+  'PUT /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}': async (event) => exito(await relaciones.actualizarNivel(event.pathParameters.colaboradorId, event.pathParameters.habilidadId, validarDatos(actualizarNivelHabilidadSchema, obtenerBody(event)))),
   'DELETE /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}': async (event) => exito(await relaciones.retirar(event.pathParameters.colaboradorId, event.pathParameters.habilidadId)),
   'GET /api/v1/colaboradores': listarColaboradores,
+  'GET /api/v1/colaboradores/yo': obtenerMiColaborador,
   'POST /api/v1/colaboradores': crearColaborador,
   'GET /api/v1/colaboradores/{colaboradorId}': obtenerColaborador,
   'PUT /api/v1/colaboradores/{colaboradorId}': actualizarColaborador,
@@ -135,6 +211,7 @@ module.exports = {
   crearColaborador,
   listarColaboradores,
   obtenerColaborador,
+  obtenerMiColaborador,
   actualizarColaborador,
   darBajaColaborador,
   handler,

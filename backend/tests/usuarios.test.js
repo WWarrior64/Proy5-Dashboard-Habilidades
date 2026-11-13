@@ -53,6 +53,7 @@ describe('Módulo de Usuarios - Handler', () => {
       const result = await usuariosHandler.obtenerPerfil(event, {});
       expect(result.statusCode).toBe(200);
       expect(usuariosRepository.obtenerPorCognitoSub).toHaveBeenCalledWith('cognito_123');
+      expect(usuariosRepository.registrarUltimoAcceso).not.toHaveBeenCalled();
     });
 
     test('debe retornar 401 cuando no hay identidad de Cognito', async () => {
@@ -68,6 +69,29 @@ describe('Módulo de Usuarios - Handler', () => {
       };
       const result = await usuariosHandler.obtenerPerfil(event, {});
       expect(result.statusCode).toBe(403);
+    });
+  });
+
+  describe('registrarAcceso', () => {
+    test('registra el acceso en el usuario autenticado, ignorando cualquier ID del cliente', async () => {
+      usuariosRepository.registrarUltimoAcceso.mockResolvedValue({
+        usuarioId: 'usr_1', ultimoAcceso: '2026-11-13T18:40:00.000Z',
+      });
+      const result = await usuariosHandler.registrarAcceso({
+        usuarioAutenticado: { usuarioId: 'usr_1', estado: 'ACTIVO' },
+        body: JSON.stringify({ usuarioId: 'usr_ajeno', ultimoAcceso: '2099-01-01' }),
+      }, {});
+      expect(result.statusCode).toBe(200);
+      expect(usuariosRepository.registrarUltimoAcceso).toHaveBeenCalledWith('usr_1');
+      expect(JSON.parse(result.body).datos.ultimoAcceso).toBe('2026-11-13T18:40:00.000Z');
+    });
+
+    test('no registra accesos sin identidad autenticada o con cuenta inactiva', async () => {
+      expect((await usuariosHandler.registrarAcceso({}, {})).statusCode).toBe(401);
+      expect((await usuariosHandler.registrarAcceso({ usuarioAutenticado: {
+        usuarioId: 'usr_1', estado: 'INACTIVO',
+      } }, {})).statusCode).toBe(401);
+      expect(usuariosRepository.registrarUltimoAcceso).not.toHaveBeenCalled();
     });
   });
 
@@ -183,16 +207,80 @@ describe('Módulo de Usuarios - Handler', () => {
     });
   });
 
-  describe('actualizarUsuario', () => {
-    test('debe actualizar los datos permitidos de un usuario', async () => {
-      usuariosRepository.actualizar.mockResolvedValue({ usuarioId: 'usr_1', nombre: 'Modificado' });
+describe('actualizarUsuario', () => {
+    it('debe actualizar los datos permitidos de un usuario autenticado', async () => {
+      usuariosRepository.obtenerPorCognitoSub.mockResolvedValue({
+        usuarioId: 'usr_1',
+        cognitoSub: 'sub_123',
+        email: 'test@example.com',
+        rol: 'EMPLEADO',
+        estado: 'ACTIVO',
+      });
+      usuariosRepository.actualizar.mockResolvedValue({
+        usuarioId: 'usr_1',
+        nombre: 'Modificado',
+      });
+
       const event = {
         pathParameters: { usuarioId: 'usr_1' },
+        requestContext: {
+          authorizer: {
+            claims: { sub: 'sub_123' },
+          },
+        },
         body: JSON.stringify({ nombre: 'Modificado' }),
       };
+
       const result = await usuariosHandler.actualizarUsuario(event, {});
       expect(result.statusCode).toBe(200);
       expect(usuariosRepository.actualizar).toHaveBeenCalledWith('usr_1', { nombre: 'Modificado' });
+    });
+
+    it('debe retornar 400 si se intenta cambiar el correo directamente', async () => {
+      usuariosRepository.obtenerPorCognitoSub.mockResolvedValue({
+        usuarioId: 'usr_1',
+        cognitoSub: 'sub_123',
+        email: 'original@example.com',
+        rol: 'EMPLEADO',
+        estado: 'ACTIVO',
+      });
+
+      const event = {
+        pathParameters: { usuarioId: 'usr_1' },
+        requestContext: {
+          authorizer: {
+            claims: { sub: 'sub_123' },
+          },
+        },
+        body: JSON.stringify({ email: 'nuevo@example.com' }),
+      };
+
+      const result = await usuariosHandler.actualizarUsuario(event, {});
+      expect(result.statusCode).toBe(400);
+      const parsed = JSON.parse(result.body);
+      expect(parsed.error.mensaje).toContain('Cognito');
+    });
+
+    it('debe retornar 403 si un usuario intenta modificar a otro sin ser admin', async () => {
+      usuariosRepository.obtenerPorCognitoSub.mockResolvedValue({
+        usuarioId: 'usr_1',
+        cognitoSub: 'sub_123',
+        rol: 'EMPLEADO',
+        estado: 'ACTIVO',
+      });
+
+      const event = {
+        pathParameters: { usuarioId: 'usr_2' },
+        requestContext: {
+          authorizer: {
+            claims: { sub: 'sub_123' },
+          },
+        },
+        body: JSON.stringify({ nombre: 'Hack' }),
+      };
+
+      const result = await usuariosHandler.actualizarUsuario(event, {});
+      expect(result.statusCode).toBe(403);
     });
   });
 

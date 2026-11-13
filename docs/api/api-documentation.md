@@ -1,11 +1,12 @@
 # Documentacion de la API - Internal Marketplace
 
-**Version:** 2.0.0  
+**Versión documental:** 2.1.0 (contrato de código vigente; despliegue en AWS pendiente de validación)  
 **Prefijo base comun:** `/api/v1`  
 **Base URL (produccion / API Gateway):** `https://{api-id}.execute-api.us-east-2.amazonaws.com/prod/api/v1`  
 **Base URL (SAM Local):** `http://127.0.0.1:3000/api/v1`  
 **Arquitectura:** AWS Serverless (API Gateway REST API + AWS Lambda con Node.js 24 + DynamoDB)  
-**Formato de datos:** `application/json`
+**Formato de datos:** `application/json`  
+**Nombres de tablas en ejemplos:** el sufijo `-dev` corresponde a desarrollo; la plantilla usa `-prod` cuando `StageName=prod`. 
 
 ---
 
@@ -63,8 +64,11 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **Tabla DynamoDB:** `internal-marketplace-usuarios-dev` (PK: `usuarioId`, GSI1: `cognitoSub`, GSI2: `correo`)
 
 - **GET /api/v1/usuarios/yo**
-  - Descripcion: Consultar perfil del usuario autenticado (resuelto via cognitoSub).
+  - Descripcion: Consultar perfil del usuario autenticado (resuelto via cognitoSub), sin modificar el último acceso al recargar páginas o restaurar la sesión.
   - Roles permitidos: Todos.
+- **POST /api/v1/usuarios/yo/acceso**
+  - Descripcion: Registrar en DynamoDB el campo `ultimoAcceso` (ISO 8601, hora del servidor) tras un inicio de sesión exitoso en Cognito o la confirmación de contraseña nueva. No recibe `usuarioId` ni fecha desde el cliente.
+  - Roles permitidos: Todos los usuarios autenticados y activos; solo se actualiza el propio registro.
 - **GET /api/v1/usuarios**
   - Descripcion: Listar usuarios registrados.
   - Roles permitidos: ADMINISTRADOR, RRHH.
@@ -72,8 +76,8 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
   - Descripcion: Consultar usuario por identificador.
   - Roles permitidos: ADMINISTRADOR, RRHH.
 - **POST /api/v1/usuarios**
-  - Descripcion: Crear registro interno de usuario vinculado a Cognito.
-  - Roles permitidos: Todos.
+  - Descripcion: Crear registro interno de usuario vinculado a Cognito. El cuerpo acepta `nombre`, `email` y `rol` opcional; `usuarioId`, `cognitoSub` y `estado` se resuelven en el backend y no deben enviarse desde React.
+  - Roles permitidos: ADMINISTRADOR activo, según las comprobaciones del handler.
 - **PUT /api/v1/usuarios/{usuarioId}**
   - Descripcion: Actualizar datos permitidos del usuario.
   - Roles permitidos: Propio usuario, ADMINISTRADOR.
@@ -91,11 +95,14 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **Tablas DynamoDB:** `internal-marketplace-colaboradores-dev`, `internal-marketplace-usuarios-dev`, `internal-marketplace-cargos-dev`, `internal-marketplace-colaborador-habilidad-dev`
 
 - **GET /api/v1/colaboradores**
-  - Descripcion: Listar plantilla con filtros (estado, cargo, rol).
+  - Descripcion: Listar plantilla con filtros `estado`, `cargoId` y `rolProfesional`.
+  - Paginacion: `limit` (entero entre 1 y 100, predeterminado 25) y `cursor` (token opaco `base64url` recibido como `datos.nextCursor` en la respuesta anterior). La respuesta conserva `datos.items` y `datos.lastKey` por compatibilidad y agrega `datos.nextCursor`, que es `null` al terminar. Un cursor inválido devuelve 400. No deben fabricarse cursores manualmente. DynamoDB filtra después de leer la página: puede devolver menos de `limit`, incluso cero elementos, y todavía proporcionar `nextCursor`; debe continuarse mientras no sea `null`.
 - **POST /api/v1/colaboradores**
-  - Descripcion: Dar de alta un colaborador. Requiere usuarioId y cargoId activos.
+  - Descripcion: Dar de alta un colaborador. Requiere `usuarioId`, `cargoId` y `rolProfesional`; `colaboradorId` es opcional (UUID automático). La creación reserva `USUARIO#<usuarioId>` en la misma transacción para impedir duplicados concurrentes.
 - **GET /api/v1/colaboradores/{colaboradorId}**
   - Descripcion: Consultar detalle de colaborador por PK.
+- **GET /api/v1/colaboradores/yo**
+  - Descripcion: Consultar el perfil de colaborador asociado a la identidad Cognito autenticada; retorna 404 si no existe.
 - **PUT /api/v1/colaboradores/{colaboradorId}**
   - Descripcion: Actualizar informacion profesional.
 - **PATCH /api/v1/colaboradores/{colaboradorId}/estado**
@@ -118,7 +125,7 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **GET /api/v1/cargos**
   - Descripcion: Listar cargos activos e inactivos.
 - **POST /api/v1/cargos**
-  - Descripcion: Crear un cargo nuevo en el catalogo.
+  - Descripcion: Crear un cargo nuevo en el catalogo. `cargoId` es opcional y se genera automáticamente si falta.
 - **GET /api/v1/cargos/{cargoId}**
   - Descripcion: Consultar cargo por identificador.
 - **PUT /api/v1/cargos/{cargoId}**
@@ -135,9 +142,9 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **GET /api/v1/habilidades**
   - Descripcion: Listar catalogo de habilidades con filtros por categoria.
 - **POST /api/v1/habilidades**
-  - Descripcion: Crear nueva habilidad (valida nombre normalizado unico).
+  - Descripcion: Crear nueva habilidad (`habilidadId` opcional; UUID automático). El nombre normalizado se reserva transaccionalmente para impedir duplicados exactos.
 - **GET /api/v1/habilidades/categorias**
-  - Descripcion: Listar categorias disponibles de habilidades.
+  - Descripcion: Listar categorias disponibles, recorriendo las paginas del catalogo de habilidades y excluyendo los marcadores internos de unicidad. Devuelve un arreglo de nombres ordenados.
 - **GET /api/v1/habilidades/{habilidadId}**
   - Descripcion: Consultar habilidad por identificador.
 - **PUT /api/v1/habilidades/{habilidadId}**
@@ -154,13 +161,13 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **GET /api/v1/proyectos**
   - Descripcion: Listar proyectos por estado o lider.
 - **POST /api/v1/proyectos**
-  - Descripcion: Registrar requerimiento de proyecto (estado inicial BORRADOR).
+  - Descripcion: Registrar requerimiento de proyecto con estado inicial `BORRADOR`. El backend rechaza crearlo directamente como `ACTIVO`; debe asociarse primero una o más habilidades requeridas.
 - **GET /api/v1/proyectos/{proyectoId}**
   - Descripcion: Consultar proyecto por identificador.
 - **PUT /api/v1/proyectos/{proyectoId}**
   - Descripcion: Actualizar alcance, fechas u horas requeridas.
 - **PATCH /api/v1/proyectos/{proyectoId}/estado**
-  - Descripcion: Cancelar o cambiar estado de proyecto (sin borrado fisico).
+  - Descripcion: Publicar, cancelar o cambiar estado de proyecto (sin borrado físico). Para pasar de `BORRADOR` a `ACTIVO`, exige al menos una habilidad en ProyectoHabilidad y registra la primera `fechaPublicacion` con fecha del servidor.
 - **GET /api/v1/proyectos/{proyectoId}/habilidades**
   - Descripcion: Consultar matriz de habilidades requeridas del proyecto.
 - **POST /api/v1/proyectos/{proyectoId}/habilidades**
@@ -186,6 +193,8 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
   - Descripcion: Consultar detalle de postulacion mediante clave compuesta.
 - **PATCH /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/estado**
   - Descripcion: Aceptar o rechazar postulacion. La aceptacion ejecuta TransactWriteItems para generar la asignacion.
+- **PATCH /api/v1/proyectos/{proyectoId}/postulaciones/{colaboradorId}/retirar**
+  - Descripcion: Retirar una postulacion segun los permisos del colaborador autenticado.
 
 ---
 
@@ -194,17 +203,27 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **Tablas DynamoDB:** `internal-marketplace-asignaciones-dev` (PK: `asignacionId`, GSIs por colaborador, proyecto y estado)
 
 - **GET /api/v1/asignaciones**
-  - Descripcion: Listado general de asignaciones para control y auditoria.
+  - Descripcion: Alias del listado de asignaciones activas; no consulta historicos desvinculados.
 - **POST /api/v1/asignaciones**
-  - Descripcion: Crear asignacion directa comprobando que la dedicacion total no supere el 100%.
+  - Descripcion: Crear asignacion directa comprobando que la dedicacion total no supere el 100%, que no exista duplicación y que el colaborador no sea el mismo usuario que el líder del proyecto. Esta última regla se valida también de forma transaccional en DynamoDB.
+- **Regla de separación de responsabilidades:** un líder no puede postularse ni ser asignado a un proyecto que dirige. También se aplica al aceptar postulaciones; la comparación se realiza entre `Colaboradores.usuarioId` y `Proyectos.liderId`. Las cuentas sin identidad verificable no pueden generar asignaciones nuevas.
+- **GET /api/v1/asignaciones/mias**
+  - Descripcion: Consultar las asignaciones personales de la cuenta autenticada, incluso cuando su rol es Líder de Proyecto y participa en proyectos de otros líderes. El servidor obtiene el `colaboradorId` mediante `usuarioAutenticado.usuarioId`, sin aceptar IDs proporcionados por el cliente.
+  - Roles permitidos: usuarios autenticados activos. Respuesta `datos.items` (incluye historial) y `datos.tienePerfil` (booleano). No concede privilegios para gestionar asignaciones ajenas.
 - **GET /api/v1/asignaciones/activas**
-  - Descripcion: Consultar asignaciones activas (filtro por GSI3).
+  - Descripcion: Consultar asignaciones activas mediante GSI3. Las lecturas de GSI son eventualmente consistentes y no reemplazan la condición transaccional sobre `dedicacionReservada`.
 - **GET /api/v1/asignaciones/{asignacionId}**
   - Descripcion: Consultar asignacion por identificador unico.
 - **PUT /api/v1/asignaciones/{asignacionId}**
   - Descripcion: Modificar horas o porcentaje de dedicacion activa.
 - **PATCH /api/v1/asignaciones/{asignacionId}/estado**
-  - Descripcion: Desvincular colaborador (estado DESVINCULADA y registro de fecha).
+  - Descripcion: Desvincular colaborador enviando `{ "estado": "DESVINCULADA" }` (registro de fecha y liberacion de dedicacion).
+- **DELETE /api/v1/asignaciones/{asignacionId}**
+  - Descripcion: Desvincular logicamente una asignacion; conserva el registro historico.
+- **GET /api/v1/colaboradores/{colaboradorId}/asignaciones**
+  - Descripcion: Consultar las asignaciones del colaborador indicado, incluido el historial, según autorización. Para consultas personales del líder o empleado se recomienda `/asignaciones/mias`.
+- **GET /api/v1/proyectos/{proyectoId}/asignaciones**
+  - Descripcion: Consultar asignaciones del proyecto (incluido su historial) según los permisos del rol. La gestión de un líder se limita a proyectos que dirige.
 
 ---
 
@@ -212,20 +231,35 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **Funcion Lambda:** `BusquedaFunction` (`src/functions/busqueda/handler.js`)
 - **Tablas DynamoDB:** `internal-marketplace-colaborador-habilidad-dev`, `internal-marketplace-habilidades-dev`, `internal-marketplace-colaboradores-dev`, `internal-marketplace-cargos-dev`
 
-- **GET /api/v1/busqueda/colaboradores?habilidadId={id}&nivel={nivel}**
-  - Descripcion: Algoritmo de coincidencia de candidatos segun matriz de habilidades y disponibilidad.
-- **GET /api/v1/busqueda/proyectos?habilidadId={id}**
-  - Descripcion: Busqueda de proyectos que demanden una habilidad tecnica especifica.
-- **GET /api/v1/busqueda/habilidades?q={termino}**
-  - Descripcion: Busqueda en catalogo por texto normalizado.
+- **GET /api/v1/busqueda/colaboradores?habilidades={id1,id2}&nivelMinimo=MID&tipoCoincidencia=todas&considerarDisponibilidad=true&limit=50**
+  - Descripcion: Buscar candidatos activos por habilidades y nivel. La disponibilidad se determina con `100 - dedicacionReservada`, y los registros sin dedicación válida no se consideran disponibles. La respuesta incluye `total` de coincidencias antes del límite, `devueltos`, `candidatos`, puntuaciones y habilidades faltantes.
+  - Parametros: `habilidades` obligatorio; `nivelMinimo` (`JUNIOR`, `MID`, `SENIOR`); `tipoCoincidencia` (`todas`, `alguna`); `considerarDisponibilidad` (`true`, `false`); `limit` entero de 1 a 100.
+- **GET /api/v1/busqueda/proyectos?estado=ACTIVO&nombre={termino}**
+  - Descripcion: Buscar proyectos por estado y texto del nombre. Tambien admite `liderId` y `fecha`; no filtra proyectos por `habilidadId`.
+- **GET /api/v1/busqueda/habilidades?nombre={termino}**
+  - Descripcion: Consultar habilidades mediante los filtros admitidos por el repositorio (`nombre`, `categoria`, `estado`).
 
 ---
 
 ### 2.10 Modulo 09: Dashboard y Metricas
 - **Funcion Lambda:** `DashboardFunction` (`src/functions/dashboard/handler.js`)
-- **Acceso:** Consultas agregadas sin Scan masivo sobre tablas operativas.
+- **Acceso:** Consultas agregadas mediante GSIs y lecturas paginadas; la distribución de habilidades y el conteo de postulaciones realizan scans limitados a sus tablas correspondientes.
 
 - **GET /api/v1/dashboard/resumen**
   - Descripcion: Metricas consolidadas (colaboradores activos, proyectos por estado, asignaciones).
 - **GET /api/v1/dashboard/{tipoMetrica}**
   - Descripcion: Desglose especifico de metricas (`colaboradores`, `proyectos`, `asignaciones`, `habilidades`, `postulaciones`).
+
+---
+
+### 2.11 Modulo 10: Administración y Auditoría
+- **Funcion Lambda:** `AdministracionFunction` (`src/functions/administracion/handler.js`).
+- **Tabla DynamoDB:** `internal-marketplace-auditoria-{entorno}` (PK: `auditoriaId`; GSI1: `tipoRegistro` + `fechaId`). Se crea con SAM y facturación bajo demanda.
+- **GET /api/v1/administracion/auditoria**
+  - Descripcion: Consultar los eventos persistidos que se generaron después de habilitar la auditoría.
+  - Rol permitido: únicamente `ADMINISTRADOR`.
+  - Parametros: `desde` y `hasta` (YYYY-MM-DD, horario de El Salvador), `limite` (1-100) y `cursor` paginado.
+  - Respuesta: `datos.items` y `datos.nextCursor`.
+- **Registro automático de eventos:** el despachador guarda acciones de escritura exitosas (POST, PUT, PATCH y DELETE) y el inicio de sesión en la tabla de auditoría cuando `AUDIT_ENABLED=true`. El actor proviene de Cognito y no del cliente. No se almacenan credenciales ni tokens.
+- **Interfaz administrativa:** `Administrador → Auditoría` consulta los eventos persistidos, con filtros por usuario, entidad, tipo de acción y fechas. Los eventos anteriores al despliegue de la tabla no se atribuyen retroactivamente a un usuario.
+- **Limitaciones:** no se pueden reconstruir identidades de eventos anteriores sin registros históricos verificables. Una caída aislada del registro de auditoría se deja en CloudWatch y no revierte una operación de negocio que ya fue confirmada; debe vigilarse ese fallo para detectar brechas de auditoría.

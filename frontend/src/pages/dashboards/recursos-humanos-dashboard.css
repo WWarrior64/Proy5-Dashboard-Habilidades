@@ -1,0 +1,461 @@
+/* Dashboard de RRHH. Reutiliza la estructura visual del empleado. */
+.rrhh-dashboard { width: 100%; }
+
+.rrhh-dashboard .emp-content.rrhh-dashboard-content {
+  padding: 16px 24px 24px;
+  overflow-y: auto;
+}
+
+.rrhh-dashboard-section-title {
+  margin: 0 0 12px;
+  color: #16255a;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.rrhh-dashboard-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.rrhh-dashboard .rrhh-dashboard-metrics .emp-card {
+  width: auto;
+  min-width: 0;
+  height: 90px;
+  padding: 13px 15px;
+  flex-shrink: 1;
+}
+
+.rrhh-dashboard .rrhh-dashboard-metrics .emp-card-value {
+  font-size: 30px;
+}
+
+.rrhh-talent-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 290px;
+  background: #eef2f8;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.rrhh-talent-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px;
+}
+
+.rrhh-talent-heading h3 {
+  margin: 0;
+  color: #16255a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.rrhh-talent-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rrhh-talent-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 220px;
+  max-width: 100%;
+  height: 35px;
+  padding: 0 10px;
+  color: #64748b;
+  background: #eef2f8;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+}
+
+.rrhh-talent-search:focus-within { border-color: #2563eb; }
+
+.rrhh-talent-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  outline: none;
+  color: #333;
+  font-size: 12px;
+}
+
+.rrhh-talent-search input::placeholder { color: #94a3b8; }
+
+.rrhh-talent-filter-select {
+  width: 150px;
+  min-width: 0;
+  height: 35px;
+  padding: 0 10px;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  background: #eef2f8;
+  color: #333;
+  font-size: 12px;
+}
+
+.rrhh-talent-filter-select:focus {
+  outline-color: #2563eb;
+}
+
+.rrhh-talent-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.rrhh-talent-table {
+  width: 100%;
+  min-width: 590px;
+  table-layout: fixed;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.rrhh-talent-table th {
+  padding: 10px 12px;
+  background: #cfddec;
+  color: #222;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: none;
+  text-align: left;
+  line-height: 1.2;
+}
+
+.rrhh-talent-table td {
+  padding: 10px 12px;
+  color: #333;
+  border-bottom: 1px solid #c9d4e0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.rrhh-talent-table tr:last-child td { border-bottom: 0; }
+
+.rrhh-talent-table th:nth-child(1) { width: 28%; }
+.rrhh-talent-table th:nth-child(2) { width: 26%; }
+.rrhh-talent-table th:nth-child(3) { width: 23%; }
+.rrhh-talent-table th:nth-child(4) { width: 23%; }
+
+.rrhh-talent-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* La misma paleta Senior / Mid / Junior utilizada en Mis habilidades. */
+.rrhh-talent-status.available {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.rrhh-talent-status.unavailable {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.rrhh-talent-empty {
+  margin: 0;
+  padding: 26px 12px;
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+}
+
+.rrhh-talent-count {
+  margin: auto 0 0;
+  padding: 13px 8px;
+  color: #8b939f;
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .rrhh-dashboard .emp-content.rrhh-dashboard-content { padding: 14px; }
+  .rrhh-dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .rrhh-dashboard .emp-sidebar { width: 145px; }
+  .rrhh-dashboard .emp-sidebar-top { padding-left: 12px; }
+  .rrhh-dashboard .emp-sidebar-brand { font-size: 14px; width: 120px; }
+  .rrhh-dashboard .emp-sidebar-divider { width: 115px; }
+  .rrhh-dashboard .emp-sidebar-menu { padding-left: 0; }
+  .rrhh-dashboard .emp-sidebar-item,
+  .rrhh-dashboard .emp-sidebar-item.active {
+    width: 125px;
+    font-size: 11px;
+    padding-left: 5px;
+    white-space: normal;
+  }
+  .rrhh-dashboard .emp-sidebar-bottom { padding-left: 12px; }
+  .rrhh-dashboard .emp-header-right { gap: 8px; }
+  .rrhh-dashboard .emp-user-icon { margin-right: 0; }
+  .rrhh-dashboard-metrics { gap: 6px; }
+  .rrhh-dashboard .rrhh-dashboard-metrics .emp-card { height: 78px; padding: 8px; }
+  .rrhh-dashboard .emp-card-label { font-size: 10px; line-height: 1.2; }
+  .rrhh-dashboard .rrhh-dashboard-metrics .emp-card-value { font-size: 20px; }
+  .rrhh-talent-heading { align-items: stretch; }
+  .rrhh-talent-actions { width: 100%; }
+  .rrhh-talent-search { flex: 1; width: auto; }
+}
+
+/* Rework del contenido interno: conserva intactos sidebar y barra superior. */
+.rrhh-dashboard-intro {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rrhh-dashboard-intro .rrhh-dashboard-section-title { margin: 0; }
+.rrhh-dashboard-preview { color: #64748b; font-size: 11px; white-space: nowrap; }
+
+.rrhh-dashboard .rrhh-dashboard-metrics .emp-card.rrhh-dashboard-metric {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  height: 98px;
+  padding: 13px 52px 13px 15px;
+  text-align: left;
+}
+
+.rrhh-dashboard-metric-text { width: 100%; min-width: 0; text-align: left; }
+.rrhh-dashboard .rrhh-dashboard-metric .emp-card-label {
+  margin: 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+}
+.rrhh-dashboard .rrhh-dashboard-metric .emp-card-value {
+  margin: 2px 0;
+  color: #2563eb;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: left;
+}
+.rrhh-dashboard-metric-note {
+  margin: 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.3;
+}
+.rrhh-dashboard-metric-icon {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 31px;
+  height: 31px;
+  border-radius: 6px;
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.rrhh-dashboard-panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.rrhh-dashboard-panel {
+  min-width: 0;
+  min-height: 196px;
+  padding: 15px 16px;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  background: #eef2f8;
+}
+.rrhh-dashboard-panel:nth-child(-n + 2) { min-height: 266px; }
+.rrhh-dashboard-panel h2 {
+  margin: 0;
+  padding: 0 0 11px;
+  border-bottom: 1px solid #c9d4e0;
+  color: #16255a;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.rrhh-dashboard-panel-list { display: grid; }
+.rrhh-dashboard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 11px 0;
+  border-bottom: 1px solid #c9d4e0;
+}
+.rrhh-dashboard-panel-list > :last-child { border-bottom: 0; }
+a.rrhh-dashboard-row:hover .rrhh-dashboard-row-copy strong { color: #2563eb; }
+.rrhh-dashboard-row-copy { min-width: 0; flex: 1 1 auto; }
+.rrhh-dashboard-row-copy strong {
+  display: block;
+  color: #16255a;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.rrhh-dashboard-row-copy p {
+  margin: 3px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.rrhh-dashboard-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.rrhh-dashboard-status.disponible { background: #dbeafe; color: #2563eb; }
+.rrhh-dashboard-status.parcial { background: #fef3c7; color: #92400e; }
+.rrhh-dashboard-status.no-disponible { background: #e2e8f0; color: #64748b; }
+
+.rrhh-dashboard-progress-column {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  flex: 0 0 26%;
+  max-width: 165px;
+  min-width: 85px;
+  color: #64748b;
+  font-size: 11px;
+}
+.rrhh-dashboard-progress {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #c9d4e0;
+}
+.rrhh-dashboard-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2563eb;
+}
+
+.rrhh-dashboard-actions-panel { min-height: 196px; }
+.rrhh-dashboard-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding-top: 14px;
+}
+.rrhh-dashboard-quick-actions :is(a, button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  background: #fff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+.rrhh-dashboard-quick-actions :is(a, button):hover { background: #dbeafe; }
+.rrhh-dashboard-quick-actions :is(a, button):focus-visible,
+.rrhh-dashboard-panel-list a:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.rrhh-dashboard-action-note {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: 5px;
+  background: #dbeafe;
+  color: #16255a;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.rrhh-dashboard-action-note button {
+  flex: 0 0 auto;
+  color: #2563eb;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.rrhh-dashboard-skill-count {
+  flex-shrink: 0;
+  padding: 5px 8px;
+  border-radius: 4px;
+  color: #64748b;
+  background: #dbeafe;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.rrhh-dashboard-empty {
+  margin: 0;
+  padding: 16px 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .rrhh-dashboard-quick-actions { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  .rrhh-dashboard-panels { grid-template-columns: 1fr; }
+  .rrhh-dashboard-panel:nth-child(-n + 2) { min-height: 0; }
+}
+@media (max-width: 620px) {
+  .rrhh-dashboard .rrhh-dashboard-metrics .emp-card.rrhh-dashboard-metric {
+    height: 88px;
+    padding: 8px 38px 8px 8px;
+  }
+  .rrhh-dashboard-metric-icon { top: 10px; right: 8px; width: 25px; height: 25px; }
+  .rrhh-dashboard .rrhh-dashboard-metric .emp-card-value { font-size: 20px; }
+  .rrhh-dashboard-metric-note { font-size: 10px; }
+  .rrhh-dashboard-panel { padding: 12px; }
+  .rrhh-dashboard-quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 430px) {
+  .rrhh-dashboard-metrics { grid-template-columns: 1fr; }
+}

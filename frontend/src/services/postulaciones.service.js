@@ -1,10 +1,14 @@
 import api from './api.js'
 
+const id = (value) => encodeURIComponent(value)
+
 export const postulacionesService = {
-  list: (params) => api.get('/postulaciones', { params }),
-  get: (id) => api.get(`/postulaciones/${id}`),
   create: (data) => api.post('/postulaciones', data),
-  update: (id, data) => api.put(`/postulaciones/${id}`, data),
-  remove: (id) => api.delete(`/postulaciones/${id}`),
-  responder: (id, data) => api.patch(`/postulaciones/${id}/responder`, data),
+  listByProject: (proyectoId) => api.get(`/proyectos/${id(proyectoId)}/postulaciones`),
+  listByCollaborator: (colaboradorId) => api.get(`/colaboradores/${id(colaboradorId)}/postulaciones`),
+  get: (proyectoId, colaboradorId) => api.get(`/proyectos/${id(proyectoId)}/postulaciones/${id(colaboradorId)}`),
+  decide: (proyectoId, colaboradorId, data) =>
+    api.patch(`/proyectos/${id(proyectoId)}/postulaciones/${id(colaboradorId)}/estado`, data),
+  withdraw: (proyectoId, colaboradorId) =>
+    api.patch(`/proyectos/${id(proyectoId)}/postulaciones/${id(colaboradorId)}/retirar`, {}),
 }

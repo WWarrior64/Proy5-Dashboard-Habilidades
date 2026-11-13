@@ -11,45 +11,61 @@ const {
 const ESTADOS_PROYECTO = ['BORRADOR', 'ACTIVO', 'PAUSADO', 'COMPLETADO', 'CANCELADO'];
 const ESTADOS_POSTULACION = ['PENDIENTE', 'ACEPTADA', 'RECHAZADA', 'RETIRADA'];
 
+// DynamoDB devuelve resultados paginados incluso cuando se utiliza Select: COUNT.
+// Recorremos todas las páginas para no mostrar métricas incompletas.
+async function consultarPaginas(Comando, parametros) {
+  const items = [];
+  let count = 0;
+  let lastKey;
+  do {
+    const resultado = await dynamoDb.send(new Comando({
+      ...parametros,
+      ...(lastKey && { ExclusiveStartKey: lastKey }),
+    }));
+    count += resultado.Count || 0;
+    items.push(...(resultado.Items || []));
+    lastKey = resultado.LastEvaluatedKey;
+  } while (lastKey);
+  return { Count: count, Items: items };
+}
+
 async function contarColaboradoresActivos() {
-  const resultado = await dynamoDb.send(
-    new QueryCommand({
+  const resultado = await consultarPaginas(QueryCommand, {
       TableName: tableColaboradores,
       IndexName: 'GSI2',
       KeyConditionExpression: '#est = :est',
       ExpressionAttributeNames: { '#est': 'estado' },
       ExpressionAttributeValues: { ':est': 'ACTIVO' },
       Select: 'COUNT',
-    })
-  );
+  });
   return resultado.Count || 0;
 }
 
 async function contarProyectosPorEstado() {
   const conteo = {};
   for (const estado of ESTADOS_PROYECTO) {
-    const resultado = await dynamoDb.send(new QueryCommand({
+    const resultado = await consultarPaginas(QueryCommand, {
       TableName: tableProyectos,
       IndexName: 'GSI1',
       KeyConditionExpression: '#est = :est',
       ExpressionAttributeNames: { '#est': 'estado' },
       ExpressionAttributeValues: { ':est': estado },
       Select: 'COUNT',
-    }));
+    });
     conteo[estado] = resultado.Count || 0;
   }
   return conteo;
 }
 
 async function contarAsignacionesActivas() {
-  const resultado = await dynamoDb.send(new QueryCommand({
+  const resultado = await consultarPaginas(QueryCommand, {
     TableName: tableAsignaciones,
     IndexName: 'GSI3',
     KeyConditionExpression: '#est = :est',
     ExpressionAttributeNames: { '#est': 'estado' },
     ExpressionAttributeValues: { ':est': 'ACTIVA' },
     Select: 'COUNT',
-  }));
+  });
   return resultado.Count || 0;
 }
 
@@ -58,26 +74,24 @@ async function obtenerDistribucionHabilidades() {
   // de habilidades (tabla de dimensión pequeña) y se cuenta, por habilidad,
   // las relaciones de proyecto-habilidad mediante su GSI1 (habilidadId).
   // No se ejecuta un Scan sobre las tablas de hechos del sistema.
-  const catalogo = await dynamoDb.send(
-    new ScanCommand({
-      TableName: tableHabilidades,
-      ProjectionExpression: 'habilidadId, nombre',
-    })
-  );
+  const catalogo = await consultarPaginas(ScanCommand, {
+    TableName: tableHabilidades,
+    ProjectionExpression: 'habilidadId, #nombre',
+    FilterExpression: 'attribute_exists(#nombre)',
+    ExpressionAttributeNames: { '#nombre': 'nombre' },
+  });
   const habilidades = catalogo.Items || [];
 
   const distribucion = [];
   for (const habilidad of habilidades) {
-    const resultado = await dynamoDb.send(
-      new QueryCommand({
+    const resultado = await consultarPaginas(QueryCommand, {
         TableName: tableProyectoHabilidad,
         IndexName: 'GSI1',
         KeyConditionExpression: '#h = :h',
         ExpressionAttributeNames: { '#h': 'habilidadId' },
         ExpressionAttributeValues: { ':h': habilidad.habilidadId },
         Select: 'COUNT',
-      })
-    );
+    });
     distribucion.push({
       habilidadId: habilidad.habilidadId,
       nombre: habilidad.nombre,
@@ -93,7 +107,7 @@ async function obtenerPostulacionesPorEstado() {
   // la tabla de postulaciones no tiene GSI sobre estado, por lo que esta métrica se
   // obtiene con una operación puntual (filtrada) sobre esa tabla; no se
   // escanean las demás tablas del sistema.
-  const resultado = await dynamoDb.send(new ScanCommand({
+  const resultado = await consultarPaginas(ScanCommand, {
     TableName: tablePostulaciones,
     ProjectionExpression: '#est',
     ExpressionAttributeNames: { '#est': 'estado' },
@@ -104,7 +118,7 @@ async function obtenerPostulacionesPorEstado() {
       ':rechazada': 'RECHAZADA',
       ':retirada': 'RETIRADA',
     },
-  }));
+  });
   const conteo = { PENDIENTE: 0, ACEPTADA: 0, RECHAZADA: 0, RETIRADA: 0 };
   for (const item of resultado.Items || []) {
     if (Object.prototype.hasOwnProperty.call(conteo, item.estado)) {
@@ -121,15 +135,13 @@ async function obtenerActividadReciente(parametros = {}) {
 
   // Proyectos creados/modificados recientemente (GSI1 por estado).
   for (const estado of ESTADOS_PROYECTO) {
-    const resultado = await dynamoDb.send(
-      new QueryCommand({
+    const resultado = await consultarPaginas(QueryCommand, {
         TableName: tableProyectos,
         IndexName: 'GSI1',
         KeyConditionExpression: '#est = :est',
         ExpressionAttributeNames: { '#est': 'estado' },
         ExpressionAttributeValues: { ':est': estado },
-      })
-    );
+    });
     for (const proyecto of resultado.Items || []) {
       if (proyecto.fechaCreacion >= desde) {
         eventos.push({
@@ -144,18 +156,16 @@ async function obtenerActividadReciente(parametros = {}) {
   }
 
   // Asignaciones activadas o desvinculadas recientemente (GSI3 por estado).
-  for (const estado of ['ACTIVA', 'DESVINCULADA']) {
-    const resultado = await dynamoDb.send(
-      new QueryCommand({
+  for (const estado of ['ACTIVA', 'DESVINCULADA', 'FINALIZADA']) {
+    const resultado = await consultarPaginas(QueryCommand, {
         TableName: tableAsignaciones,
         IndexName: 'GSI3',
         KeyConditionExpression: '#est = :est',
         ExpressionAttributeNames: { '#est': 'estado' },
         ExpressionAttributeValues: { ':est': estado },
-      })
-    );
+    });
     for (const asignacion of resultado.Items || []) {
-      const fecha = asignacion.estado === 'DESVINCULADA' ? asignacion.fechaFin : asignacion.fechaAsignacion;
+      const fecha = asignacion.estado === 'ACTIVA' ? asignacion.fechaAsignacion : asignacion.fechaFin;
       if (fecha && fecha >= desde) {
         eventos.push({
           tipo: 'asignacion',
