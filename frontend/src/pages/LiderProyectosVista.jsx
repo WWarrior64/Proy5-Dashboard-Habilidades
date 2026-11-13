@@ -49,6 +49,49 @@ function obtenerLista(respuesta) {
 
 const nombreEstado = estado => estados.find(item => item.valor === estado)?.nombre || estado || 'Sin estado'
 
+async function prepararRequisitos(texto) {
+  const entradas = texto.split(',').map(item => item.trim()).filter(Boolean)
+  if (!entradas.length) return []
+  const catalogo = obtenerLista(await habilidadesService.listAll())
+  const porNombre = new Map(catalogo.filter(item => item.estado === 'ACTIVO')
+    .map(item => [item.nombre.trim().toLocaleLowerCase('es'), item]))
+  const requisitos = entradas.map(entrada => {
+    const [nombre, nivelTexto = 'JUNIOR'] = entrada.split('·').map(item => item.trim())
+    const habilidad = porNombre.get(nombre.toLocaleLowerCase('es'))
+    if (!habilidad) throw new Error('La habilidad "' + nombre + '" no existe o está inactiva en el catálogo de RRHH.')
+    const nivelMinimo = nivelTexto.toUpperCase()
+    if (!['JUNIOR', 'MID', 'SENIOR'].includes(nivelMinimo)) {
+      throw new Error('El nivel requerido para "' + nombre + '" debe ser Junior, Mid o Senior.')
+    }
+    return { habilidadId: habilidad.habilidadId, nivelMinimo, esObligatoria: true }
+  })
+  if (new Set(requisitos.map(item => item.habilidadId)).size !== requisitos.length) {
+    throw new Error('No repitas una misma habilidad en los requisitos del proyecto.')
+  }
+  return requisitos
+}
+
+async function sincronizarRequisitos(proyectoId, requisitos) {
+  const base = `/proyectos/${encodeURIComponent(proyectoId)}/habilidades`
+  const anteriores = obtenerLista(await api.get(base))
+  const anterioresPorId = new Map(anteriores.map(item => [item.habilidadId, item]))
+  const actuales = new Set(requisitos.map(item => item.habilidadId))
+  for (const requisito of requisitos) {
+    const anterior = anterioresPorId.get(requisito.habilidadId)
+    if (!anterior) await api.post(base, requisito)
+    else if (anterior.nivelMinimo !== requisito.nivelMinimo) {
+      await api.put(`${base}/${encodeURIComponent(requisito.habilidadId)}`, {
+        nivelMinimo: requisito.nivelMinimo,
+      })
+    }
+  }
+  for (const anterior of anteriores) {
+    if (!actuales.has(anterior.habilidadId)) {
+      await api.delete(`${base}/${encodeURIComponent(anterior.habilidadId)}`)
+    }
+  }
+}
+
 export default function LiderProyectosVista() {
   const { user } = useAuth()
   const [proyectos, setProyectos] = useState([])
@@ -82,7 +125,7 @@ export default function LiderProyectosVista() {
 
       if (lista.length) {
         const [catalogo, ...resultadosRelaciones] = await Promise.allSettled([
-          habilidadesService.list({ limit: 100 }),
+          habilidadesService.listAll(),
           ...lista.map(item => api.get(`/proyectos/${encodeURIComponent(item.proyectoId)}/habilidades`)),
         ])
         const nombres = catalogo.status === 'fulfilled'
@@ -93,7 +136,8 @@ export default function LiderProyectosVista() {
           const relacionado = resultadosRelaciones[indice]
           if (relacionado.status === 'fulfilled') {
             resultado[item.proyectoId] = obtenerLista(relacionado.value).map(relacion =>
-              nombres.get(relacion.habilidadId) || relacion.nombre || relacion.habilidadId,
+              (nombres.get(relacion.habilidadId) || relacion.nombre || relacion.habilidadId) +
+                ' · ' + (relacion.nivelMinimo || 'JUNIOR'),
             )
           }
         })
@@ -161,7 +205,7 @@ export default function LiderProyectosVista() {
     setErrorFormulario('')
     try {
       const cambios = { nombre, descripcion, horasRequeridas: horas, estado: formulario.estado }
-      if (mostrandoEjemplo) {
+      if (modal?.esEjemplo) {
         const habilidades = formulario.habilidadesTexto.split(',').map(texto => texto.trim()).filter(Boolean)
         if (modal.proyectoId) {
           setEjemplos(actuales => actuales.map(item =>
@@ -172,11 +216,19 @@ export default function LiderProyectosVista() {
             ...cambios, proyectoId: '__ejemplo_' + crypto.randomUUID(), habilidades, esEjemplo: true,
           }])
         }
-      } else if (modal.proyectoId) {
-        await proyectosService.update(modal.proyectoId, cambios)
-        await cargarProyectos()
       } else {
-        await proyectosService.create({ ...cambios, liderId: user.usuarioId, creadoPor: user.usuarioId })
+        const requisitos = await prepararRequisitos(formulario.habilidadesTexto)
+        if (modal.proyectoId) {
+          await proyectosService.update(modal.proyectoId, cambios)
+          await sincronizarRequisitos(modal.proyectoId, requisitos)
+        } else {
+          const creado = await proyectosService.create({
+            ...cambios, liderId: user.usuarioId, creadoPor: user.usuarioId,
+          })
+          const proyectoId = creado.data?.datos?.proyectoId
+          if (!proyectoId) throw new Error('Se creó el proyecto pero no se recibió su identificador para guardar los requisitos.')
+          await sincronizarRequisitos(proyectoId, requisitos)
+        }
         await cargarProyectos()
       }
       setModal(null)

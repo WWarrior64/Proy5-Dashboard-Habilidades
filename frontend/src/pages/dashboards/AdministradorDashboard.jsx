@@ -4,6 +4,7 @@ import { Clock3, ShieldCheck, UserCheck, UserRound, UsersRound } from 'lucide-re
 import EmpleadoLogoutButton from '../../components/layout/EmpleadoLogoutButton.jsx'
 import './administrador-dashboard.css'
 import { usuariosService } from '../../services/usuarios.service.js'
+import api from '../../services/api.js'
 import { proyectosService } from '../../services/proyectos.service.js'
 import Statistics from '../../components/dashboard/Statistics.jsx'
 import ActivityList from '../../components/dashboard/ActivityList.jsx'
@@ -26,6 +27,7 @@ export default function AdministradorDashboard() {
   const navigate = useNavigate()
   const [usuarios, setUsuarios] = useState([])
   const [proyectos, setProyectos] = useState([])
+  const [actividadReciente, setActividadReciente] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
@@ -36,13 +38,22 @@ export default function AdministradorDashboard() {
     setLoading(true)
     setError(null)
     try {
-      const [usuariosResp, proyectosResp] = await Promise.allSettled([
-        usuariosService.list({}),
+      const [usuariosResp, proyectosResp, actividadResp] = await Promise.allSettled([
+        usuariosService.listAll(),
         proyectosService.list({}),
+        api.get('/dashboard/actividad', { params: { dias: 30, limite: 30 } }),
       ])
 
       if (usuariosResp.status === 'rejected') setError(getApiErrorMessage(usuariosResp.reason))
       if (proyectosResp.status === 'rejected') setError(getApiErrorMessage(proyectosResp.reason))
+      if (actividadResp.status === 'rejected') setError(getApiErrorMessage(actividadResp.reason))
+      if (actividadResp.status === 'fulfilled') {
+        const eventos = actividadResp.value.data?.datos?.eventos || []
+        setActividadReciente(eventos.map(item => ({
+          ...item,
+          nombre: item.nombre || item.proyectoId || item.id || 'Evento sin nombre',
+        })))
+      }
 
       if (usuariosResp.status === 'fulfilled') {
         const data = usuariosResp.value.data
@@ -81,7 +92,7 @@ export default function AdministradorDashboard() {
     { title: 'Pendientes', value: demoMode ? 0 : proyectos.filter((p) => p.estado === 'BORRADOR').length, subtitle: 'Proyectos por iniciar', icon: <Clock3 size={19} /> },
   ]
 
-  const actividades = demoMode ? DEMO_ACTIVIDADES : []
+  const actividades = demoMode ? DEMO_ACTIVIDADES : actividadReciente
   const termino = busquedaSuperior.trim().toLocaleLowerCase('es')
   const actividadesVisibles = actividades.filter(item =>
     [item.tipo, item.nombre, item.fecha, item.estado].join(' ').toLocaleLowerCase('es').includes(termino))

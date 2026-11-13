@@ -54,7 +54,7 @@ export default function RrhhHabilidadesVista() {
     setCargando(true)
     setError('')
     try {
-      const respuesta = await habilidadesService.list({ limit: 100 })
+      const respuesta = await habilidadesService.listAll()
       const datos = respuesta.data?.datos
       setHabilidades(Array.isArray(datos?.items) ? datos.items : Array.isArray(datos) ? datos : [])
     } catch (fallo) {

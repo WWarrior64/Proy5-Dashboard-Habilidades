@@ -68,7 +68,7 @@ export default function RrhhProyectosVista({
     let cancelado = false
     async function cargarRelacionados() {
       const [catalogo, horas, ...requisitos] = await Promise.allSettled([
-        habilidadesService.list({ limit: 100 }),
+        habilidadesService.listAll(),
         asignacionesService.list({}),
         ...proyectos.map(item => api.get(`/proyectos/${encodeURIComponent(item.proyectoId)}/habilidades`)),
       ])

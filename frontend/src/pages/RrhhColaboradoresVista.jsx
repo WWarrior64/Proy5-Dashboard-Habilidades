@@ -26,6 +26,14 @@ const ejemploInactivo = {
   esEjemplo: true,
 }
 
+function disponibilidadReal(colaborador) {
+  if (colaborador.esEjemplo) return colaborador.disponibilidad || 'SIN_DATOS'
+  if (colaborador.estado === 'INACTIVO') return 'NO_DISPONIBLE'
+  const reserva = colaborador.dedicacionReservada
+  if (!Number.isFinite(reserva) || reserva < 0 || reserva > 100) return 'SIN_DATOS'
+  return reserva > 0 ? 'ASIGNADA' : 'DISPONIBLE'
+}
+
 function nombreColaborador(colaborador, usuarios) {
   const usuario = usuarios.find(item => item.usuarioId === colaborador.usuarioId)
   return usuario?.nombre || colaborador.nombre || colaborador.usuarioId || 'Colaborador'
@@ -135,7 +143,7 @@ export default function RrhhColaboradoresVista({
       const habilidades = habilidadesColaborador(colaborador)
       const texto = [nombre, colaborador.rolProfesional, cargo?.nombre, ...habilidades]
         .filter(Boolean).join(' ').toLocaleLowerCase('es')
-      const estado = (colaborador.disponibilidad || 'DISPONIBLE').toUpperCase()
+      const estado = disponibilidadReal(colaborador)
       return terminos.every(termino => texto.includes(termino)) &&
         (disponibilidad === 'Todas' ||
           (disponibilidad === 'Disponibles' && estado === 'DISPONIBLE') ||
@@ -143,8 +151,8 @@ export default function RrhhColaboradoresVista({
     })
   }, [tarjetas, usuarios, cargos, busqueda, busquedaSuperior, disponibilidad])
 
-  const disponibles = colaboradores.filter(item => (item.disponibilidad || 'DISPONIBLE') === 'DISPONIBLE').length
-  const asignados = colaboradores.filter(item => item.disponibilidad === 'ASIGNADA').length
+  const disponibles = colaboradores.filter(item => disponibilidadReal(item) === 'DISPONIBLE').length
+  const asignados = colaboradores.filter(item => disponibilidadReal(item) === 'ASIGNADA').length
 
   return (
     <div className="emp-dashboard rrhh-colaboradores-page">
@@ -263,7 +271,7 @@ export default function RrhhColaboradoresVista({
                   const usuario = usuarios.find(item => item.usuarioId === colaborador.usuarioId)
                   const estaActivo = colaborador.estado !== 'INACTIVO' && usuario?.estado !== 'INACTIVO'
                   const yaDadoDeBaja = colaborador.estado === 'INACTIVO'
-                  const estadoDisponibilidad = (colaborador.disponibilidad || 'DISPONIBLE').toUpperCase()
+                  const estadoDisponibilidad = disponibilidadReal(colaborador)
                   const disponible = estadoDisponibilidad === 'DISPONIBLE'
                   return (
                     <article className="rrhh-colaborador-card" key={colaborador.colaboradorId}>
@@ -277,7 +285,7 @@ export default function RrhhColaboradoresVista({
                         </div>
                         <div className="rrhh-colaborador-estados">
                         <span className={'rrhh-colaborador-status ' + (disponible ? 'disponible' : 'asignada')}>
-                          {disponible ? 'Disponible' : estadoDisponibilidad === 'ASIGNADA' ? 'Asignado' : 'No disponible'}
+                          {disponible ? 'Disponible' : estadoDisponibilidad === 'ASIGNADA' ? 'Asignado' : estadoDisponibilidad === 'SIN_DATOS' ? 'Sin datos' : 'No disponible'}
                         </span>
                         <span className={'rrhh-colaborador-status ' + (estaActivo ? 'activo' : 'inactivo')}>
                           {estaActivo ? 'Activo' : 'Inactivo'}

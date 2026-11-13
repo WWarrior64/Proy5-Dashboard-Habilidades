@@ -54,9 +54,9 @@ export default function RrhhAsignacionesVista() {
     setError('')
     const [resultadoAsignaciones, resultadoColaboradores, resultadoProyectos, resultadoUsuarios] = await Promise.allSettled([
       asignacionesService.list(),
-      colaboradoresService.list({ limit: 100 }),
+      colaboradoresService.listAll(),
       proyectosService.list(),
-      usuariosService.list({}),
+      usuariosService.listAll(),
     ])
     if (resultadoAsignaciones.status === 'fulfilled') {
       setAsignaciones(extraerLista(resultadoAsignaciones.value))

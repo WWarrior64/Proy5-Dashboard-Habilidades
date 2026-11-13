@@ -48,6 +48,27 @@ export function extractPaginated(response) {
 }
 
 /**
+ * Recorre los cursores devueltos por las API de listados sin perder registros.
+ * fetchPage recibe { limit, cursor } y devuelve la respuesta Axios.
+ */
+export async function fetchAllPages(fetchPage, limit = 100) {
+  const items = []
+  const visitados = new Set()
+  let cursor = null
+  do {
+    const respuesta = await fetchPage({ limit, ...(cursor ? { cursor } : {}) })
+    const datos = respuesta?.data?.datos ?? respuesta?.data ?? respuesta
+    items.push(...extractItems(datos))
+    cursor = datos?.nextCursor || null
+    if (cursor && visitados.has(cursor)) {
+      throw new Error('La API devolvió un cursor de paginación repetido.')
+    }
+    if (cursor) visitados.add(cursor)
+  } while (cursor)
+  return { data: { success: true, datos: { items, nextCursor: null } } }
+}
+
+/**
  * Verifica si una respuesta de API indica éxito.
  * @param {any} response - Respuesta de la API
  * @returns {boolean}

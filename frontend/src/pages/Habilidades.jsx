@@ -1,7 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Pencil, Trash2, Plus, Search, UserRound } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
+import { colaboradoresService } from '../services/colaboradores.service.js'
+import { habilidadesService } from '../services/habilidades.service.js'
+import { extractItems } from '../utils/apiResponses.js'
+import { getApiErrorMessage } from '../utils/apiErrors.js'
 import './habilidades-empleado.css'
 
 const initialSkills = [
@@ -23,32 +27,123 @@ const menu = [
   ['Mis asignaciones', '/asignaciones'],
 ]
 
+const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
+const fechaVisible = valor => valor ? new Date(valor).toLocaleDateString('es-SV', { timeZone: 'UTC' }) : '—'
+
 export default function Habilidades() {
-  const [skills, setSkills] = useState(initialSkills)
+  const [skills, setSkills] = useState(modoDemo ? initialSkills : [])
+  const [catalogo, setCatalogo] = useState([])
+  const [colaboradorId, setColaboradorId] = useState(null)
+  const [cargando, setCargando] = useState(!modoDemo)
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [headerSearch, setHeaderSearch] = useState('')
   const [category, setCategory] = useState('')
   const [level, setLevel] = useState('')
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(emptySkill)
+
+  const cargar = async () => {
+    setCargando(true)
+    setError('')
+    try {
+      const perfil = await colaboradoresService.getMe()
+      const id = perfil.data?.datos?.colaboradorId
+      if (!id) throw new Error('La cuenta no tiene un perfil de colaborador.')
+      const [relaciones, habilidades] = await Promise.all([
+        colaboradoresService.listSkills(id),
+        habilidadesService.listAll(),
+      ])
+      const itemsCatalogo = extractItems(habilidades.data)
+      const porId = new Map(itemsCatalogo.map(item => [item.habilidadId, item]))
+      setCatalogo(itemsCatalogo)
+      setColaboradorId(id)
+      setSkills(extractItems(relaciones.data).map(item => {
+        const detalle = porId.get(item.habilidadId)
+        const nivel = String(item.nivel || 'JUNIOR').toUpperCase()
+        return {
+          id: item.habilidadId,
+          nombre: detalle?.nombre || item.habilidadId,
+          categoria: detalle?.categoria || 'Sin categoría',
+          nivel: nivel.charAt(0) + nivel.slice(1).toLowerCase(),
+          anios: item.anosExperiencia || 0,
+          fecha: fechaVisible(item.fechaUltimoUso),
+          observaciones: item.observaciones || '',
+        }
+      }))
+    } catch (fallo) {
+      setError(getApiErrorMessage(fallo, 'No se pudieron cargar tus habilidades.'))
+    } finally {
+      setCargando(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!modoDemo) cargar()
+  }, [])
+
   const filtered = useMemo(() => skills.filter(s =>
     s.nombre.toLowerCase().includes(search.toLowerCase()) &&
+    s.nombre.toLowerCase().includes(headerSearch.toLowerCase()) &&
     (!category || s.categoria === category) && (!level || s.nivel === level)
-  ), [skills, search, category, level])
+  ), [skills, search, headerSearch, category, level])
   const latest = skills.length ? skills.reduce((a, b) => {
-    const parse = value => value.split('/').reverse().join('-')
+    const parse = value => value === '—' ? '' : value.split('/').reverse().join('-')
     return parse(a.fecha) > parse(b.fecha) ? a : b
   }).fecha : '—'
   const openForm = skill => {
     setEditing(skill ? skill.id : 'new')
     setForm(skill ? { ...skill } : { ...emptySkill, fecha: new Date().toLocaleDateString('es-ES') })
   }
-  const saveSkill = event => {
+  const saveSkill = async event => {
     event.preventDefault()
-    if (!form.nombre.trim()) return
-    if (editing === 'new') setSkills(previous => [...previous, { ...form, id: Date.now() }])
-    else setSkills(previous => previous.map(s => s.id === editing ? { ...form, id: s.id } : s))
-    setEditing(null)
+    if (!form.nombre.trim() || guardando) return
+    setError('')
+    setGuardando(true)
+    try {
+      if (modoDemo) {
+        if (editing === 'new') setSkills(previous => [...previous, { ...form, id: Date.now() }])
+        else setSkills(previous => previous.map(s => s.id === editing ? { ...form, id: s.id } : s))
+      } else {
+        const habilidad = catalogo.find(item => item.nombre.toLowerCase() === form.nombre.trim().toLowerCase())
+        if (!habilidad) throw new Error('La habilidad debe existir en el catálogo de RRHH.')
+        if (editing !== 'new' && habilidad.habilidadId !== editing) {
+          throw new Error('Para cambiar de habilidad, retira la anterior y registra la nueva.')
+        }
+        const datos = {
+          nivel: form.nivel.toUpperCase(),
+          anosExperiencia: Number(form.anios),
+          observaciones: form.observaciones,
+        }
+        if (editing === 'new') {
+          await colaboradoresService.addSkill(colaboradorId, { habilidadId: habilidad.habilidadId, ...datos })
+        } else {
+          await colaboradoresService.updateSkill(colaboradorId, editing, datos)
+        }
+        await cargar()
+      }
+      setEditing(null)
+    } catch (fallo) {
+      setError(getApiErrorMessage(fallo, 'No se pudo guardar la habilidad.'))
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  const eliminarSkill = async skill => {
+    if (!window.confirm('¿Eliminar ' + skill.nombre + '?') || guardando) return
+    setGuardando(true)
+    setError('')
+    try {
+      if (!modoDemo) await colaboradoresService.removeSkill(colaboradorId, skill.id)
+      if (modoDemo) setSkills(actuales => actuales.filter(item => item.id !== skill.id))
+      else await cargar()
+    } catch (fallo) {
+      setError(getApiErrorMessage(fallo, 'No se pudo retirar la habilidad.'))
+    } finally {
+      setGuardando(false)
+    }
   }
   return (
     <div className="emp-dashboard emp-skills-page">
@@ -71,6 +166,8 @@ export default function Habilidades() {
           </div>
         </header>
         <div className="emp-content skills-content">
+          {cargando && <p role="status">Consultando habilidades...</p>}
+          {error && <p role="alert">{error}</p>}
           <div className="skills-heading">
             <h2>Gestión de habilidades</h2>
             <button className="skills-add" onClick={() => openForm(null)}><Plus size={15} /> Agregar habilidad</button>
@@ -99,7 +196,7 @@ export default function Habilidades() {
               <tbody>{filtered.map(skill => <tr key={skill.id}>
                 <td>{skill.nombre}</td><td>{skill.categoria}</td><td><span className={'skills-level ' + skill.nivel.toLowerCase()}>{skill.nivel}</span></td>
                 <td>{skill.anios}</td><td>{skill.fecha}</td><td>{skill.observaciones}</td>
-                <td><div className="skills-actions"><button title={'Editar ' + skill.nombre} aria-label={'Editar ' + skill.nombre} onClick={() => openForm(skill)}><Pencil size={16} /></button><button title={'Eliminar ' + skill.nombre} aria-label={'Eliminar ' + skill.nombre} onClick={() => { if (window.confirm('¿Eliminar ' + skill.nombre + '?')) setSkills(prev => prev.filter(s => s.id !== skill.id)) }}><Trash2 size={16} /></button></div></td>
+                <td><div className="skills-actions"><button title={'Editar ' + skill.nombre} aria-label={'Editar ' + skill.nombre} onClick={() => openForm(skill)}><Pencil size={16} /></button><button title={'Eliminar ' + skill.nombre} aria-label={'Eliminar ' + skill.nombre} onClick={() => eliminarSkill(skill)}><Trash2 size={16} /></button></div></td>
               </tr>)}</tbody>
             </table>
             {!filtered.length && <p className="skills-no-results">No hay habilidades que coincidan con los filtros.</p>}
@@ -116,7 +213,7 @@ export default function Habilidades() {
           <label>Años de experiencia<input type="number" min="0" value={form.anios} onChange={e => setForm({ ...form, anios: Number(e.target.value) })} /></label>
           <label>Último uso (dd/mm/aaaa)<input required value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} /></label>
           <label>Observaciones<input value={form.observaciones} onChange={e => setForm({ ...form, observaciones: e.target.value })} /></label>
-          <div className="skills-modal-buttons"><button type="button" onClick={() => setEditing(null)}>Cancelar</button><button className="skills-add" type="submit">Guardar</button></div>
+          <div className="skills-modal-buttons"><button type="button" onClick={() => setEditing(null)}>Cancelar</button><button className="skills-add" type="submit" disabled={guardando}>{guardando ? 'Guardando...' : 'Guardar'}</button></div>
         </form>
       </div>}
     </div>

@@ -148,26 +148,40 @@ describe('Repositorio: asignaciones', () => {
     expect(cache.guardar).toHaveBeenCalledWith('asignaciones:activas', items, 60000);
   });
 
-  test('listarAsignacionesColaborador consulta el GSI1 con filtro ACTIVA', async () => {
-    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [] });
-    await repo.listarAsignacionesColaborador('c1');
+  test('listarAsignacionesColaborador consulta el GSI1 e incluye el historial', async () => {
+    const items = [
+      { asignacionId: 'a1', colaboradorId: 'c1', estado: 'ACTIVA' },
+      { asignacionId: 'a2', colaboradorId: 'c1', estado: 'DESVINCULADA' },
+    ];
+    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: items });
+    const resultado = await repo.listarAsignacionesColaborador('c1');
     expect(commandMocks.QueryCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         IndexName: 'GSI1',
-        ExpressionAttributeValues: { ':c': 'c1', ':prefijo': 'ACTIVA#' },
+        KeyConditionExpression: '#c = :c',
+        ExpressionAttributeNames: { '#c': 'colaboradorId' },
+        ExpressionAttributeValues: { ':c': 'c1' },
       })
     );
+    expect(resultado).toEqual(items);
   });
 
-  test('listarAsignacionesProyecto consulta el GSI2 con filtro ACTIVA', async () => {
-    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [] });
-    await repo.listarAsignacionesProyecto('p1');
+  test('listarAsignacionesProyecto consulta el GSI2 e incluye el historial', async () => {
+    const items = [
+      { asignacionId: 'a1', proyectoId: 'p1', estado: 'ACTIVA' },
+      { asignacionId: 'a2', proyectoId: 'p1', estado: 'DESVINCULADA' },
+    ];
+    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: items });
+    const resultado = await repo.listarAsignacionesProyecto('p1');
     expect(commandMocks.QueryCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         IndexName: 'GSI2',
-        ExpressionAttributeValues: { ':p': 'p1', ':prefijo': 'ACTIVA#' },
+        KeyConditionExpression: '#p = :p',
+        ExpressionAttributeNames: { '#p': 'proyectoId' },
+        ExpressionAttributeValues: { ':p': 'p1' },
       })
     );
+    expect(resultado).toEqual(items);
   });
 
   test('obtenerAsignacion devuelve la asignación o 404', async () => {

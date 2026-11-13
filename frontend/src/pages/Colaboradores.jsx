@@ -36,7 +36,7 @@ export default function Colaboradores() {
     setLoading(true)
     setError(null)
     try {
-      const response = await colaboradoresService.list(filterParams)
+      const response = await colaboradoresService.listAll(filterParams)
       const data = response.data
       let items = []
       if (data && data.datos && data.datos.items) {
@@ -57,7 +57,7 @@ export default function Colaboradores() {
   const loadReferenceData = useCallback(async () => {
     // Axios agrega el ID Token a ambas peticiones; fetch() omitía Authorization.
     const [usuariosResult, cargosResult] = await Promise.allSettled([
-      usuariosService.list({}),
+      usuariosService.listAll(),
       cargosService.list({ estado: 'ACTIVO' }),
     ])
     if (usuariosResult.status === 'fulfilled') {

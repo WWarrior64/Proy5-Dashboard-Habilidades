@@ -74,7 +74,7 @@ export default function LiderProyectoDashboard() {
       setCargando(true)
       setError('')
       const [resultadoColaboradores, resultadoProyectos] = await Promise.allSettled([
-        colaboradoresService.list({ limit: 100 }),
+        colaboradoresService.listAll(),
         proyectosService.list({ liderId: user.usuarioId }),
       ])
       if (cancelado) return
@@ -141,8 +141,8 @@ export default function LiderProyectoDashboard() {
       : mostrarPostulacionesEjemplo ? postulacionesEjemplo.filter(item => item.estado === 'PENDIENTE').length : pendientesReales,
     candidatos: datos.colaboradores == null ? '—'
       : mostrarCandidatosEjemplo ? 12
-        : datos.colaboradores.filter(item => item.estado !== 'INACTIVO' &&
-          ['DISPONIBLE', 'PARCIAL'].includes(item.disponibilidad)).length,
+        : datos.colaboradores.filter(item => item.estado === 'ACTIVO' &&
+          Number.isFinite(item.dedicacionReservada) && item.dedicacionReservada < 100).length,
     asignaciones: datos.asignaciones == null ? '—'
       : mostrarProyectosEjemplo ? asignacionesEjemplo.length
         : datos.asignaciones.filter(item => item.estado === 'ACTIVA').length,

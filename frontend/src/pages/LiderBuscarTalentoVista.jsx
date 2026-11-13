@@ -54,6 +54,12 @@ const nombreNivel = nivel => nivel ? (nivel === 'MID' ? 'Mid' : nivel.charAt(0) 
 
 function tipoDisponibilidad(item) {
   if (item.estado === 'INACTIVO') return 'NO_DISPONIBLE'
+  if (!item.esEjemplo) {
+    if (!Number.isFinite(item.dedicacion)) return 'SIN_DATOS'
+    if (item.dedicacion >= 100) return 'NO_DISPONIBLE'
+    if (item.dedicacion > 0) return 'PARCIAL'
+    return 'DISPONIBLE'
+  }
   if (item.disponibilidad === 'PARCIAL') return 'PARCIAL'
   if (item.disponibilidad === 'NO_DISPONIBLE') return 'NO_DISPONIBLE'
   if (item.disponibilidad === 'ASIGNADA') {
@@ -64,7 +70,7 @@ function tipoDisponibilidad(item) {
 
 function nombreDisponibilidad(item) {
   const tipo = tipoDisponibilidad(item)
-  return tipo === 'PARCIAL' ? 'Parcial' : tipo === 'NO_DISPONIBLE' ? 'No disponible' : 'Disponible'
+  return tipo === 'SIN_DATOS' ? 'Sin datos' : tipo === 'PARCIAL' ? 'Parcial' : tipo === 'NO_DISPONIBLE' ? 'No disponible' : 'Disponible'
 }
 
 export default function LiderBuscarTalentoVista() {
@@ -99,8 +105,8 @@ export default function LiderBuscarTalentoVista() {
     setCargando(true)
     setError('')
     const [listaColaboradores, listaHabilidades, listaCargos, listaProyectos] = await Promise.allSettled([
-      colaboradoresService.list({ limit: 100 }),
-      habilidadesService.list({ limit: 100 }),
+      colaboradoresService.listAll(),
+      habilidadesService.listAll(),
       cargosService.list({ estado: 'ACTIVO' }),
       user?.usuarioId ? proyectosService.list({ liderId: user.usuarioId }) : Promise.resolve({ data: { datos: [] } }),
     ])
@@ -166,7 +172,7 @@ export default function LiderBuscarTalentoVista() {
       nombre: item.nombre || item.nombreCompleto || item.usuario?.nombre ||
         (item.colaboradorId ? 'Colaborador ' + item.colaboradorId.slice(0, 6) : 'Colaborador'),
       cargo: cargosPorId.get(item.cargoId) || item.cargoNombre || item.rolProfesional || 'Sin cargo',
-      dedicacion: typeof item.porcentajeDedicacion === 'number' ? item.porcentajeDedicacion : null,
+      dedicacion: Number.isFinite(item.dedicacionReservada) ? item.dedicacionReservada : null,
       habilidades: habilidadesColaboradores[item.colaboradorId] ||
         (Array.isArray(item.habilidades) ? item.habilidades.map(h => typeof h === 'string' ? { nombre: h, nivel: '' } : {
           nombre: h.nombre || h.habilidadId, nivel: String(h.nivel || '').toUpperCase(),

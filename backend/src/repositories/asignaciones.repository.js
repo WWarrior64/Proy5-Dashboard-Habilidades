@@ -215,9 +215,9 @@ async function listarAsignacionesColaborador(colaboradorId) {
   const items = await consultarTodasPaginas({
       TableName: tableAsignaciones,
       IndexName: 'GSI1',
-      KeyConditionExpression: '#c = :c AND begins_with(#s, :prefijo)',
-      ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'colaboradorFechaKey' },
-      ExpressionAttributeValues: { ':c': colaboradorId, ':prefijo': 'ACTIVA#' },
+      KeyConditionExpression: '#c = :c',
+      ExpressionAttributeNames: { '#c': 'colaboradorId' },
+      ExpressionAttributeValues: { ':c': colaboradorId },
   });
 
   cache.guardar(clave, items, CACHE_TTL_MS);
@@ -232,9 +232,9 @@ async function listarAsignacionesProyecto(proyectoId) {
   const items = await consultarTodasPaginas({
       TableName: tableAsignaciones,
       IndexName: 'GSI2',
-      KeyConditionExpression: '#p = :p AND begins_with(#s, :prefijo)',
-      ExpressionAttributeNames: { '#p': 'proyectoId', '#s': 'proyectoFechaKey' },
-      ExpressionAttributeValues: { ':p': proyectoId, ':prefijo': 'ACTIVA#' },
+      KeyConditionExpression: '#p = :p',
+      ExpressionAttributeNames: { '#p': 'proyectoId' },
+      ExpressionAttributeValues: { ':p': proyectoId },
   });
 
   cache.guardar(clave, items, CACHE_TTL_MS);

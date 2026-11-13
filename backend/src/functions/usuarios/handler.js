@@ -73,10 +73,30 @@ async function listarUsuarios(event, context) {
     const filtros = {};
     if (query.rol) filtros.rol = query.rol;
     if (query.estado) filtros.estado = query.estado;
-    if (query.limit) filtros.limit = parseInt(query.limit, 10);
+    if (query.limit !== undefined) {
+      const limit = Number(query.limit);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+        return error('limit debe ser un entero entre 1 y 100', 400, CODIGOS.VALIDACION);
+      }
+      filtros.limit = limit;
+    }
+    if (query.cursor !== undefined) {
+      if (typeof query.cursor !== 'string' || query.cursor.length > 2048 || !/^[A-Za-z0-9_-]+$/.test(query.cursor)) {
+        return error('Cursor de paginación inválido', 400, CODIGOS.VALIDACION);
+      }
+      try {
+        const clave = JSON.parse(Buffer.from(query.cursor, 'base64url').toString('utf8'));
+        if (!clave || typeof clave.usuarioId !== 'string' || Array.isArray(clave)) {
+          return error('Cursor de paginación inválido', 400, CODIGOS.VALIDACION);
+        }
+        filtros.lastKey = clave;
+      } catch (_) {
+        return error('Cursor de paginación inválido', 400, CODIGOS.VALIDACION);
+      }
+    }
 
     const resultado = await usuariosRepository.listar(filtros);
-    return exito(resultado);
+    return exito({ ...resultado, nextCursor: resultado.lastKey ? Buffer.from(JSON.stringify(resultado.lastKey)).toString('base64url') : null });
   } catch (err) {
     return error(err.message, err.codigo || 500, err.codigoError);
   }

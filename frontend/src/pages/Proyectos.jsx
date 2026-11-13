@@ -51,7 +51,7 @@ export default function Proyectos() {
 
   const loadReferenceData = useCallback(async () => {
     try {
-      const usuariosResp = await usuariosService.list({})
+      const usuariosResp = await usuariosService.listAll()
       const uData = usuariosResp.data
       let uItems = []
       if (uData && uData.datos && uData.datos.items) uItems = uData.datos.items

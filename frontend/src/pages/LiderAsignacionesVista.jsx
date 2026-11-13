@@ -5,7 +5,6 @@ import { useAuth } from '../hooks/useAuth.js'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import { proyectosService } from '../services/proyectos.service.js'
 import { colaboradoresService } from '../services/colaboradores.service.js'
-import { usuariosService } from '../services/usuarios.service.js'
 import { asignacionesService } from '../services/asignaciones.service.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
 import api from '../services/api.js'
@@ -84,19 +83,16 @@ export default function LiderAsignacionesVista() {
       return
     }
 
-    const [proyectosResp, colaboradoresResp, usuariosResp] = await Promise.allSettled([
+    const [proyectosResp, colaboradoresResp] = await Promise.allSettled([
       proyectosService.list({ liderId: user.usuarioId }),
-      colaboradoresService.list({ limit: 100 }),
-      usuariosService.list({}),
+      colaboradoresService.listAll(),
     ])
     const listaProyectos = proyectosResp.status === 'fulfilled'
       ? extraer(proyectosResp.value).filter(item => item.liderId === user.usuarioId) : []
     const listaColaboradores = colaboradoresResp.status === 'fulfilled' ? extraer(colaboradoresResp.value) : []
-    const usuarios = usuariosResp.status === 'fulfilled' ? extraer(usuariosResp.value) : []
-    const nombresUsuarios = new Map(usuarios.map(item => [item.usuarioId, item.nombre]))
     const personas = listaColaboradores.map(item => ({
       ...item,
-      nombre: nombresUsuarios.get(item.usuarioId) || item.nombre || item.nombreCompleto ||
+      nombre: item.nombre || item.nombreCompleto ||
         item.usuario?.nombre || 'Colaborador ' + String(item.colaboradorId || '').slice(0, 8),
       rol: item.rolProfesional || 'Colaborador',
     }))

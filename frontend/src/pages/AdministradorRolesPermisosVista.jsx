@@ -66,7 +66,7 @@ export default function AdministradorRolesPermisosVista() {
     setCargando(true)
     setError('')
     try {
-      const respuesta = await usuariosService.list({ limit: 500 })
+      const respuesta = await usuariosService.listAll()
       setUsuarios(extraer(respuesta))
       setUsuariosCargados(true)
     } catch (fallo) {

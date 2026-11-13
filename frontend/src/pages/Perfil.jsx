@@ -132,13 +132,15 @@ export default function Perfil() {
       setAvisoCarga('')
       const consultas = {
         cuenta: usuariosService.getMe(),
-        colaboradores: colaboradoresService.list({ limit: 200 }),
+        colaboradores: rol === 'EMPLEADO'
+          ? colaboradoresService.getMe().then(response => ({ data: { datos: { items: [response.data?.datos].filter(Boolean) } } }))
+          : colaboradoresService.listAll(),
         proyectos: proyectosService.list(rol === 'LIDER_PROYECTO'
           ? { liderId: user.usuarioId } : { estado: 'ACTIVO' }),
       }
-      if (rol === 'ADMINISTRADOR') consultas.usuarios = usuariosService.list({ limit: 200 })
+      if (rol === 'ADMINISTRADOR') consultas.usuarios = usuariosService.listAll()
       if (rol === 'RRHH') {
-        consultas.catalogo = habilidadesService.list({ limit: 200 })
+        consultas.catalogo = habilidadesService.listAll()
         consultas.asignaciones = asignacionesService.list({})
       }
 
@@ -157,7 +159,7 @@ export default function Perfil() {
       const secundarios = {}
       if (colaborador) {
         secundarios.habilidades = colaboradoresService.listSkills(colaborador.colaboradorId)
-        secundarios.catalogo = habilidadesService.list({ limit: 200 })
+        secundarios.catalogo = habilidadesService.listAll()
         if (rol === 'EMPLEADO') {
           secundarios.postulaciones = api.get(`/colaboradores/${encodeURIComponent(colaborador.colaboradorId)}/postulaciones`)
           secundarios.asignaciones = api.get(`/colaboradores/${encodeURIComponent(colaborador.colaboradorId)}/asignaciones`)

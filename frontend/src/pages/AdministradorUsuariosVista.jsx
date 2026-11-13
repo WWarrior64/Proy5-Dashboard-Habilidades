@@ -64,14 +64,14 @@ export default function AdministradorUsuariosVista() {
   const [menuAbierto, setMenuAbierto] = useState(null)
   const [confirmacion, setConfirmacion] = useState(null)
 
-  const puedeGestionar = user?.rol === 'ADMINISTRADOR' || user?.rol === 'RRHH'
+  const puedeGestionar = user?.rol === 'ADMINISTRADOR'
 
   const cargarUsuarios = useCallback(async () => {
     setUsuariosCargando(true)
     setError('')
     try {
       // Los filtros son locales: las tarjetas de métricas siempre resumen los mismos datos.
-      const respuesta = await usuariosService.list({ limit: 500 })
+      const respuesta = await usuariosService.listAll()
       setUsuarios(extraer(respuesta))
     } catch (fallo) {
       setError(getApiErrorMessage(fallo, 'No se pudieron cargar los usuarios.'))
@@ -84,7 +84,7 @@ export default function AdministradorUsuariosVista() {
 
   useEffect(() => {
     let cancelado = false
-    colaboradoresService.list({ limit: 500 })
+    colaboradoresService.listAll()
       .then(respuesta => {
         if (!cancelado) setPerfiles(new Set(extraer(respuesta).map(item => item.usuarioId).filter(Boolean)))
       })
@@ -140,7 +140,6 @@ export default function AdministradorUsuariosVista() {
       if (usuarioEditar) {
         const cambios = {}
         if (datos.nombre !== usuarioEditar.nombre) cambios.nombre = datos.nombre
-        if (datos.email !== usuarioEditar.email) cambios.email = datos.email
         if (Object.keys(cambios).length) await usuariosService.update(usuarioEditar.usuarioId, cambios)
         if (datos.rol !== usuarioEditar.rol) {
           await usuariosService.changeRole(usuarioEditar.usuarioId, { rol: datos.rol })

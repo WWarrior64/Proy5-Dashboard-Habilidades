@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { ProtectedRoute } from './components/layout/ProtectedRoute.jsx'
 import { ROLES, ROUTE_PATHS } from './utils/constants.js'
@@ -34,19 +34,22 @@ import Perfil from './pages/Perfil.jsx'
 // Layout
 import MainLayout from './components/layout/MainLayout.jsx'
 
-function PublicRoute({ component: Component, ...rest }) {
-  return (
-    <Routes>
-      <Route
-        {...rest}
-        element={
-          <>
-            <Component {...rest} />
-          </>
-        }
-      />
-    </Routes>
-  )
+const inicioPorRol = {
+  [ROLES.EMPLEADO]: ROUTE_PATHS.DASHBOARD_EMPLEADO,
+  [ROLES.RRHH]: ROUTE_PATHS.DASHBOARD_RRHH,
+  [ROLES.LIDER_PROYECTO]: ROUTE_PATHS.DASHBOARD_LIDER,
+  [ROLES.ADMINISTRADOR]: ROUTE_PATHS.DASHBOARD_ADMIN,
+}
+
+function InicioPorRol() {
+  const { user } = useAuth()
+  return <Navigate to={inicioPorRol[user?.rol] || '/login'} replace />
+}
+
+// La autorización visual es independiente del ProtectedRoute y de la seguridad del backend.
+function SoloRol({ permitidos, children }) {
+  const { user } = useAuth()
+  return user && !permitidos.includes(user.rol) ? <Navigate to="/" replace /> : children
 }
 
 // Para RRHH, Colaboradores usa su propio diseño de tarjetas y barra lateral.
@@ -103,36 +106,36 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route path="/" element={<Login />} />
+            <Route path="/" element={<InicioPorRol />} />
           </Route>
-          <Route element={<ProtectedRoute><ColaboradoresPorRol /></ProtectedRoute>}>
+          <Route element={<ProtectedRoute><SoloRol permitidos={[ROLES.RRHH, ROLES.LIDER_PROYECTO, ROLES.ADMINISTRADOR]}><ColaboradoresPorRol /></SoloRol></ProtectedRoute>}>
             <Route path="colaboradores" element={<Colaboradores />} />
           </Route>
-          <Route element={<ProtectedRoute><ProyectosPorRol /></ProtectedRoute>}>
+          <Route element={<ProtectedRoute><SoloRol permitidos={[ROLES.EMPLEADO, ROLES.RRHH, ROLES.LIDER_PROYECTO, ROLES.ADMINISTRADOR]}><ProyectosPorRol /></SoloRol></ProtectedRoute>}>
             <Route path="proyectos" element={<Proyectos />} />
           </Route>
-          <Route element={<ProtectedRoute><PostulacionesPorRol /></ProtectedRoute>}>
+          <Route element={<ProtectedRoute><SoloRol permitidos={[ROLES.EMPLEADO, ROLES.LIDER_PROYECTO]}><PostulacionesPorRol /></SoloRol></ProtectedRoute>}>
             <Route path="postulaciones" element={<Postulaciones />} />
           </Route>
-          <Route element={<ProtectedRoute><AsignacionesPorRol /></ProtectedRoute>}>
+          <Route element={<ProtectedRoute><SoloRol permitidos={[ROLES.EMPLEADO, ROLES.RRHH, ROLES.LIDER_PROYECTO]}><AsignacionesPorRol /></SoloRol></ProtectedRoute>}>
             <Route path="asignaciones" element={<Asignaciones />} />
           </Route>
-          <Route path="/habilidades" element={<ProtectedRoute><HabilidadesPorRol /></ProtectedRoute>} />
+          <Route path="/habilidades" element={<ProtectedRoute><SoloRol permitidos={[ROLES.EMPLEADO, ROLES.RRHH]}><HabilidadesPorRol /></SoloRol></ProtectedRoute>} />
           <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
-          <Route path="/usuarios" element={<ProtectedRoute><AdministradorUsuariosVista /></ProtectedRoute>} />
-          <Route path="/roles-permisos" element={<ProtectedRoute><AdministradorRolesPermisosVista /></ProtectedRoute>} />
-          <Route path="/configuracion" element={<ProtectedRoute><AdministradorConfiguracionVista /></ProtectedRoute>} />
-          <Route path="/auditoria" element={<ProtectedRoute><AdministradorAuditoriaVista /></ProtectedRoute>} />
-          <Route path="/dashboards/administrador" element={<ProtectedRoute><AdministradorDashboard /></ProtectedRoute>} />
-          <Route path="/dashboards/lider" element={<ProtectedRoute><LiderProyectoDashboard /></ProtectedRoute>} />
+          <Route path="/usuarios" element={<ProtectedRoute><SoloRol permitidos={[ROLES.ADMINISTRADOR]}><AdministradorUsuariosVista /></SoloRol></ProtectedRoute>} />
+          <Route path="/roles-permisos" element={<ProtectedRoute><SoloRol permitidos={[ROLES.ADMINISTRADOR]}><AdministradorRolesPermisosVista /></SoloRol></ProtectedRoute>} />
+          <Route path="/configuracion" element={<ProtectedRoute><SoloRol permitidos={[ROLES.ADMINISTRADOR]}><AdministradorConfiguracionVista /></SoloRol></ProtectedRoute>} />
+          <Route path="/auditoria" element={<ProtectedRoute><SoloRol permitidos={[ROLES.ADMINISTRADOR]}><AdministradorAuditoriaVista /></SoloRol></ProtectedRoute>} />
+          <Route path="/dashboards/administrador" element={<ProtectedRoute><SoloRol permitidos={[ROLES.ADMINISTRADOR]}><AdministradorDashboard /></SoloRol></ProtectedRoute>} />
+          <Route path="/dashboards/lider" element={<ProtectedRoute><SoloRol permitidos={[ROLES.LIDER_PROYECTO]}><LiderProyectoDashboard /></SoloRol></ProtectedRoute>} />
           <Route path="/dashboards/rrhh" element={
             <ProtectedRoute>
-              <RecursosHumanosDashboard />
+              <SoloRol permitidos={[ROLES.RRHH]}><RecursosHumanosDashboard /></SoloRol>
             </ProtectedRoute>
           } />
           <Route path="/dashboards/empleado" element={
             <ProtectedRoute>
-              <EmpleadoDashboard />
+              <SoloRol permitidos={[ROLES.EMPLEADO]}><EmpleadoDashboard /></SoloRol>
             </ProtectedRoute>
           } />
           <Route path="*" element={<NotFound />} />

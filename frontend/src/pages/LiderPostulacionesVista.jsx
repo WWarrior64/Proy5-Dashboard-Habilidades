@@ -81,7 +81,7 @@ export default function LiderPostulacionesVista() {
       const respuestaProyectos = await proyectosService.list({ liderId: user.usuarioId })
       const proyectos = obtenerItems(respuestaProyectos).filter(item => item.liderId === user.usuarioId)
       const [respuestaPersonas, ...resultados] = await Promise.allSettled([
-        colaboradoresService.list({ limit: 100 }),
+        colaboradoresService.listAll(),
         ...proyectos.map(item => api.get(`/proyectos/${encodeURIComponent(item.proyectoId)}/postulaciones`)),
       ])
 
