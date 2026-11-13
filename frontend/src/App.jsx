@@ -1,6 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { ProtectedRoute } from './components/layout/ProtectedRoute.jsx'
+import { ROLES, ROUTE_PATHS } from './utils/constants.js'
 
 // Pages
 import Login from './pages/Login.jsx'

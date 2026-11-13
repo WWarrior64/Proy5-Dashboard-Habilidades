@@ -3,12 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const {
   dynamoDb,
   GetCommand,
-  PutCommand,
-  UpdateCommand,
-  DeleteCommand,
   QueryCommand,
-  ScanCommand,
-  TransactWriteCommand,
 } = require('../../src/config/dynamodb.js');
 const {
   tableAsignaciones,
@@ -48,6 +43,20 @@ function ahoraISO() {
   return new Date().toISOString();
 }
 
+async function consultarTodasPaginas(parametros) {
+  const items = [];
+  let lastKey;
+  do {
+    const pagina = await dynamoDb.send(new QueryCommand({
+      ...parametros,
+      ...(lastKey && { ExclusiveStartKey: lastKey }),
+    }));
+    items.push(...(pagina.Items || []));
+    lastKey = pagina.LastEvaluatedKey;
+  } while (lastKey);
+  return items;
+}
+
 async function validarColaboradorActivo(colaboradorId) {
   const resultado = await dynamoDb.send(
     new GetCommand({
@@ -83,7 +92,10 @@ async function validarProyectoActivo(proyectoId) {
 }
 
 async function obtenerSumaDedicacionActiva(colaboradorId, asignacionIdExcluir) {
-  const resultado = await dynamoDb.send(
+  let lastKey;
+  let suma = 0;
+  do {
+    const resultado = await dynamoDb.send(
     new QueryCommand({
       TableName: tableAsignaciones,
       IndexName: 'GSI1',
@@ -91,11 +103,15 @@ async function obtenerSumaDedicacionActiva(colaboradorId, asignacionIdExcluir) {
       ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'colaboradorFechaKey' },
       ExpressionAttributeValues: { ':c': colaboradorId, ':prefijo': 'ACTIVA#' },
       ProjectionExpression: 'porcentajeDedicacion, asignacionId',
+      ...(lastKey && { ExclusiveStartKey: lastKey }),
     })
   );
-  return (resultado.Items || [])
-    .filter((item) => item.asignacionId !== asignacionIdExcluir)
-    .reduce((acc, item) => acc + (item.porcentajeDedicacion || 0), 0);
+    suma += (resultado.Items || [])
+      .filter((item) => item.asignacionId !== asignacionIdExcluir)
+      .reduce((acc, item) => acc + (item.porcentajeDedicacion || 0), 0);
+    lastKey = resultado.LastEvaluatedKey;
+  } while (lastKey);
+  return suma;
 }
 
 async function crearAsignacion(datos) {
@@ -179,16 +195,13 @@ async function listarAsignacionesActivas() {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.send(
-    new QueryCommand({
+  const items = await consultarTodasPaginas({
       TableName: tableAsignaciones,
       IndexName: 'GSI3',
       KeyConditionExpression: '#est = :est',
       ExpressionAttributeNames: { '#est': 'estado' },
       ExpressionAttributeValues: { ':est': 'ACTIVA' },
-    })
-  );
-  const items = resultado.Items || [];
+  });
 
   cache.guardar(clave, items, CACHE_TTL_MS);
   return items;
@@ -199,16 +212,13 @@ async function listarAsignacionesColaborador(colaboradorId) {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.send(
-    new QueryCommand({
+  const items = await consultarTodasPaginas({
       TableName: tableAsignaciones,
       IndexName: 'GSI1',
       KeyConditionExpression: '#c = :c AND begins_with(#s, :prefijo)',
       ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'colaboradorFechaKey' },
       ExpressionAttributeValues: { ':c': colaboradorId, ':prefijo': 'ACTIVA#' },
-    })
-  );
-  const items = resultado.Items || [];
+  });
 
   cache.guardar(clave, items, CACHE_TTL_MS);
   return items;
@@ -219,16 +229,13 @@ async function listarAsignacionesProyecto(proyectoId) {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.send(
-    new QueryCommand({
+  const items = await consultarTodasPaginas({
       TableName: tableAsignaciones,
       IndexName: 'GSI2',
       KeyConditionExpression: '#p = :p AND begins_with(#s, :prefijo)',
       ExpressionAttributeNames: { '#p': 'proyectoId', '#s': 'proyectoFechaKey' },
       ExpressionAttributeValues: { ':p': proyectoId, ':prefijo': 'ACTIVA#' },
-    })
-  );
-  const items = resultado.Items || [];
+  });
 
   cache.guardar(clave, items, CACHE_TTL_MS);
   return items;

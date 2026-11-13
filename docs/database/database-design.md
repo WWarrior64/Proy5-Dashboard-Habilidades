@@ -41,14 +41,14 @@ Para evitar nombres de atributos con caracteres especiales (`#`), las claves de 
 - `proyectoFechaKey` en `internal-marketplace-asignaciones-dev` GSI2 (guarda `estado#fechaAsignacion`)
 - `estadoFechaKey` en `internal-marketplace-asignaciones-dev` GSI3 (guarda `fechaAsignacion#asignacionId`)
 - `nivelColaboradorKey` en `internal-marketplace-colaborador-habilidad-dev` GSI1 (guarda `nivel#colaboradorId`)
-- `proyectoHabilidadKey` en `internal-marketplace-proyecto-habilidad-dev` GSI1 (guarda `proyectoId`)
+- En ProyectoHabilidad, **GSI1 utiliza directamente** `habilidadId` (partición) y `proyectoId` (ordenación), sin el atributo auxiliar `proyectoHabilidadKey`.
 
 ## Relaciones entre las tablas
-- **Usuario 1:N Colaborador**: `internal-marketplace-usuarios-dev.usuarioId → internal-marketplace-colaboradores-dev.usuarioId`
+- **Usuario 1:0..1 Colaborador**: una cuenta tiene cero o un perfil. Los nuevos registros usan un ítem de reserva `USUARIO#<usuarioId>` en Colaboradores, creado en la misma transacción que el perfil para evitar duplicados concurrentes. Los perfiles históricos requieren reconciliación.
 - **Colaborador N:M Habilidad**: Mediante `internal-marketplace-colaborador-habilidad-dev` (`colaboradorId` + `habilidadId`)
 - **Colaborador 1:1 Cargo**: `internal-marketplace-colaboradores-dev.cargoId → internal-marketplace-cargos-dev.cargoId`
 - **Proyecto N:M Habilidad**: Mediante `internal-marketplace-proyecto-habilidad-dev` (`proyectoId` + `habilidadId`)
 - **Colaborador N:M Proyecto**: Mediante `internal-marketplace-asignaciones-dev` (confirmado) e `internal-marketplace-postulaciones-dev` (pendiente)
 
 ## Control atómico de dedicación
-Al crear o actualizar una asignación en `internal-marketplace-asignaciones-dev`, los repositorios deben usar TransactWriteItems o UpdateItem con ConditionExpression para verificar que la suma de `porcentajeDedicacion` de asignaciones `ACTIVA` del colaborador no exceda el 100 %.
+Al crear, aceptar, modificar o desvincular asignaciones se usa `TransactWriteItems` para actualizar `Colaboradores.dedicacionReservada` junto con los registros relacionados. Una condición impide que la dedicación reservada quede fuera del rango 0–100 %, incluso ante solicitudes concurrentes. Los ítems históricos sin el atributo deben reconciliarse antes de nuevas reservas.

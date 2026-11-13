@@ -68,12 +68,11 @@ export const DEMO_COLABORADORES = [
     cargoId: 'cargo_001',
     rolProfesional: 'Analista de RRHH',
     estado: 'ACTIVO',
-    disponibilidad: 'DISPONIBLE',
     observaciones: 'Encargada de contrataciones',
     fechaAlta: '2026-01-15T08:30:00Z',
     fechaActualizacion: '2026-01-15T08:30:00Z',
     habilidades: ['Java', 'SQL'],
-    nivel: 'Senior',
+    nivel: 'SENIOR',
   },
   {
     colaboradorId: 'col_002',
@@ -81,12 +80,11 @@ export const DEMO_COLABORADORES = [
     cargoId: 'cargo_002',
     rolProfesional: 'Desarrollador Backend',
     estado: 'ACTIVO',
-    disponibilidad: 'ASIGNADA',
     observaciones: 'Especialista en Node.js',
     fechaAlta: '2026-02-10T10:15:00Z',
     fechaActualizacion: '2026-02-10T10:15:00Z',
     habilidades: ['Java', 'Node.js', 'SQL'],
-    nivel: 'Mid',
+    nivel: 'MID',
   },
   {
     colaboradorId: 'col_003',
@@ -99,7 +97,7 @@ export const DEMO_COLABORADORES = [
     fechaAlta: '2026-01-20T14:00:00Z',
     fechaActualizacion: '2026-01-20T14:00:00Z',
     habilidades: ['Python', 'Power BI'],
-    nivel: 'Senior',
+    nivel: 'SENIOR',
   },
 ]
 
@@ -134,7 +132,7 @@ export const DEMO_PROYECTOS = [
     descripcion: 'App móvil para empleados',
     liderId: 'usr_003',
     horasRequeridas: 100,
-    estado: 'BORRADOR',
+    estado: 'PLANIFICADO',
     fechaCreacion: '2026-02-15T00:00:00Z',
     fechaActualizacion: '2026-02-15T00:00:00Z',
     creadoPor: 'usr_005',
@@ -146,7 +144,7 @@ export const DEMO_PROYECTOS = [
     descripcion: 'Portal de autoservicio para clientes',
     liderId: 'usr_003',
     horasRequeridas: 200,
-    estado: 'BORRADOR',
+    estado: 'PLANIFICADO',
     fechaCreacion: '2026-03-01T00:00:00Z',
     fechaActualizacion: '2026-03-01T00:00:00Z',
     creadoPor: 'usr_005',
@@ -189,4 +187,13 @@ export const DEMO_ACTIVIDADES = [
   { tipo: 'Proyecto creado', nombre: 'Sistema Web', fecha: '2026-01-10', estado: 'Activo' },
   { tipo: 'Colaborador asignado', nombre: 'Carlos Méndez', fecha: '2026-02-10', estado: 'Asignado' },
   { tipo: 'Usuario desactivado', nombre: 'Sofia Ramírez', fecha: '2026-03-05', estado: 'Inactivo' },
+]
+
+export const DEMO_HABILIDADES = [
+  { habilidadId: 'hab_001', nombre: 'JavaScript', categoria: 'Programación', estado: 'ACTIVO' },
+  { habilidadId: 'hab_002', nombre: 'Python', categoria: 'Programación', estado: 'ACTIVO' },
+  { habilidadId: 'hab_003', nombre: 'SQL', categoria: 'Bases de datos', estado: 'ACTIVO' },
+  { habilidadId: 'hab_004', nombre: 'Java', categoria: 'Programación', estado: 'ACTIVO' },
+  { habilidadId: 'hab_005', nombre: 'Node.js', categoria: 'Backend', estado: 'ACTIVO' },
+  { habilidadId: 'hab_006', nombre: 'Power BI', categoria: 'Analytics', estado: 'ACTIVO' },
 ]

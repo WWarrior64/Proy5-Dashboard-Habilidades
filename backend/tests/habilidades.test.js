@@ -9,6 +9,12 @@ describe('Módulo de Habilidades - Handler', () => {
   });
 
   describe('crearHabilidad', () => {
+    test('devuelve 400 ante JSON malformado sin invocar el repositorio', async () => {
+      const result = await habilidadesHandler.crearHabilidad({ body: '{malformado' }, {});
+      expect(result.statusCode).toBe(400);
+      expect(habilidadesRepository.crear).not.toHaveBeenCalled();
+    });
+
     test('debe crear una habilidad válida', async () => {
       const habilidadMock = {
         habilidadId: 'hab_1',

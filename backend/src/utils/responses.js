@@ -41,16 +41,19 @@ function creado(datos) {
  * @returns {Object} Objeto { statusCode, headers, body } listo para devolver en un handler de Lambda.
  */
 function error(mensaje, codigo = 500, codigoError = null) {
+  const status = Number.isInteger(codigo) && codigo >= 400 && codigo <= 599 ? codigo : 500;
+  const mensajePublico = status >= 500 ? 'Error interno del servidor' : String(mensaje || 'Solicitud inválida');
   const cuerpo = {
     success: false,
     error: {
-      mensaje,
-      ...(codigoError && { codigo: codigoError }),
+      mensaje: mensajePublico,
+      ...(codigoError && status < 500 && { codigo: codigoError }),
+      ...(status >= 500 && { codigo: 'INTERNAL_SERVER_ERROR' }),
       timestamp: new Date().toISOString(),
     },
   };
   return {
-    statusCode: codigo,
+    statusCode: status,
     headers: CORS_HEADERS,
     body: JSON.stringify(cuerpo),
   };

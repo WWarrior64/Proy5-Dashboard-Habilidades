@@ -90,6 +90,17 @@ describe('Repositorio: asignaciones', () => {
     expect(cache.eliminarPorPrefijo).toHaveBeenCalledWith('asignaciones:');
   });
 
+  test('convierte un conflicto transaccional concurrente en HTTP 409 sin invalidar caché', async () => {
+    commandMocks.TransactWriteCommand.mockRejectedValueOnce(Object.assign(new Error('Transacción concurrente'), {
+      name: 'TransactionCanceledException',
+    }));
+    await expect(repo.crearAsignacion({
+      colaboradorId: 'c1', proyectoId: 'p1', porcentajeDedicacion: 60,
+      horasAsignadas: 20, creadoPor: 'admin',
+    })).rejects.toMatchObject({ codigo: 409, codigoError: CODIGOS.CONFLICTO });
+    expect(cache.eliminarPorPrefijo).not.toHaveBeenCalled();
+  });
+
   test('crearAsignacion rechaza porcentaje de dedicacion fuera de 1..100', async () => {
     await expect(repo.crearAsignacion({ colaboradorId: 'c1', proyectoId: 'p1', porcentajeDedicacion: 0, horasAsignadas: 10, creadoPor: 'admin' }))
       .rejects.toMatchObject({ codigo: 400, codigoError: CODIGOS.VALIDACION });
@@ -213,6 +224,12 @@ describe('Repositorio: asignaciones', () => {
 });
 
 describe('Handler: asignaciones', () => {
+  test('rechaza JSON malformado sin crear asignaciones', async () => {
+    const resultado = await handler.crearAsignacion({ body: '{malformado' }, {});
+    expect(resultado.statusCode).toBe(400);
+    expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
+  });
+
   test('crearAsignacion devuelve 201 con la asignación', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: COLABORADOR });
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: PROYECTO });

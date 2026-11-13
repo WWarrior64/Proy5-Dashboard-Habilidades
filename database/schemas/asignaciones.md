@@ -18,7 +18,7 @@ Vinculación de colaboradores con proyectos. Almacena las asignaciones confirmad
 | horasCompletadas | Sí | Number | Cantidad de horas realizadas; inicia en cero. |
 | fechaInicio | Sí | String (ISO 8601) | Fecha de inicio de la asignación. |
 | fechaFin | No | String (ISO 8601) | Fecha de finalización o desvinculación. |
-| estado | Sí | String | ACTIVA, FINALIZADA o DESVINCULADA. |
+| estado | Sí | String | ACTIVA o DESVINCULADA; el estado FINALIZADA no está implementado. |
 | fechaAsignacion | Sí | String (ISO 8601) | Fecha en que se creó la asignación. |
 | fechaActualizacion | Sí | String (ISO 8601) | Fecha de última modificación. |
 | creadoPor | Sí | String | Usuario que realizó la asignación. |
@@ -38,10 +38,10 @@ Vinculación de colaboradores con proyectos. Almacena las asignaciones confirmad
 
 ## Patrones de consulta
 
-1. `GET /asignaciones/{asignacionId}` → Query por clave primaria `asignacionId`.
-2. `GET /colaboradores/{colaboradorId}/asignaciones?estado=ACTIVA` → Query GSI1 con `colaboradorId = :id` y `colaboradorFechaKey` comienza con `ACTIVA#`.
-3. `GET /proyectos/{proyectoId}/asignaciones?estado=ACTIVA` → Query GSI2 con `proyectoId = :id` y `proyectoFechaKey` comienza con `ACTIVA#`.
-4. `GET /asignaciones?estado=ACTIVA` → Query GSI3 con `estado = 'ACTIVA'`.
+1. `GET /api/v1/asignaciones/{asignacionId}` → GetItem por `asignacionId`.
+2. `GET /api/v1/colaboradores/{colaboradorId}/asignaciones` → GSI1, solo asignaciones activas.
+3. `GET /api/v1/proyectos/{proyectoId}/asignaciones` → GSI2, solo asignaciones activas.
+4. `GET /api/v1/asignaciones/activas` → GSI3, solo asignaciones activas; `/api/v1/asignaciones` es su alias.
 
 ## Reglas de negocio
 

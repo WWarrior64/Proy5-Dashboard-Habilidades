@@ -16,7 +16,7 @@
 
 ## Relaciones entre las tablas
 
-- **Usuario 1:N Colaborador**: Una cuenta de usuario puede tener un perfil de colaborador (`internal-marketplace-usuarios-dev.usuarioId → internal-marketplace-colaboradores-dev.usuarioId`).
+- **Usuario 1:0..1 Colaborador**: Una cuenta puede tener un único perfil de colaborador (`Usuarios.usuarioId → Colaboradores.usuarioId`). Una transacción crea una reserva `USUARIO#<usuarioId>` para impedir duplicados entre nuevas solicitudes concurrentes.
 - **Colaborador N:M Habilidad**: Mediante `internal-marketplace-colaborador-habilidad-dev` (`colaboradorId` + `habilidadId`).
 - **Colaborador 1:1 Cargo**: Un colaborador tiene un cargo (`internal-marketplace-colaboradores-dev.cargoId → internal-marketplace-cargos-dev.cargoId`).
 - **Proyecto N:M Habilidad**: Mediante `internal-marketplace-proyecto-habilidad-dev` (`proyectoId` + `habilidadId`).

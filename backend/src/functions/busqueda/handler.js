@@ -5,24 +5,6 @@ const colaboradoresRepository = require('../../repositories/colaboradores.reposi
 
 const NIVELES_JERARQUIA = { JUNIOR: 1, MID: 2, SENIOR: 3 };
 
-function obtenerBody(event) {
-  if (!event.body) return {};
-  if (typeof event.body === 'string') {
-    try {
-      return JSON.parse(event.body);
-    } catch (e) {
-      return {};
-    }
-  }
-  return event.body;
-}
-
-function obtenerQueryParam(event, nombre) {
-  return event.queryStringParameters && event.queryStringParameters[nombre]
-    ? event.queryStringParameters[nombre]
-    : null;
-}
-
 /**
  * Algoritmo de búsqueda de candidatos por coincidencia de habilidades.
  * Utiliza la tabla ColaboradorHabilidad como fuente real de habilidades.
@@ -30,13 +12,14 @@ function obtenerQueryParam(event, nombre) {
 async function buscarCandidatos(event, context) {
   try {
     const query = event.queryStringParameters || {};
-    const body = { ...query, habilidades: (query.habilidades || '').split(',').map((id) => id.trim()).filter(Boolean), considerarDisponibilidad: query.considerarDisponibilidad !== 'false' };
-
-    const habilidadesRequeridas = body.habilidades || [];
-    const nivelMinimo = body.nivelMinimo || 'JUNIOR';
-    const tipoCoincidencia = body.tipoCoincidencia || 'todas'; // 'todas' | 'alguna'
-    const considerarDisponibilidad = body.considerarDisponibilidad !== false;
-    const limit = parseInt(body.limit || '50', 10);
+    const habilidadesRequeridas = [...new Set(String(query.habilidades || '').split(',').map((id) => id.trim()).filter(Boolean))];
+    const nivelMinimo = query.nivelMinimo || 'JUNIOR';
+    const tipoCoincidencia = query.tipoCoincidencia || 'todas';
+    if (query.considerarDisponibilidad !== undefined && !['true', 'false'].includes(query.considerarDisponibilidad)) {
+      return error('considerarDisponibilidad debe ser true o false', 400, CODIGOS.VALIDACION);
+    }
+    const considerarDisponibilidad = query.considerarDisponibilidad !== 'false';
+    const limit = query.limit === undefined ? 50 : Number(query.limit);
 
     if (!Array.isArray(habilidadesRequeridas) || habilidadesRequeridas.length === 0) {
       return error('Se requiere al menos una habilidad en el campo "habilidades"', 400, CODIGOS.VALIDACION);
@@ -51,12 +34,11 @@ async function buscarCandidatos(event, context) {
       return error('tipoCoincidencia debe ser "todas" o "alguna"', 400, CODIGOS.VALIDACION);
     }
 
-    if (!Number.isInteger(limit) || limit < 1 || limit > 100) return error('limit debe estar entre 1 y 100', 400, CODIGOS.VALIDACION);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) return error('limit debe ser un entero entre 1 y 100', 400, CODIGOS.VALIDACION);
     const nivelMinimoValor = NIVELES_JERARQUIA[nivelMinimo];
 
     // Paso 1: Para cada habilidad requerida, obtener los colaboradores asociados
     const colaboradoresPorHabilidad = {};
-    const habilidadesNoEncontradas = [];
 
     for (const habilidadId of habilidadesRequeridas) {
       const colaboradores = [];
@@ -66,10 +48,6 @@ async function buscarCandidatos(event, context) {
         colaboradores.push(...resultado.items);
         lastKey = resultado.lastKey;
       } while (lastKey);
-
-      if (colaboradores.length === 0) {
-        habilidadesNoEncontradas.push(habilidadId);
-      }
 
       colaboradoresPorHabilidad[habilidadId] = colaboradores;
     }
@@ -131,9 +109,25 @@ async function buscarCandidatos(event, context) {
       const colaborador = await colaboradoresRepository.obtenerPorId(colaboradorId);
       if (!colaborador) continue;
 
-      // Considerar disponibilidad y estado
-      if (considerarDisponibilidad) {
-        if (colaborador.estado !== 'ACTIVO') continue;
+      // Un colaborador inactivo nunca es candidato válido. La dedicación reservada
+      // se actualiza transaccionalmente cuando se crean o desvinculan asignaciones.
+      if (colaborador.estado !== 'ACTIVO') continue;
+      const reserva = colaborador.dedicacionReservada;
+      const reservaValida = typeof reserva === 'number' && Number.isFinite(reserva) && reserva >= 0 && reserva <= 100;
+      const dedicacionReservada = reservaValida ? reserva : null;
+      const dedicacionDisponible = reservaValida ? 100 - reserva : null;
+      // Los registros antiguos sin reserva calculada deben migrarse antes de declarar disponibilidad.
+      if (considerarDisponibilidad && (!reservaValida || dedicacionDisponible <= 0)) continue;
+
+      // Registrar también las habilidades que el colaborador no posee en absoluto.
+      const conocidas = new Set([
+        ...info.habilidadesCoincidentes.map((h) => h.habilidadId),
+        ...info.habilidadesFaltantes.map((h) => h.habilidadId),
+      ]);
+      for (const habilidadId of habilidadesRequeridas) {
+        if (!conocidas.has(habilidadId)) {
+          info.habilidadesFaltantes.push({ habilidadId, nivelPoseido: null, nivelRequerido: nivelMinimo });
+        }
       }
 
       // Calcular puntuación (0-100)
@@ -146,6 +140,8 @@ async function buscarCandidatos(event, context) {
         cargoId: colaborador.cargoId,
         rolProfesional: colaborador.rolProfesional,
         estado: colaborador.estado,
+        dedicacionReservada,
+        dedicacionDisponible,
         puntuacion,
         habilidadesCoincidentes: info.habilidadesCoincidentes,
         habilidadesFaltantes: info.habilidadesFaltantes,
@@ -161,7 +157,8 @@ async function buscarCandidatos(event, context) {
     const resultados = candidatos.slice(0, limit);
 
     return exito({
-      total: resultados.length,
+      total: candidatos.length,
+      devueltos: resultados.length,
       candidatos: resultados,
       criterios: {
         habilidadesRequeridas,

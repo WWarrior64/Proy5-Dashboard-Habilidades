@@ -9,6 +9,20 @@ describe('Módulo de Colaboradores - Handler', () => {
   });
 
   describe('crearColaborador', () => {
+    test('devuelve 400 ante JSON malformado sin invocar el repositorio', async () => {
+      const result = await colaboradoresHandler.crearColaborador({ body: '{malformado' }, {});
+      expect(result.statusCode).toBe(400);
+      expect(colaboradoresRepository.crear).not.toHaveBeenCalled();
+    });
+
+    test('rechaza valores de estado fuera del contrato Joi', async () => {
+      const respuesta = await colaboradoresHandler.crearColaborador({ body: JSON.stringify({
+        usuarioId: 'u1', cargoId: 'c1', rolProfesional: 'Dev', estado: 'DESCONOCIDO',
+      }) }, {});
+      expect(respuesta.statusCode).toBe(400);
+      expect(colaboradoresRepository.crear).not.toHaveBeenCalled();
+    });
+
     test('debe crear un colaborador válido', async () => {
       const colaboradorMock = {
         colaboradorId: 'col_1',
@@ -22,6 +36,12 @@ describe('Módulo de Colaboradores - Handler', () => {
       const result = await colaboradoresHandler.crearColaborador(event, {});
       expect(result.statusCode).toBe(201);
       expect(colaboradoresRepository.crear).toHaveBeenCalledWith(colaboradorMock);
+    });
+
+    test('rechaza una matriz JSON aunque su sintaxis sea válida', async () => {
+      const result = await colaboradoresHandler.crearColaborador({ body: '[]' }, {});
+      expect(result.statusCode).toBe(400);
+      expect(colaboradoresRepository.crear).not.toHaveBeenCalled();
     });
 
     test('debe retornar 400 cuando faltan campos requeridos', async () => {
@@ -60,6 +80,22 @@ describe('Módulo de Colaboradores - Handler', () => {
   });
 
   describe('listarColaboradores', () => {
+    test('envía el cursor opaco al repositorio y entrega el cursor de la página siguiente', async () => {
+      const clave = { colaboradorId: 'col-25' };
+      const cursor = Buffer.from(JSON.stringify(clave)).toString('base64url');
+      colaboradoresRepository.listar.mockResolvedValue({ items: [{ colaboradorId: 'col-26' }], lastKey: { colaboradorId: 'col-26' } });
+      const respuesta = await colaboradoresHandler.listarColaboradores({ queryStringParameters: { cursor } }, {});
+      expect(respuesta.statusCode).toBe(200);
+      expect(colaboradoresRepository.listar).toHaveBeenCalledWith({ lastKey: clave });
+      expect(JSON.parse(respuesta.body).datos.nextCursor).toBe(Buffer.from(JSON.stringify({ colaboradorId: 'col-26' })).toString('base64url'));
+    });
+
+    test('rechaza cursores inválidos antes de acceder a DynamoDB', async () => {
+      const respuesta = await colaboradoresHandler.listarColaboradores({ queryStringParameters: { cursor: '!!!' } }, {});
+      expect(respuesta.statusCode).toBe(400);
+      expect(colaboradoresRepository.listar).not.toHaveBeenCalled();
+    });
+
     test('debe listar colaboradores con filtros', async () => {
       colaboradoresRepository.listar.mockResolvedValue({ items: [{ colaboradorId: 'col_1' }], lastKey: null });
       const event = { queryStringParameters: { estado: 'ACTIVO', cargoId: 'cargo_1' } };

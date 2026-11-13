@@ -4,9 +4,7 @@ const {
   GetCommand,
   PutCommand,
   UpdateCommand,
-  DeleteCommand,
   QueryCommand,
-  ScanCommand,
 } = require('../../src/config/dynamodb.js');
 const { tableProyectos, tableUsuarios } = require('../../src/config/environment.js');
 const { ErrorApp, CODIGOS } = require('../../src/utils/errors.js');
@@ -17,6 +15,20 @@ const ESTADOS_VALIDOS = ['BORRADOR', 'ACTIVO', 'PAUSADO', 'COMPLETADO', 'CANCELA
 
 function ahoraISO() {
   return new Date().toISOString();
+}
+
+async function consultarTodasPaginas(parametros) {
+  const items = [];
+  let lastKey;
+  do {
+    const pagina = await dynamoDb.send(new QueryCommand({
+      ...parametros,
+      ...(lastKey && { ExclusiveStartKey: lastKey }),
+    }));
+    items.push(...(pagina.Items || []));
+    lastKey = pagina.LastEvaluatedKey;
+  } while (lastKey);
+  return items;
 }
 
 function claveProyecto(proyectoId) {
@@ -76,6 +88,18 @@ function validarEstado(estado) {
   }
 }
 
+function validarFechas(inicio, fin) {
+  for (const valor of [inicio, fin]) {
+    if (valor !== undefined && valor !== null &&
+      (typeof valor !== 'string' || !Number.isFinite(Date.parse(valor)))) {
+      throw new ErrorApp('Las fechas deben ser cadenas de fecha válidas', 400, CODIGOS.VALIDACION);
+    }
+  }
+  if (inicio && fin && Date.parse(fin) < Date.parse(inicio)) {
+    throw new ErrorApp('fechaFin no puede ser anterior a fechaInicio', 400, CODIGOS.VALIDACION);
+  }
+}
+
 function itemBaseProyecto(proyectoId, datos, ahora) {
   const { estado, objetivo, fechaInicio, fechaFin, fechaPublicacion } = datos;
   return {
@@ -120,7 +144,10 @@ async function crearProyecto(datos) {
     throw new ErrorApp('Las horas requeridas deben ser un número positivo', 400, CODIGOS.VALIDACION);
   }
 
-  const estado = datos.estado && ESTADOS_VALIDOS.includes(datos.estado) ? datos.estado : 'BORRADOR';
+  const estado = datos.estado || 'BORRADOR';
+  validarEstado(estado);
+  validarFechas(datos.fechaInicio, datos.fechaFin);
+  if (datos.fechaPublicacion !== undefined) validarFechas(datos.fechaPublicacion);
   await validarLider(liderId);
 
   const proyectoId = proyectoIdEntrada || uuidv4();
@@ -193,8 +220,7 @@ async function listarProyectos(filtros = {}) {
     if (condicionesFiltro.length > 0) {
       params.FilterExpression = condicionesFiltro.join(' AND ');
     }
-    const resultado = await dynamoDb.send(new QueryCommand(params));
-    items = resultado.Items || [];
+    items = await consultarTodasPaginas(params);
   } else if (estado) {
     nombresAtributos['#est'] = 'estado';
     valoresAtributos[':est'] = estado;
@@ -210,8 +236,7 @@ async function listarProyectos(filtros = {}) {
       valoresAtributos[':fecha'] = fecha;
       params.FilterExpression = '#fp >= :fecha';
     }
-    const resultado = await dynamoDb.send(new QueryCommand(params));
-    items = resultado.Items || [];
+    items = await consultarTodasPaginas(params);
   } else {
     throw new ErrorApp('Se requiere al menos un filtro: estado o liderId', 400, CODIGOS.VALIDACION);
   }
@@ -222,6 +247,10 @@ async function listarProyectos(filtros = {}) {
 
 async function actualizarProyecto(proyectoId, cambios) {
   const { nombre, descripcion, liderId, horasRequeridas, fechaInicio, fechaFin, estado } = cambios;
+  if (fechaInicio !== undefined || fechaFin !== undefined) {
+    const actual = await obtenerProyecto(proyectoId);
+    validarFechas(fechaInicio ?? actual.fechaInicio, fechaFin ?? actual.fechaFin);
+  }
   const sets = [];
   const nombresAtributos = {};
   const valoresAtributos = {};
@@ -340,16 +369,13 @@ async function listarProyectosActivos() {
   const enCache = cache.obtener(clave);
   if (enCache !== undefined) return enCache;
 
-  const resultado = await dynamoDb.send(
-    new QueryCommand({
+  const items = await consultarTodasPaginas({
       TableName: tableProyectos,
       IndexName: 'GSI1',
       KeyConditionExpression: '#est = :est',
       ExpressionAttributeNames: { '#est': 'estado' },
       ExpressionAttributeValues: { ':est': 'ACTIVO' },
-    })
-  );
-  const items = resultado.Items || [];
+  });
 
   cache.guardar(clave, items, CACHE_TTL_MS);
   return items;
