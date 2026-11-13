@@ -12,12 +12,13 @@ import ProyectoForm from '../components/proyectos/ProyectoForm.jsx'
 import ProyectoTable from '../components/proyectos/ProyectoTable.jsx'
 import ProyectoFilters from '../components/proyectos/ProyectoFilters.jsx'
 import ProyectoDetails from '../components/proyectos/ProyectoDetails.jsx'
+import RrhhProyectosVista from './RrhhProyectosVista.jsx'
 
 export default function Proyectos() {
   const { user } = useAuth()
   const [proyectos, setProyectos] = useState([])
   const [lideres, setLideres] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [editMode, setEditMode] = useState(false)
@@ -139,6 +140,20 @@ export default function Proyectos() {
 
   return (
     <>
+    {user?.rol === 'RRHH' ? (
+      <RrhhProyectosVista
+        proyectos={proyectos}
+        lideres={lideres}
+        loading={loading}
+        error={error}
+        canManage={canManage}
+        onCreate={handleCreate}
+        onEdit={handleEdit}
+        onDetails={handleViewDetails}
+        onRetry={loadProyectos}
+      />
+    ) : (
+    <>
     <div className="page-header">
       <div>
         <h1 className="page-title">Mis proyectos</h1>
@@ -193,6 +208,8 @@ export default function Proyectos() {
           />
         </div>
       </div>
+    )}
+    </>
     )}
 
     <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Editar proyecto' : 'Nuevo proyecto'}>

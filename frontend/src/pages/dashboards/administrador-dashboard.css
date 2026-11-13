@@ -1,0 +1,331 @@
+/* Dashboard del Administrador: mismos componentes visuales que Empleado, RRHH y Líder. */
+.admin-dashboard-page { width: 100%; }
+
+.admin-dashboard-page .emp-content.admin-dashboard-content {
+  padding: 16px 24px 24px;
+  overflow-y: auto;
+}
+
+.admin-dashboard-title {
+  margin: 0 0 12px;
+  color: #16255a;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.admin-dashboard-preview {
+  margin: 0 0 12px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.admin-dashboard-statistics .dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 14px !important;
+}
+
+.admin-dashboard-statistics .stat-card {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
+  width: auto;
+  min-width: 0;
+  height: 90px;
+  padding: 10px 56px 10px 15px;
+  text-align: left;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  background: #f8fafc;
+  box-shadow: none;
+}
+
+.admin-dashboard-statistics .stat-card > div {
+  min-width: 0;
+  width: 100%;
+  text-align: left;
+}
+
+.admin-dashboard-statistics .stat-card :is(.stat-label, .stat-value) {
+  text-align: left;
+}
+
+.admin-dashboard-statistics .stat-label {
+  margin: 0 !important;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.admin-dashboard-statistics .stat-value {
+  margin: 2px 0 0;
+  color: #2563eb;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.admin-dashboard-statistics .stat-card .stat-label:last-child {
+  margin-top: 4px !important;
+  color: #64748b;
+  font-size: 10px !important;
+  line-height: 1.2;
+}
+
+.admin-dashboard-statistics .stat-card > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 50%;
+  right: 15px;
+  transform: translateY(-50%);
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  margin-left: 0;
+  border-radius: 6px;
+  background: #dbeafe;
+  color: #2563eb;
+  opacity: 1 !important;
+}
+
+.admin-dashboard-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.admin-dashboard-lower { margin-top: 16px; }
+
+.admin-dashboard-panel,
+.admin-dashboard-page .card-section,
+.admin-dashboard-activity > .card,
+.admin-dashboard-quick-actions > .card {
+  min-width: 0;
+  margin: 0 !important;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  background: #eef2f8;
+  box-shadow: none;
+}
+
+.admin-dashboard-activity,
+.admin-dashboard-quick-actions {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-dashboard-activity > .card,
+.admin-dashboard-quick-actions > .card {
+  flex: 1;
+  padding: 14px;
+}
+
+.admin-dashboard-activity > .card > h3,
+.admin-dashboard-quick-actions > .card > h3 {
+  margin: 0 0 14px !important;
+  color: #16255a !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  line-height: 1.35;
+}
+
+.admin-dashboard-page .card-section-header {
+  min-height: 48px;
+  padding: 14px;
+  border: 0;
+}
+
+.admin-dashboard-page .card-section-title {
+  margin: 0;
+  color: #16255a;
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.admin-dashboard-page .card-section-body {
+  padding: 0 14px 14px;
+}
+
+.admin-dashboard-page .admin-dashboard-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px 0;
+  border-bottom: 1px solid #c9d4e0;
+}
+
+.admin-dashboard-user-row:last-child { border-bottom: 0; }
+.admin-dashboard-user-row > div:first-child { min-width: 0; }
+.admin-dashboard-user-name {
+  margin: 0;
+  color: #16255a;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.admin-dashboard-user-email {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.admin-dashboard-user-meta { text-align: right; }
+.admin-dashboard-role,
+.admin-dashboard-user-state {
+  display: inline-block;
+  padding: 4px 7px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.admin-dashboard-role {
+  color: #2563eb;
+  background: #dbeafe;
+}
+.admin-dashboard-role.manager {
+  color: #fff;
+  background: #16255a;
+}
+.admin-dashboard-user-state {
+  margin-top: 4px;
+  color: #64748b;
+  background: #e2e8f0;
+}
+.admin-dashboard-user-state.active {
+  color: #2563eb;
+  background: #dbeafe;
+}
+
+.admin-dashboard-activity .card li {
+  gap: 10px;
+  border-bottom-color: #c9d4e0 !important;
+}
+.admin-dashboard-activity .card li:last-child { border-bottom: 0 !important; }
+.admin-dashboard-activity .card li p:first-child {
+  color: #16255a !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+.admin-dashboard-activity .card li p {
+  color: #64748b !important;
+  font-size: 11px !important;
+}
+.admin-dashboard-activity .badge {
+  padding: 4px 7px;
+  border-radius: 3px;
+  background: #dbeafe !important;
+  color: #2563eb !important;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.admin-dashboard-page .empty-state {
+  padding: 20px 10px;
+  color: #64748b;
+  font-size: 12px;
+}
+.admin-dashboard-page .empty-state p { color: #64748b; font-size: 12px; }
+.admin-dashboard-page .empty-state span { display: block; }
+
+.admin-dashboard-quick-actions .card > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.admin-dashboard-page .btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 35px;
+  padding: 9px 12px;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  background: #fff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: none;
+}
+.admin-dashboard-page .btn-outline:hover {
+  border-color: #93c5fd;
+  background: #dbeafe;
+}
+.admin-dashboard-page .btn-outline:focus-visible,
+.admin-dashboard-page .emp-sidebar-item:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.admin-dashboard-access-text {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.admin-dashboard-loading,
+.admin-dashboard-error {
+  min-height: 185px;
+  padding: 20px;
+  border: 1px solid #c9d4e0;
+  border-radius: 6px;
+  background: #eef2f8;
+}
+.admin-dashboard-error {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 10px;
+  color: #b91c1c;
+  font-size: 13px;
+}
+.admin-dashboard-error .btn-outline { margin-top: 4px; }
+.admin-dashboard-page .emp-sidebar-user { font-size: 12px; }
+
+@media (max-width: 1000px) {
+  .admin-dashboard-columns { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  .admin-dashboard-page .emp-content.admin-dashboard-content { padding: 14px; }
+  .admin-dashboard-statistics .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .admin-dashboard-page .emp-sidebar { width: 145px; }
+  .admin-dashboard-page .emp-sidebar-top { padding-left: 12px; }
+  .admin-dashboard-page .emp-sidebar-brand { font-size: 14px; width: 120px; }
+  .admin-dashboard-page .emp-sidebar-divider { width: 115px; }
+  .admin-dashboard-page .emp-sidebar-menu { padding-left: 0; }
+  .admin-dashboard-page .emp-sidebar-item,
+  .admin-dashboard-page .emp-sidebar-item.active {
+    width: 125px;
+    padding-left: 5px;
+    font-size: 11px;
+    white-space: normal;
+  }
+  .admin-dashboard-page .emp-sidebar-bottom { padding-left: 12px; }
+  .admin-dashboard-page .emp-header-right { gap: 8px; }
+  .admin-dashboard-page .emp-user-icon { margin-right: 0; }
+  .admin-dashboard-statistics .dashboard-grid { gap: 6px; }
+  .admin-dashboard-statistics .stat-card { height: 78px; padding: 8px 40px 8px 8px; }
+  .admin-dashboard-statistics .stat-card > span { right: 8px; }
+  .admin-dashboard-statistics .stat-value { font-size: 20px; }
+  .admin-dashboard-statistics .stat-label { font-size: 10px; }
+  .admin-dashboard-statistics .stat-card .stat-label:last-child { font-size: 9px !important; }
+  .admin-dashboard-statistics .stat-card > span { width: 24px; height: 24px; }
+}
+@media (max-width: 430px) {
+  .admin-dashboard-statistics .dashboard-grid { grid-template-columns: 1fr; }
+}
