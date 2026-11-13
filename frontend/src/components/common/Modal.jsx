@@ -1,9 +1,9 @@
-export default function Modal({ isOpen, onClose, title, children }) {
+export default function Modal({ isOpen, onClose, title, children, className = '' }) {
   if (!isOpen) return null
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <div className="modal">
+      <div className={['modal', className].filter(Boolean).join(' ')}>
         <div className="modal-header">
           <h2 id="modal-title" className="modal-title">{title}</h2>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">×</button>

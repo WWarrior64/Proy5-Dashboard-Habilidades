@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Eye, Pencil, Plus, Search, UserRound } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
+import { useAuth } from '../hooks/useAuth.js'
 import { asignacionesService } from '../services/asignaciones.service.js'
 import { habilidadesService } from '../services/habilidades.service.js'
+import { obtenerFechasProyecto, formatoFechaProyecto } from '../utils/proyectoFechas.js'
 import api from '../services/api.js'
 import './rrhh-proyectos.css'
 
@@ -13,6 +15,14 @@ const menu = [
   ['Habilidades', '/habilidades'],
   ['Proyectos', '/proyectos'],
   ['Asignaciones', '/asignaciones'],
+]
+
+const menuAdministrador = [
+  ['Dashboard', '/dashboards/administrador'],
+  ['Usuarios', '/usuarios'],
+  ['Roles y permisos', '/roles-permisos'],
+  ['Configuración', '/configuracion'],
+  ['Auditoría', '/auditoria'],
 ]
 
 const estados = [
@@ -37,11 +47,6 @@ const leerItems = respuesta => {
 }
 
 const nombreEstado = valor => estados.find(([clave]) => clave === valor)?.[1] || valor || 'Sin estado'
-const fechaCorta = fecha => {
-  if (!fecha || typeof fecha !== 'string') return '—'
-  const [anio, mes, dia] = fecha.slice(0, 10).split('-')
-  return anio && mes && dia ? `${dia}/${mes}/${anio}` : '—'
-}
 const numero = valor => typeof valor === 'number' && Number.isFinite(valor) ? valor : null
 
 export default function RrhhProyectosVista({
@@ -55,9 +60,11 @@ export default function RrhhProyectosVista({
   onDetails,
   onRetry,
 }) {
+  const { user } = useAuth()
+  const esAdministrador = user?.rol === 'ADMINISTRADOR'
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [busqueda, setBusqueda] = useState('')
-  const [estado, setEstado] = useState('')
+  const [estado, setEstado] = useState('VIGENTES')
   const [lider, setLider] = useState('')
   const [habilidad, setHabilidad] = useState('')
   const [relaciones, setRelaciones] = useState({})
@@ -91,7 +98,7 @@ export default function RrhhProyectosVista({
   }, [proyectos])
 
   // Vista previa exclusivamente en desarrollo, si la API aún no devuelve proyectos.
-  const mostrandoEjemplo = import.meta.env.DEV && !loading && proyectos.length === 0
+  const mostrandoEjemplo = import.meta.env.VITE_DEMO_MODE === 'true' && !loading && !error && proyectos.length === 0
   const catalogo = useMemo(() => {
     if (mostrandoEjemplo) return proyectosEjemplo.map(item => ({ ...item, esEjemplo: true }))
     const liderPorId = new Map(lideres.map(item => [item.usuarioId || item.id, item.nombre || item.email || 'Sin nombre']))
@@ -130,7 +137,8 @@ export default function RrhhProyectosVista({
       const contenido = [item.nombre, item.lider, item.descripcion, ...(item.habilidades || []).map(h => h.nombre)]
         .filter(Boolean).join(' ').toLocaleLowerCase('es')
       return terminos.every(termino => contenido.includes(termino)) &&
-        (!estado || item.estado === estado) &&
+        (estado === 'TODOS' || (estado === 'VIGENTES'
+          ? !['CANCELADO', 'COMPLETADO'].includes(item.estado) : item.estado === estado)) &&
         (!lider || item.lider === lider) &&
         (!habilidad || (item.habilidades || []).some(h => h.nombre === habilidad))
     })
@@ -155,8 +163,8 @@ export default function RrhhProyectosVista({
         <div className="emp-sidebar-top">
           <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
           <div className="emp-sidebar-divider" />
-          <nav className="emp-sidebar-menu" aria-label="Menú de recursos humanos">
-            {menu.map(([texto, ruta]) => (
+          <nav className="emp-sidebar-menu" aria-label={esAdministrador ? 'Menú de administrador' : 'Menú de recursos humanos'}>
+            {(esAdministrador ? menuAdministrador : menu).map(([texto, ruta]) => (
               <NavLink key={ruta} to={ruta} end className={({ isActive }) => 'emp-sidebar-item' + (isActive ? ' active' : '')}>
                 {texto}
               </NavLink>
@@ -164,7 +172,7 @@ export default function RrhhProyectosVista({
           </nav>
         </div>
         <div className="emp-sidebar-bottom">
-          <span className="emp-sidebar-user">RRHH</span>
+          <span className="emp-sidebar-user">{esAdministrador ? 'Administrador' : 'RRHH'}</span>
           <EmpleadoLogoutButton />
         </div>
       </aside>
@@ -231,7 +239,8 @@ export default function RrhhProyectosVista({
                   />
                 </label>
                 <select aria-label="Filtrar por estado" value={estado} onChange={evento => setEstado(evento.target.value)}>
-                  <option value="">Estado: Todos</option>
+                  <option value="VIGENTES">Estado: Vigentes</option>
+                   <option value="TODOS">Todos los estados</option>
                   {estados.map(([clave, etiqueta]) => <option value={clave} key={clave}>{etiqueta}</option>)}
                 </select>
                 <select aria-label="Filtrar por líder" value={lider} onChange={evento => setLider(evento.target.value)}>
@@ -276,6 +285,7 @@ export default function RrhhProyectosVista({
                       {visibles.map(item => {
                         const asignadas = numero(item.horasAsignadas)
                         const requeridas = numero(item.horasRequeridas)
+                        const fechas = obtenerFechasProyecto(item)
                         const progreso = requeridas > 0 && asignadas !== null ? Math.min(100, Math.max(0, (asignadas / requeridas) * 100)) : 0
                         return (
                           <tr key={item.proyectoId}>
@@ -302,8 +312,8 @@ export default function RrhhProyectosVista({
                             </td>
                             <td>
                               <div className="rrhh-proyectos-dates">
-                                <span>{fechaCorta(item.fechaInicio)}</span>
-                                <span>{fechaCorta(item.fechaFin)}</span>
+                                <span>{formatoFechaProyecto(fechas.inicio)}</span>
+                                <span>{formatoFechaProyecto(fechas.fin)}{fechas.estimada ? ' · estimada' : ''}</span>
                               </div>
                             </td>
                             <td>

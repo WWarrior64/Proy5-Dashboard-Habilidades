@@ -39,7 +39,7 @@ Solicitudes de participación. Registra las solicitudes de los colaboradores que
 ## Reglas de negocio
 
 - Un colaborador no puede postularse dos veces al mismo proyecto mientras exista su registro de postulación.
-- Solo se puede postular a proyectos activos.
-- La aceptación crea la asignación y reserva la dedicación mediante una transacción atómica; el porcentaje acumulado se comprueba en `Colaboradores.dedicacionReservada`, sin depender de lecturas eventualmente consistentes del GSI.
+- Solo se puede postular a proyectos activos. Un usuario con rol `LIDER_PROYECTO` puede postularse como colaborador a proyectos de otros líderes, pero no a un proyecto que dirige; se compara `Colaboradores.usuarioId` con `Proyectos.liderId`.
+- La aceptación crea la asignación y reserva la dedicación mediante una transacción atómica; el porcentaje acumulado se comprueba en `Colaboradores.dedicacionReservada`, sin depender de lecturas eventualmente consistentes del GSI. La misma transacción vuelve a comprobar que el proyecto siga activo y que el colaborador no sea el propio líder.
 - Las consultas de postulaciones recorren todas las páginas de DynamoDB.
-- Se conserva el historial de las postulaciones rechazadas, aceptadas o retiradas.
+- Se conserva el historial de las postulaciones rechazadas, aceptadas o retiradas. No se crean asignaciones duplicadas para el mismo colaborador y proyecto aunque exista una relación histórica desvinculada.

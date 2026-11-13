@@ -55,16 +55,16 @@ function SoloRol({ permitidos, children }) {
 // Para RRHH, Colaboradores usa su propio diseño de tarjetas y barra lateral.
 function ColaboradoresPorRol() {
   const { user } = useAuth()
-  return user?.rol === 'RRHH' ? <Colaboradores />
-    : user?.rol === 'LIDER_PROYECTO' ? <LiderBuscarTalentoVista /> : <MainLayout />
+  return [ROLES.RRHH, ROLES.ADMINISTRADOR].includes(user?.rol) ? <Colaboradores />
+    : user?.rol === ROLES.LIDER_PROYECTO ? <LiderBuscarTalentoVista /> : <MainLayout />
 }
 
 // Conserva la pantalla de gestión de proyectos para el resto de roles.
 function ProyectosPorRol() {
   const { user } = useAuth()
   return user?.rol === 'EMPLEADO' ? <EmpleadoProyectos />
-    : user?.rol === 'RRHH' ? <Proyectos />
-      : user?.rol === 'LIDER_PROYECTO' ? <LiderProyectosVista /> : <MainLayout />
+    : [ROLES.RRHH, ROLES.ADMINISTRADOR].includes(user?.rol) ? <Proyectos />
+      : user?.rol === ROLES.LIDER_PROYECTO ? <LiderProyectosVista /> : <MainLayout />
 }
 
 // La vista anterior de postulaciones permanece accesible para otros roles.

@@ -6,6 +6,7 @@ import { colaboradoresService } from '../../services/colaboradores.service.js'
 import { habilidadesService } from '../../services/habilidades.service.js'
 import { usuariosService } from '../../services/usuarios.service.js'
 import { cargosService } from '../../services/cargos.service.js'
+import GestionCargosModal from '../../components/cargos/GestionCargosModal.jsx'
 import { proyectosService } from '../../services/proyectos.service.js'
 import { asignacionesService } from '../../services/asignaciones.service.js'
 import { extractItems } from '../../utils/apiResponses.js'
@@ -59,7 +60,8 @@ export default function RecursosHumanosDashboard() {
   const [cargando, setCargando] = useState(!modoDemo)
   const [error, setError] = useState('')
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
-  const [avisoCargos, setAvisoCargos] = useState(false)
+  const [cargosAbierto, setCargosAbierto] = useState(false)
+  const [versionCargos, setVersionCargos] = useState(0)
 
   useEffect(() => {
     if (modoDemo) return undefined
@@ -93,7 +95,7 @@ export default function RecursosHumanosDashboard() {
           ids.forEach(id => cantidadesHabilidades.set(id, (cantidadesHabilidades.get(id) || 0) + 1))
         })
         const cargoConteos = new Map()
-        colaboradores.forEach(item => {
+        colaboradores.filter(item => item.estado === 'ACTIVO').forEach(item => {
           const nombre = cargosCatalogo.get(item.cargoId) || item.rolProfesional || 'Sin cargo'
           cargoConteos.set(nombre, (cargoConteos.get(nombre) || 0) + 1)
         })
@@ -104,7 +106,7 @@ export default function RecursosHumanosDashboard() {
           if (item.dedicacionReservada < 100) return { nombre: 'Parcial', clase: 'parcial' }
           return { nombre: 'No disponible', clase: 'no-disponible' }
         }
-        const recientes = [...colaboradores].sort((a, b) =>
+        const recientes = colaboradores.filter(item => item.estado === 'ACTIVO').sort((a, b) =>
           (b.fechaAlta || '').localeCompare(a.fechaAlta || '')).slice(0, 3).map(item => {
             const estado = disponibilidad(item)
             return {
@@ -127,7 +129,9 @@ export default function RecursosHumanosDashboard() {
           setRecientes(recientes)
           setCargos([...cargoConteos].sort((a, b) => b[1] - a[1]).map(([nombre, colaboradores], i) =>
             ({ id: i, nombre, colaboradores })))
-          setHabilidades([...cantidadesHabilidades].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id, cantidad]) => ({
+          setHabilidades([...cantidadesHabilidades]
+             .filter(([id]) => habilidadesCatalogo.get(id)?.estado !== 'INACTIVO')
+             .sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id, cantidad]) => ({
             id,
             nombre: habilidadesCatalogo.get(id)?.nombre || id,
             categoria: habilidadesCatalogo.get(id)?.categoria || 'Sin categoría',
@@ -142,7 +146,7 @@ export default function RecursosHumanosDashboard() {
     }
     cargar()
     return () => { cancelado = true }
-  }, [])
+  }, [versionCargos])
 
   const termino = busquedaSuperior.trim().toLocaleLowerCase('es')
   const recientesVisibles = useMemo(() => recientes.filter(item =>
@@ -287,15 +291,10 @@ export default function RecursosHumanosDashboard() {
               <h2 id="rrhh-acciones-titulo">Acciones rápidas</h2>
               <div className="rrhh-dashboard-quick-actions">
                 <Link to="/colaboradores">Gestionar colaboradores</Link>
-                <button type="button" onClick={() => setAvisoCargos(true)}>Gestionar cargos</button>
+                <button type="button" onClick={() => setCargosAbierto(true)}>Gestionar cargos</button>
                 <Link to="/habilidades">Gestionar habilidades</Link>
               </div>
-              {avisoCargos && (
-                <p className="rrhh-dashboard-action-note" role="status">
-                  La gestión de cargos aún no tiene una pantalla propia. Puedes consultar los cargos desde Colaboradores.
-                  <button type="button" onClick={() => setAvisoCargos(false)} aria-label="Cerrar aviso">×</button>
-                </p>
-              )}
+
             </section>
 
             <section className="rrhh-dashboard-panel" aria-labelledby="rrhh-habilidades-titulo">
@@ -316,6 +315,8 @@ export default function RecursosHumanosDashboard() {
           </div>
         </section>
       </main>
+      <GestionCargosModal abierto={cargosAbierto} onClose={() => setCargosAbierto(false)}
+        onUpdated={() => setVersionCargos(v => v + 1)} />
     </div>
   )
 }

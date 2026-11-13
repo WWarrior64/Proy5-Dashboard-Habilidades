@@ -1,6 +1,7 @@
 const { exito, creado, error } = require('../../utils/responses');
 const { ErrorApp, CODIGOS } = require('../../utils/errors');
 const colaboradoresRepository = require('../../repositories/colaboradores.repository');
+const usuariosRepository = require('../../repositories/usuarios.repository');
 const { validarDatos } = require('../../middleware/validation');
 const { crearColaboradorSchema, actualizarColaboradorSchema, asociarHabilidadSchema, actualizarNivelHabilidadSchema } = require('../../utils/validators');
 
@@ -52,6 +53,19 @@ async function crearColaborador(event, context) {
   }
 }
 
+function mostrarIdentidadPublica(item, nombreUsuario) {
+  const nombreValido = typeof nombreUsuario === 'string' && nombreUsuario.trim()
+    ? nombreUsuario.trim() : null;
+  const esNombreProfesional = item.nombre?.trim().toLocaleLowerCase('es') ===
+    item.rolProfesional?.trim().toLocaleLowerCase('es');
+  return {
+    ...item,
+    nombreUsuario: nombreValido,
+    nombre: nombreValido || (esNombreProfesional
+      ? `Colaborador ${item.colaboradorId}` : item.nombre || `Colaborador ${item.colaboradorId}`),
+  };
+}
+
 async function listarColaboradores(event, context) {
   try {
     const query = event.queryStringParameters || {};
@@ -82,7 +96,21 @@ async function listarColaboradores(event, context) {
       }
     }
     const resultado = await colaboradoresRepository.listar(filtros);
-    return exito({ ...resultado, nextCursor: resultado.lastKey ? Buffer.from(JSON.stringify(resultado.lastKey)).toString('base64url') : null });
+    let items = resultado.items;
+    if (event.usuarioAutenticado?.rol === 'LIDER_PROYECTO') {
+      // El Líder puede ver nombres profesionales, pero no consultar la API privada de Usuarios.
+      const ids = [...new Set(items.map(item => item.usuarioId).filter(Boolean))];
+      const nombres = new Map();
+      for (let inicio = 0; inicio < ids.length; inicio += 10) {
+        const lote = await Promise.all(ids.slice(inicio, inicio + 10).map(async id => {
+          const usuario = await usuariosRepository.obtenerPorId(id);
+          return [id, usuario?.nombre || null];
+        }));
+        lote.forEach(([id, nombre]) => nombres.set(id, nombre));
+      }
+      items = items.map(item => mostrarIdentidadPublica(item, nombres.get(item.usuarioId)));
+    }
+    return exito({ ...resultado, items, nextCursor: resultado.lastKey ? Buffer.from(JSON.stringify(resultado.lastKey)).toString('base64url') : null });
   } catch (err) {
     return error(err.message, err.codigo || 500, err.codigoError);
   }
@@ -100,6 +128,11 @@ async function obtenerColaborador(event, context) {
       return error('Colaborador no encontrado', 404, CODIGOS.NO_ENCONTRADO);
     }
 
+    if (event.usuarioAutenticado?.rol === 'LIDER_PROYECTO') {
+      const usuario = colaborador.usuarioId
+        ? await usuariosRepository.obtenerPorId(colaborador.usuarioId) : null;
+      return exito(mostrarIdentidadPublica(colaborador, usuario?.nombre));
+    }
     return exito(colaborador);
   } catch (err) {
     return error(err.message, err.codigo || 500, err.codigoError);

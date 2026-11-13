@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth.js'
 import EmpleadoLogoutButton from '../../components/layout/EmpleadoLogoutButton.jsx'
 import { colaboradoresService } from '../../services/colaboradores.service.js'
 import { proyectosService } from '../../services/proyectos.service.js'
+import { rangoFechasProyecto } from '../../utils/proyectoFechas.js'
 import api from '../../services/api.js'
 import './lider-proyecto-dashboard.css'
 
@@ -123,7 +124,7 @@ export default function LiderProyectoDashboard() {
     return () => { cancelado = true }
   }, [user?.usuarioId, recarga])
 
-  const vistaPrevia = import.meta.env.DEV && !cargando
+  const vistaPrevia = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error
   const mostrarProyectosEjemplo = vistaPrevia && datos.proyectos?.length === 0
   const mostrarPostulacionesEjemplo = vistaPrevia && datos.postulaciones?.length === 0
   const mostrarCandidatosEjemplo = vistaPrevia && datos.colaboradores?.length === 0
@@ -313,7 +314,7 @@ export default function LiderProyectoDashboard() {
                     <Link key={item.proyectoId} to="/proyectos" className="lider-dashboard-overview-row">
                       <div className="lider-dashboard-row-copy">
                         <strong>{item.nombre}{item.esEjemplo ? ' · Ejemplo' : ''}</strong>
-                        <p>{formatoFecha(item.fechaInicio)} – {formatoFecha(item.fechaFin)}</p>
+                        <p>{rangoFechasProyecto(item)}</p>
                       </div>
                       <div className="lider-dashboard-progress-column">
                         <div className="lider-dashboard-progress" role="progressbar"
@@ -337,6 +338,7 @@ export default function LiderProyectoDashboard() {
                 <Link to="/proyectos">Crear proyecto</Link>
                 <Link to="/colaboradores">Buscar talento</Link>
                 <Link to="/postulaciones">Ver postulaciones</Link>
+                 <Link to="/asignaciones">Consultar mis participaciones</Link>
               </div>
             </section>
 

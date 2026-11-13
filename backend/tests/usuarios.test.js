@@ -53,6 +53,7 @@ describe('Módulo de Usuarios - Handler', () => {
       const result = await usuariosHandler.obtenerPerfil(event, {});
       expect(result.statusCode).toBe(200);
       expect(usuariosRepository.obtenerPorCognitoSub).toHaveBeenCalledWith('cognito_123');
+      expect(usuariosRepository.registrarUltimoAcceso).not.toHaveBeenCalled();
     });
 
     test('debe retornar 401 cuando no hay identidad de Cognito', async () => {
@@ -68,6 +69,29 @@ describe('Módulo de Usuarios - Handler', () => {
       };
       const result = await usuariosHandler.obtenerPerfil(event, {});
       expect(result.statusCode).toBe(403);
+    });
+  });
+
+  describe('registrarAcceso', () => {
+    test('registra el acceso en el usuario autenticado, ignorando cualquier ID del cliente', async () => {
+      usuariosRepository.registrarUltimoAcceso.mockResolvedValue({
+        usuarioId: 'usr_1', ultimoAcceso: '2026-11-13T18:40:00.000Z',
+      });
+      const result = await usuariosHandler.registrarAcceso({
+        usuarioAutenticado: { usuarioId: 'usr_1', estado: 'ACTIVO' },
+        body: JSON.stringify({ usuarioId: 'usr_ajeno', ultimoAcceso: '2099-01-01' }),
+      }, {});
+      expect(result.statusCode).toBe(200);
+      expect(usuariosRepository.registrarUltimoAcceso).toHaveBeenCalledWith('usr_1');
+      expect(JSON.parse(result.body).datos.ultimoAcceso).toBe('2026-11-13T18:40:00.000Z');
+    });
+
+    test('no registra accesos sin identidad autenticada o con cuenta inactiva', async () => {
+      expect((await usuariosHandler.registrarAcceso({}, {})).statusCode).toBe(401);
+      expect((await usuariosHandler.registrarAcceso({ usuarioAutenticado: {
+        usuarioId: 'usr_1', estado: 'INACTIVO',
+      } }, {})).statusCode).toBe(401);
+      expect(usuariosRepository.registrarUltimoAcceso).not.toHaveBeenCalled();
     });
   });
 

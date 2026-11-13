@@ -46,6 +46,7 @@ describe('Contrato de Rutas - Handlers vs SAM Template', () => {
       'busqueda',
       'dashboard',
       'health',
+      'administracion',
     ];
 
     handlersList.forEach((modulo) => {
@@ -56,15 +57,33 @@ describe('Contrato de Rutas - Handlers vs SAM Template', () => {
     });
   });
 
+  it('concede ConditionCheckItem a ambas Lambdas que reservan dedicación por transacción', () => {
+    const template = fs.readFileSync(templatePath, 'utf8');
+    const postulaciones = template.split('  PostulacionesFunction:')[1]?.split('  AsignacionesFunction:')[0];
+    const asignaciones = template.split('  AsignacionesFunction:')[1]?.split('  DashboardFunction:')[0];
+    for (const bloque of [postulaciones, asignaciones]) {
+      expect(bloque).toBeDefined();
+      expect(bloque).toContain('dynamodb:ConditionCheckItem');
+      expect(bloque).toContain('Resource: !GetAtt ProyectosTable.Arn');
+    }
+  });
+
   it('debe registrar y documentar rutas conocidas entre SAM y Handlers', () => {
     // Verifica que rutas críticas estén presentes en la declaración de SAM
     const rutasCriticas = [
       'GET /api/v1/health',
       'GET /api/v1/usuarios/yo',
+      'POST /api/v1/usuarios/yo/acceso',
       'POST /api/v1/usuarios',
       'GET /api/v1/colaboradores',
+      'GET /api/v1/asignaciones/mias',
       'GET /api/v1/dashboard/resumen',
       'GET /api/v1/busqueda/colaboradores',
+      'GET /api/v1/administracion/configuracion',
+      'GET /api/v1/administracion/auditoria',
+      'PUT /api/v1/administracion/configuracion',
+      'GET /api/v1/administracion/roles-permisos',
+      'PUT /api/v1/administracion/roles-permisos',
     ];
 
     rutasCriticas.forEach((ruta) => {

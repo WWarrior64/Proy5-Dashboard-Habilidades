@@ -28,6 +28,7 @@ export default function AdministradorDashboard() {
   const [usuarios, setUsuarios] = useState([])
   const [proyectos, setProyectos] = useState([])
   const [actividadReciente, setActividadReciente] = useState([])
+  const [datosCargados, setDatosCargados] = useState({ usuarios: false, proyectos: false, actividad: false })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
@@ -44,6 +45,11 @@ export default function AdministradorDashboard() {
         api.get('/dashboard/actividad', { params: { dias: 30, limite: 30 } }),
       ])
 
+      setDatosCargados({
+        usuarios: usuariosResp.status === 'fulfilled',
+        proyectos: proyectosResp.status === 'fulfilled',
+        actividad: actividadResp.status === 'fulfilled',
+      })
       if (usuariosResp.status === 'rejected') setError(getApiErrorMessage(usuariosResp.reason))
       if (proyectosResp.status === 'rejected') setError(getApiErrorMessage(proyectosResp.reason))
       if (actividadResp.status === 'rejected') setError(getApiErrorMessage(actividadResp.reason))
@@ -82,14 +88,15 @@ export default function AdministradorDashboard() {
     loadDashboardData()
   }, [loadDashboardData])
 
-  const totalUsuarios = demoMode ? DEMO_USUARIOS.length : usuarios.length
-  const activosUsuarios = demoMode ? DEMO_USUARIOS.filter((u) => u.estado === 'ACTIVO').length : usuarios.filter((u) => u.estado === 'ACTIVO').length
+  const totalUsuarios = demoMode ? DEMO_USUARIOS.length : datosCargados.usuarios ? usuarios.length : '—'
+  const activosUsuarios = demoMode ? DEMO_USUARIOS.filter((u) => u.estado === 'ACTIVO').length
+    : datosCargados.usuarios ? usuarios.filter((u) => u.estado === 'ACTIVO').length : '—'
 
   const stats = [
     { title: 'Usuarios', value: totalUsuarios, subtitle: `${activosUsuarios} activos`, icon: <UsersRound size={19} /> },
     { title: 'Activos', value: activosUsuarios, subtitle: 'Usuarios con acceso', icon: <UserCheck size={19} /> },
     { title: 'Roles', value: 4, subtitle: 'Empleado, RRHH, Líder, Admin', icon: <ShieldCheck size={19} /> },
-    { title: 'Pendientes', value: demoMode ? 0 : proyectos.filter((p) => p.estado === 'BORRADOR').length, subtitle: 'Proyectos por iniciar', icon: <Clock3 size={19} /> },
+    { title: 'Pendientes', value: demoMode ? 0 : datosCargados.proyectos ? proyectos.filter((p) => p.estado === 'BORRADOR').length : '—', subtitle: 'Proyectos por iniciar', icon: <Clock3 size={19} /> },
   ]
 
   const actividades = demoMode ? DEMO_ACTIVIDADES : actividadReciente
@@ -97,7 +104,8 @@ export default function AdministradorDashboard() {
   const actividadesVisibles = actividades.filter(item =>
     [item.tipo, item.nombre, item.fecha, item.estado].join(' ').toLocaleLowerCase('es').includes(termino))
   const usuariosVisibles = (demoMode ? DEMO_USUARIOS : usuarios).filter(item =>
-    [item.nombre, item.email, item.rol, item.estado].join(' ').toLocaleLowerCase('es').includes(termino)).slice(0, 3)
+    [item.nombre, item.email, item.rol, item.estado].join(' ').toLocaleLowerCase('es').includes(termino))
+    .sort((a, b) => (b.fechaCreacion || '').localeCompare(a.fechaCreacion || '')).slice(0, 3)
 
   const quickActions = [
     { label: 'Gestionar usuarios', onClick: () => navigate('/usuarios') },
@@ -147,14 +155,14 @@ export default function AdministradorDashboard() {
 
     {loading ? (
       <div className="admin-dashboard-loading"><Loading /></div>
-    ) : error ? (
-      <div className="admin-dashboard-error" role="alert">
-        <span style={{ fontSize: '3rem' }}>⚠</span>
-        <p>{error}</p>
-        <Button variant="outline" onClick={loadDashboardData}>Reintentar</Button>
-      </div>
     ) : (
       <>
+        {error && (
+          <div className="admin-dashboard-error" role="alert">
+            <p>{error}</p>
+            <Button variant="outline" onClick={loadDashboardData}>Reintentar</Button>
+          </div>
+        )}
         <div className="admin-dashboard-statistics"><Statistics stats={stats} /></div>
 
         <div className="admin-dashboard-columns">
@@ -200,7 +208,7 @@ export default function AdministradorDashboard() {
             </div>
             <div className="card-section-body">
               <p className="admin-dashboard-access-text">
-                Utilice el menú lateral para navegar a Usuarios, Colaboradores o Proyectos.
+                Utiliza las acciones rápidas para gestionar usuarios, colaboradores y proyectos. El menú lateral conserva las herramientas del Administrador.
               </p>
             </div>
           </div>

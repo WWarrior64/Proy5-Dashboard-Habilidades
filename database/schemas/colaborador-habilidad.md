@@ -13,7 +13,7 @@ Matriz N:M de colaboradores y habilidades. Relaciona los colaboradores con sus h
 | habilidadId | Sí | String (UUID) | Identificador de la habilidad. |
 | nivel | Sí | String | Nivel de dominio: JUNIOR, MID o SENIOR. |
 | anosExperiencia | Sí | Number | Años de experiencia, por defecto 0; la API admite temporalmente `aniosExperiencia` como alias de entrada. |
-| observaciones | No | String | Comentarios sobre el dominio de la habilidad. |
+| observaciones | No | String | Comentarios opcionales sobre la habilidad; los formularios omiten este atributo cuando queda vacío. |
 | fechaCreacion | Sí | String (ISO 8601) | Fecha en que se agregó la habilidad al perfil. |
 | fechaActualizacion | Sí | String (ISO 8601) | Fecha de última actualización del nivel o experiencia. |
 
@@ -38,3 +38,4 @@ Matriz N:M de colaboradores y habilidades. Relaciona los colaboradores con sus h
 - El nivel debe pertenecer a JUNIOR, MID o SENIOR.
 - El nivel puede actualizarse sin crear un nuevo registro (UpdateItem sobre la misma clave).
 - Para buscar candidatos se consulta por habilidad y se compara el nivel requerido con el nivel del colaborador.
+- Las relaciones del colaborador se conservan cuando el perfil se da de baja y pueden seguir utilizándose tras su reincorporación; los perfiles inactivos quedan excluidos por defecto de la selección de talento.

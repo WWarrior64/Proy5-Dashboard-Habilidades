@@ -28,6 +28,8 @@ module.exports = {
     process.env.TABLE_PROYECTO_HABILIDAD || 'internal-marketplace-proyecto-habilidad-dev',
   tablePostulaciones: process.env.TABLE_POSTULACIONES || 'internal-marketplace-postulaciones-dev',
   tableAsignaciones: process.env.TABLE_ASIGNACIONES || 'internal-marketplace-asignaciones-dev',
+  tableAdministracion: process.env.TABLE_ADMINISTRACION || 'internal-marketplace-administracion-dev',
+  tableAuditoria: process.env.TABLE_AUDITORIA || 'internal-marketplace-auditoria-dev',
 };
 
 const TABLE_KEYS = [
@@ -40,6 +42,8 @@ const TABLE_KEYS = [
   'TABLE_PROYECTO_HABILIDAD',
   'TABLE_POSTULACIONES',
   'TABLE_ASIGNACIONES',
+  'TABLE_ADMINISTRACION',
+  'TABLE_AUDITORIA',
 ];
 
 /**

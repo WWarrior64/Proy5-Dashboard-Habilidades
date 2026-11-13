@@ -6,10 +6,10 @@ Este directorio define la infraestructura como código mediante **AWS SAM (Serve
 
 1. **API Gateway & AWS Lambda:**
    - Una API REST (`InternalMarketplaceApi`) configurada con CORS y soporte para endpoints orientados al microservicio de talento.
-   - Diez funciones Lambda organizadas por dominio, con runtime `nodejs24.x`; `HealthFunction` expone `/api/v1/health`.
+   - Once funciones Lambda organizadas por dominio, con runtime `nodejs24.x`, incluida `AdministracionFunction`; `HealthFunction` expone `/api/v1/health`.
 
 2. **Base de Datos NoSQL (Amazon DynamoDB):**
-   - Nueve tablas: `Usuarios`, `Colaboradores`, `Cargos`, `Habilidades`, `ColaboradorHabilidad`, `Proyectos`, `ProyectoHabilidad`, `Postulaciones` y `Asignaciones`.
+   - Once tablas: `Usuarios`, `Colaboradores`, `Cargos`, `Habilidades`, `ColaboradorHabilidad`, `Proyectos`, `ProyectoHabilidad`, `Postulaciones`, `Asignaciones`, `Administracion` y `Auditoria`.
    - Modo `PAY_PER_REQUEST` e índices secundarios globales (GSI) definidos en `template.yaml`.
 
 3. **Frontend Hosting (Amazon S3 + CloudFront):**
@@ -23,7 +23,7 @@ Este directorio define la infraestructura como código mediante **AWS SAM (Serve
 Asegúrate de contar con las siguientes herramientas instaladas en tu entorno de desarrollo:
 - [AWS CLI v2](https://aws.amazon.com/cli/)
 - [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
-- [Node.js (LTS v20+)](https://nodejs.org/)
+- [Node.js 24](https://nodejs.org/) (compatible con el runtime definido en SAM)
 
 ---
 
@@ -62,8 +62,18 @@ La ejecución de `sam deploy` puede crear o modificar recursos y costos. Verific
 - Verificar los casos de error HTTP 400 (JSON inválido), 404 (inexistente), 409 (duplicidad/concurrencia) y 500 (fallo interno).
 - Probar dos solicitudes de asignación o aceptación simultáneas que juntas excedan el 100 % de dedicación; solo debe confirmarse la operación compatible con el límite.
 - Confirmar que la detección de `AWS_LAMBDA_FUNCTION_NAME` desactive la caché de proceso en Lambda; por diseño, ello aumenta las lecturas en DynamoDB y no elimina la consistencia eventual de los GSIs.
-- Verificar rutas nuevas: `/api/v1/colaboradores/yo`, `/api/v1/habilidades/categorias` y el PATCH de estado de asignaciones.
-- Comprobar las políticas IAM, los nueve nombres de tablas y sus índices, la autenticación Cognito y las variables `TABLE_*`.
+- Verificar rutas nuevas o modificadas: `/api/v1/colaboradores/yo`, `/api/v1/habilidades/categorias`, `/api/v1/usuarios/yo/acceso`, `/api/v1/asignaciones/mias`, `/api/v1/administracion/auditoria` y el PATCH de estado de asignaciones.
+- Comprobar las políticas IAM, los **once** nombres de tablas y sus índices, la autenticación Cognito, `TABLE_AUDITORIA` y `AUDIT_ENABLED=true`. La tabla de Auditoría utiliza GSI1 (`tipoRegistro`, `fechaId`) y lectura restringida al Administrador.
 - Probar acceso HTTPS y recarga de rutas React en CloudFront; las respuestas 403 y 404 se redirigen a `index.html` según la plantilla.
 - Mantener separados los perfiles de desarrollo y producción y no registrar credenciales ni tokens en el repositorio.
+
+### Reglas funcionales que deben verificarse después del despliegue
+
+- Crear un proyecto como `BORRADOR`, registrar al menos una habilidad requerida y activarlo; verificar la persistencia de `fechaPublicacion` y que no pueda publicarse sin requisitos.
+- Impedir asignaciones duplicadas (incluido el historial) y comprobar el límite transaccional del 100 % de dedicación; el líder no puede ser asignado ni postularse a su propio proyecto, pero sí a uno dirigido por otra persona.
+- Validar `GET /api/v1/asignaciones/mias` con un líder que también posea perfil de colaborador: debe devolver sus participaciones, sin otorgar permisos de escritura sobre proyectos ajenos. Un 403/`Unauthorized` en una API antigua no demuestra un fallo de la implementación local: revisar la ruta y el autorizador Cognito después de desplegar.
+- Verificar que el inicio de sesión registre `ultimoAcceso` sin modificarlo en cada refresco; consultar la auditoría únicamente desde una cuenta de Administrador. Los eventos previos a habilitar la bitácora no pueden recuperarse con autor verificado.
+- Publicar la nueva compilación React en S3/CloudFront cuando cambie el frontend y comprobar que el navegador no siga utilizando archivos estáticos anteriores.
+
+Las evidencias históricas de despliegue del 10 de noviembre corresponden a la versión de aquella fecha. **No constituyen evidencia de que las nuevas rutas, la tabla Auditoría ni los cambios posteriores estén desplegados.**
 

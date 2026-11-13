@@ -1,10 +1,10 @@
 Guía de Pruebas con Postman - Internal Marketplace API
 
-Este directorio contiene la colección y el entorno oficial de Postman para probar los 58 endpoints del backend Serverless.
+Este directorio contiene la colección y el entorno de Postman para probar la API Serverless. La colección original fue preparada para una versión anterior del contrato y puede no incluir rutas añadidas posteriormente. Se debe contrastar su cobertura con `docs/api/api-documentation.md` antes de considerarla completa.
 
 Archivos incluidos
 
-internal-marketplace.postman_collection.json: Colección completa organizada en 10 módulos funcionales (00 a 09), con aserciones pm.test en cada solicitud y captura automática de identificadores (usuarioId, colaboradorId, cargoId, habilidadId, proyectoId, postulacionId, asignacionId).
+internal-marketplace.postman_collection.json: Colección organizada en los módulos originales (00 a 09), con aserciones pm.test y captura de identificadores. Las operaciones de Administración/Auditoría y las rutas personales más recientes pueden requerir su incorporación a la colección.
 
 internal-marketplace.postman_environment.json: Entorno con las variables globales requeridas sin credenciales ni tokens reales expuestos.
 
@@ -60,17 +60,25 @@ Ejecutar POST /colaboradores/{{colaboradorId}}/habilidades usando el campo anosE
 
 05 - Proyectos, 06 - Postulaciones y 07 - Asignaciones:
 
-Ejecutar POST /proyectos (guarda proyectoId) y verificar GET /proyectos?estado=ACTIVO.
+Ejecutar POST /proyectos con estado `BORRADOR` (guarda proyectoId); asociar al menos una habilidad requerida mediante POST /proyectos/{{proyectoId}}/habilidades y después activar el proyecto con PATCH /proyectos/{{proyectoId}}/estado. Finalmente, verificar GET /proyectos?estado=ACTIVO. La publicación directa sin habilidades debe rechazarse.
 
-Ejecutar POST /postulaciones (guarda postulacionId) y POST /asignaciones (guarda asignacionId).
+Ejecutar POST /postulaciones (guarda postulacionId) y POST /asignaciones (guarda asignacionId), utilizando un colaborador **distinto del líder del proyecto**. Verificar que la dedicación acumulada no supere el 100 %, que no se pueda asignar dos veces el mismo colaborador al mismo proyecto y que un líder sí pueda colaborar en proyectos de otros líderes.
 
 08 - Búsqueda y 09 - Dashboard:
 
 Ejecutar GET /busqueda/colaboradores?habilidades={{habilidadId}} y GET /dashboard/resumen.
 
+Comprobaciones adicionales de la versión reciente
+
+- `POST /usuarios/yo/acceso`: con token de usuario activo, registra `ultimoAcceso` en DynamoDB; `GET /usuarios/yo` no debe modificarlo.
+- `GET /asignaciones/mias`: con token de líder que posee perfil de colaborador, devuelve sus participaciones en proyectos ajenos. No recibe IDs del usuario ni del colaborador y no concede permisos de gestión.
+- `GET /administracion/auditoria`: solo debe responder a `ADMINISTRADOR`; permite consultar eventos nuevos por `desde`, `hasta`, `limite` y `cursor`.
+- Verificar estados `ACTIVA`, `FINALIZADA`, `DESVINCULADA` y reincorporación de colaboradores dados de baja con cuenta activa.
+- Si una ruta nueva responde 403/`Unauthorized` o 404 en la URL publicada, comprobar despliegue de API Gateway/Lambda, token ID de Cognito y permisos, sin asumir que el código local ya está publicado.
+
 Ejecución automatizada por CLI (Newman)
 
-Todas las 58 peticiones incluyen scripts pm.test con aserciones de código HTTP, validación de esquema JSON y captura automática de variables de entorno:
+La colección original incluye scripts `pm.test` con aserciones y captura de variables. No debe suponerse que cubre las rutas nuevas ni que todas las peticiones sigan usando los cuerpos vigentes; revisar especialmente el ciclo `BORRADOR → habilidades → ACTIVO`. Ejecución desde la raíz:
 
 npx newman run postman/internal-marketplace.postman_collection.json \
   -e postman/internal-marketplace.postman_environment.json \

@@ -40,3 +40,5 @@ Matriz N:M de proyectos y habilidades. Relaciona los proyectos con las habilidad
 - `esObligatoria` permite distinguir entre habilidades indispensables y deseables.
 - `peso` se valida como número no negativo y queda almacenado para una futura ponderación; la búsqueda actual calcula coincidencias sin ponderarlo.
 - La asociación requiere un proyecto no finalizado y una habilidad activa.
+- Un proyecto `BORRADOR` debe asociar al menos una habilidad requerida antes de poder cambiar a `ACTIVO`; el backend comprueba la existencia de requisitos directamente en esta tabla.
+- La interfaz de publicación permite seleccionar habilidades con `nivelMinimo` y guarda las relaciones antes de activar el proyecto. Los datos del requisito deben persistir aunque se cierre y reabra el formulario.

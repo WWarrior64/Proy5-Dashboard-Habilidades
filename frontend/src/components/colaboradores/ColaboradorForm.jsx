@@ -84,7 +84,7 @@ export default function ColaboradorForm({ colaborador, onSave, onCancel, loading
         {errors.rolProfesional && <p className="error-text">{errors.rolProfesional}</p>}
       </div>
       <div className="form-group">
-        <label className="label">Observaciones</label>
+        <label className="label">Observaciones (opcional)</label>
         <textarea
           className="input"
           value={form.observaciones}

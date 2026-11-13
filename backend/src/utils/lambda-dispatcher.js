@@ -2,6 +2,7 @@ const { error } = require('./responses');
 const { CODIGOS } = require('./errors');
 const { autenticar } = require('../middleware/authentication');
 const { proteger } = require('../middleware/route-policy');
+const auditoria = require('../repositories/auditoria.repository');
 
 /**
  * Crea un despachador de rutas para handlers de Lambda (API Gateway).
@@ -45,9 +46,26 @@ function crearDespachador(routes) {
       if (selected === 'GET /api/v1/health') return handlerFn(event, context);
       return await autenticar(event, async (authenticated) => {
         await proteger(authenticated, selected);
-        return handlerFn(authenticated, context);
+        const respuesta = await handlerFn(authenticated, context);
+        if (process.env.AUDIT_ENABLED === 'true' &&
+          httpMethod !== 'GET' && respuesta?.statusCode >= 200 && respuesta.statusCode < 300) {
+          try {
+            await auditoria.registrarDesdeSolicitud(authenticated, selected, respuesta);
+          } catch (falloAuditoria) {
+            // La mutación ya se ejecutó: no devolver un error que provoque duplicarla al reintentar.
+            console.error('No se pudo persistir el evento de auditoría', {
+              tipo: falloAuditoria.name, requestId: context?.awsRequestId, ruta: selected,
+            });
+          }
+        }
+        return respuesta;
       });
     } catch (err) {
+      if (!err.codigo || err.codigo >= 500) {
+        console.error('Error interno al despachar petición', {
+          tipo: err.name, mensaje: err.message, awsRequestId: context?.awsRequestId,
+        });
+      }
       return error(err.message, err.codigo || 500, err.codigoError || CODIGOS.INTERNO);
     }
   };

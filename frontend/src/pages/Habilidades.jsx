@@ -114,7 +114,7 @@ export default function Habilidades() {
         const datos = {
           nivel: form.nivel.toUpperCase(),
           anosExperiencia: Number(form.anios),
-          observaciones: form.observaciones,
+          ...(form.observaciones.trim() ? { observaciones: form.observaciones.trim() } : {}),
         }
         if (editing === 'new') {
           await colaboradoresService.addSkill(colaboradorId, { habilidadId: habilidad.habilidadId, ...datos })
@@ -212,7 +212,7 @@ export default function Habilidades() {
           <label>Nivel<select value={form.nivel} onChange={e => setForm({ ...form, nivel: e.target.value })}>{['Junior', 'Mid', 'Senior'].map(x => <option key={x}>{x}</option>)}</select></label>
           <label>Años de experiencia<input type="number" min="0" value={form.anios} onChange={e => setForm({ ...form, anios: Number(e.target.value) })} /></label>
           <label>Último uso (dd/mm/aaaa)<input required value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} /></label>
-          <label>Observaciones<input value={form.observaciones} onChange={e => setForm({ ...form, observaciones: e.target.value })} /></label>
+          <label>Observaciones (opcional)<input value={form.observaciones} onChange={e => setForm({ ...form, observaciones: e.target.value })} /></label>
           <div className="skills-modal-buttons"><button type="button" onClick={() => setEditing(null)}>Cancelar</button><button className="skills-add" type="submit" disabled={guardando}>{guardando ? 'Guardando...' : 'Guardar'}</button></div>
         </form>
       </div>}

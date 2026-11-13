@@ -6,7 +6,7 @@ const {
   UpdateCommand,
   QueryCommand,
 } = require('../../src/config/dynamodb.js');
-const { tableProyectos, tableUsuarios } = require('../../src/config/environment.js');
+const { tableProyectos, tableUsuarios, tableAsignaciones, tableProyectoHabilidad } = require('../../src/config/environment.js');
 const { ErrorApp, CODIGOS } = require('../../src/utils/errors.js');
 const cache = require('../../src/services/cache.service.js');
 
@@ -88,6 +88,35 @@ function validarEstado(estado) {
   }
 }
 
+async function verificarHabilidadesParaPublicar(proyectoId) {
+  const respuesta = await dynamoDb.send(new QueryCommand({
+    TableName: tableProyectoHabilidad,
+    KeyConditionExpression: '#proyecto = :proyecto',
+    ExpressionAttributeNames: { '#proyecto': 'proyectoId' },
+    ExpressionAttributeValues: { ':proyecto': proyectoId },
+    ConsistentRead: true,
+    Limit: 1,
+  }));
+  if (!respuesta.Items?.length) {
+    throw new ErrorApp('Selecciona al menos una habilidad requerida antes de publicar el proyecto',
+      400, CODIGOS.VALIDACION);
+  }
+}
+
+async function comprobarPrimeraPublicacion(proyectoId, estado) {
+  if (estado !== 'ACTIVO') return false;
+  await verificarHabilidadesParaPublicar(proyectoId);
+  const resultado = await dynamoDb.send(new GetCommand({
+    TableName: tableProyectos,
+    Key: { proyectoId },
+    ConsistentRead: true,
+  }));
+  if (!resultado.Item) {
+    throw new ErrorApp('Proyecto no encontrado', 404, CODIGOS.NO_ENCONTRADO);
+  }
+  return resultado.Item.estado === 'BORRADOR';
+}
+
 function validarFechas(inicio, fin) {
   for (const valor of [inicio, fin]) {
     if (valor !== undefined && valor !== null &&
@@ -109,7 +138,7 @@ function itemBaseProyecto(proyectoId, datos, ahora) {
     liderId: datos.liderId,
     horasRequeridas: datos.horasRequeridas,
     estado,
-    fechaPublicacion: fechaPublicacion || ahora,
+    ...(estado === 'ACTIVO' && { fechaPublicacion: fechaPublicacion || ahora }),
     fechaCreacion: ahora,
     fechaActualizacion: ahora,
     creadoPor: datos.creadoPor,
@@ -146,6 +175,10 @@ async function crearProyecto(datos) {
 
   const estado = datos.estado || 'BORRADOR';
   validarEstado(estado);
+  if (estado === 'ACTIVO') {
+    throw new ErrorApp('Crea el proyecto como BORRADOR, registra sus habilidades requeridas y luego publícalo',
+      400, CODIGOS.VALIDACION);
+  }
   validarFechas(datos.fechaInicio, datos.fechaFin);
   if (datos.fechaPublicacion !== undefined) validarFechas(datos.fechaPublicacion);
   await validarLider(liderId);
@@ -238,11 +271,40 @@ async function listarProyectos(filtros = {}) {
     }
     items = await consultarTodasPaginas(params);
   } else {
-    throw new ErrorApp('Se requiere al menos un filtro: estado o liderId', 400, CODIGOS.VALIDACION);
+    // Listado general: consultar cada partición del GSI1 evita un Scan de proyectos.
+    const paginas = await Promise.all(ESTADOS_VALIDOS.map(estadoActual => consultarTodasPaginas({
+      TableName: tableProyectos,
+      IndexName: 'GSI1',
+      KeyConditionExpression: '#est = :est',
+      ...(fecha && { FilterExpression: '#fp >= :fecha' }),
+      ExpressionAttributeNames: {
+        '#est': 'estado',
+        ...(fecha && { '#fp': 'fechaPublicacion' }),
+      },
+      ExpressionAttributeValues: {
+        ':est': estadoActual,
+        ...(fecha && { ':fecha': fecha }),
+      },
+    })));
+    items = paginas.flat();
   }
 
   cache.guardar(clave, items, CACHE_TTL_MS);
   return items;
+}
+
+async function verificarSinAsignacionesActivas(proyectoId) {
+  const resultado = await dynamoDb.send(new QueryCommand({
+    TableName: tableAsignaciones,
+    IndexName: 'GSI2',
+    KeyConditionExpression: '#p = :p AND begins_with(#s, :activa)',
+    ExpressionAttributeNames: { '#p': 'proyectoId', '#s': 'proyectoFechaKey' },
+    ExpressionAttributeValues: { ':p': proyectoId, ':activa': 'ACTIVA#' },
+    Limit: 1,
+  }));
+  if (resultado?.Items?.length) {
+    throw new ErrorApp('Desvincule o finalice las asignaciones activas antes de cerrar el proyecto', 409, CODIGOS.CONFLICTO);
+  }
 }
 
 async function actualizarProyecto(proyectoId, cambios) {
@@ -255,6 +317,7 @@ async function actualizarProyecto(proyectoId, cambios) {
   const nombresAtributos = {};
   const valoresAtributos = {};
   const ahora = ahoraISO();
+  const primeraPublicacion = estado === 'ACTIVO' && await comprobarPrimeraPublicacion(proyectoId, estado);
 
   if (nombre !== undefined) {
     nombresAtributos['#n'] = 'nombre';
@@ -292,12 +355,20 @@ async function actualizarProyecto(proyectoId, cambios) {
   }
   if (estado !== undefined) {
     validarEstado(estado);
+    if (['CANCELADO', 'COMPLETADO'].includes(estado)) await verificarSinAsignacionesActivas(proyectoId);
     nombresAtributos['#est'] = 'estado';
     valoresAtributos[':est'] = estado;
     sets.push('#est = :est');
     nombresAtributos['#s2'] = 'estadoFechaKey';
     valoresAtributos[':s2'] = `${estado}#${ahora}`;
     sets.push('#s2 = :s2');
+    if (primeraPublicacion) {
+      nombresAtributos['#fp'] = 'fechaPublicacion';
+      nombresAtributos['#fpk'] = 'fechaPublicacionKey';
+      valoresAtributos[':fp'] = ahora;
+      valoresAtributos[':fpk'] = `${ahora}#${proyectoId}`;
+      sets.push('#fp = :fp', '#fpk = :fpk');
+    }
   }
 
   nombresAtributos['#ua'] = 'fechaActualizacion';
@@ -333,17 +404,23 @@ async function actualizarProyecto(proyectoId, cambios) {
 
 async function cambiarEstado(proyectoId, estado) {
   validarEstado(estado);
+  const primeraPublicacion = await comprobarPrimeraPublicacion(proyectoId, estado);
+  if (['CANCELADO', 'COMPLETADO'].includes(estado)) await verificarSinAsignacionesActivas(proyectoId);
   const ahora = ahoraISO();
   try {
     const resultado = await dynamoDb.send(new UpdateCommand({
       TableName: tableProyectos,
       Key: { proyectoId },
-      UpdateExpression: 'SET #est = :est, #s2 = :s2, #ua = :ua',
-      ExpressionAttributeNames: { '#est': 'estado', '#s2': 'estadoFechaKey', '#ua': 'fechaActualizacion' },
+      UpdateExpression: `SET #est = :est, #s2 = :s2, #ua = :ua${primeraPublicacion ? ', #fp = :fp, #fpk = :fpk' : ''}`,
+      ExpressionAttributeNames: {
+        '#est': 'estado', '#s2': 'estadoFechaKey', '#ua': 'fechaActualizacion',
+        ...(primeraPublicacion && { '#fp': 'fechaPublicacion', '#fpk': 'fechaPublicacionKey' }),
+      },
       ExpressionAttributeValues: {
         ':est': estado,
         ':s2': `${estado}#${ahora}`,
         ':ua': ahora,
+        ...(primeraPublicacion && { ':fp': ahora, ':fpk': `${ahora}#${proyectoId}` }),
       },
       ConditionExpression: 'attribute_exists(proyectoId)',
       ReturnValues: 'ALL_NEW',

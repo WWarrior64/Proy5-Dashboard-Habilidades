@@ -9,6 +9,8 @@ import { habilidadesService } from '../services/habilidades.service.js'
 import { proyectosService } from '../services/proyectos.service.js'
 import { asignacionesService } from '../services/asignaciones.service.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
+import { nombreColaborador } from '../utils/formatters.js'
+import { esCandidatoAsignable } from '../utils/asignacionElegibilidad.js'
 import api from '../services/api.js'
 import './lider-buscar-talento.css'
 
@@ -88,6 +90,7 @@ export default function LiderBuscarTalentoVista() {
   const [habilidadFiltro, setHabilidadFiltro] = useState('')
   const [nivelFiltro, setNivelFiltro] = useState('')
   const [disponibilidadFiltro, setDisponibilidadFiltro] = useState('')
+  const [estadoPerfilFiltro, setEstadoPerfilFiltro] = useState('ACTIVO')
   const [cargoFiltro, setCargoFiltro] = useState('')
   const [proyectoFiltro, setProyectoFiltro] = useState('')
   const [pagina, setPagina] = useState(1)
@@ -107,7 +110,7 @@ export default function LiderBuscarTalentoVista() {
     const [listaColaboradores, listaHabilidades, listaCargos, listaProyectos] = await Promise.allSettled([
       colaboradoresService.listAll(),
       habilidadesService.listAll(),
-      cargosService.list({ estado: 'ACTIVO' }),
+      cargosService.list({ estado: 'ACTIVO', limit: 100 }),
       user?.usuarioId ? proyectosService.list({ liderId: user.usuarioId }) : Promise.resolve({ data: { datos: [] } }),
     ])
 
@@ -158,19 +161,18 @@ export default function LiderBuscarTalentoVista() {
   useEffect(() => { cargar() }, [cargar])
 
   // En desarrollo, los seis perfiles de ejemplo acompañan a los registros reales.
-  const mostrarEjemplos = import.meta.env.DEV && !cargando
+  const mostrarEjemplos = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error
   const proyectosDisponibles = mostrarEjemplos && proyectos.length === 0 ? proyectosEjemplo : proyectos
   const opcionesAsignacion = (asignar?.esEjemplo ? proyectosDisponibles : proyectos)
-    .filter(item => item.estado === 'ACTIVO')
+    .filter(item => item.estado === 'ACTIVO' && esCandidatoAsignable(asignar, item))
   const tieneProyectoAsignable = item => (item.esEjemplo ? proyectosDisponibles : proyectos)
-    .some(proyecto => proyecto.estado === 'ACTIVO')
+    .some(proyecto => proyecto.estado === 'ACTIVO' && esCandidatoAsignable(item, proyecto))
 
   const tarjetas = useMemo(() => {
     const cargosPorId = new Map(cargos.map(item => [item.cargoId, item.nombre]))
     const reales = colaboradores.map(item => ({
       ...item,
-      nombre: item.nombre || item.nombreCompleto || item.usuario?.nombre ||
-        (item.colaboradorId ? 'Colaborador ' + item.colaboradorId.slice(0, 6) : 'Colaborador'),
+      nombre: nombreColaborador(item),
       cargo: cargosPorId.get(item.cargoId) || item.cargoNombre || item.rolProfesional || 'Sin cargo',
       dedicacion: Number.isFinite(item.dedicacionReservada) ? item.dedicacionReservada : null,
       habilidades: habilidadesColaboradores[item.colaboradorId] ||
@@ -225,7 +227,9 @@ export default function LiderBuscarTalentoVista() {
     const cumpleHabilidad = !habilidadFiltro || item.habilidades.some(h =>
       normalizar(h.nombre) === normalizar(habilidadFiltro) && (niveles[h.nivel] || 0) >= (niveles[nivelFiltro] || 1))
     const cumpleNivel = !nivelFiltro || habilidadFiltro || item.habilidades.some(h => (niveles[h.nivel] || 0) >= niveles[nivelFiltro])
-    return terminos.every(texto => contenido.includes(texto)) && cumpleHabilidad && cumpleNivel &&
+    return (estadoPerfilFiltro === 'TODOS' || (estadoPerfilFiltro === 'ACTIVO'
+      ? item.estado !== 'INACTIVO' : item.estado === 'INACTIVO')) &&
+      terminos.every(texto => contenido.includes(texto)) && cumpleHabilidad && cumpleNivel &&
       (!disponibilidadFiltro || tipoDisponibilidad(item) === disponibilidadFiltro) &&
       (!cargoFiltro || item.cargo === cargoFiltro)
   }).sort((a, b) => (b.puntuacion ?? -1) - (a.puntuacion ?? -1))
@@ -244,7 +248,7 @@ export default function LiderBuscarTalentoVista() {
   const abrirAsignacion = colaborador => {
     setErrorAsignacion('')
     const opciones = (colaborador.esEjemplo ? proyectosDisponibles : proyectos)
-      .filter(item => item.estado === 'ACTIVO')
+      .filter(item => item.estado === 'ACTIVO' && esCandidatoAsignable(colaborador, item))
     setProyectoAsignacion(opciones.some(item => item.proyectoId === proyectoFiltro)
       ? proyectoFiltro : opciones[0]?.proyectoId || '')
     setDedicacionAsignacion('25')
@@ -260,6 +264,10 @@ export default function LiderBuscarTalentoVista() {
     if (!proyectoAsignacion || !Number.isFinite(dedicacion) || dedicacion <= 0 || dedicacion > 100 ||
       !Number.isFinite(horas) || horas <= 0) {
       setErrorAsignacion('Selecciona un proyecto activo, con dedicación de 1 a 100 % y horas mayores que cero.')
+      return
+    }
+    if (!esCandidatoAsignable(asignar, proyectosDisponibles.find(item => item.proyectoId === proyectoAsignacion))) {
+      setErrorAsignacion('El líder no puede asignarse como colaborador a su propio proyecto.')
       return
     }
     if (asignar.dedicacion != null && asignar.dedicacion + dedicacion > 100) {
@@ -358,7 +366,14 @@ export default function LiderBuscarTalentoVista() {
                   <option value="NO_DISPONIBLE">No disponible</option>
                 </select>
               </label>
-              <label>Cargo
+              <label>Estado del colaborador
+                 <select value={estadoPerfilFiltro} onChange={evento => cambiarFiltro(setEstadoPerfilFiltro, evento.target.value)}>
+                   <option value="ACTIVO">Activos</option>
+                   <option value="INACTIVO">Dados de baja</option>
+                   <option value="TODOS">Todos los estados</option>
+                 </select>
+               </label>
+               <label>Cargo
                 <select value={cargoFiltro} onChange={evento => cambiarFiltro(setCargoFiltro, evento.target.value)}>
                   <option value="">Todos los cargos</option>
                   {nombresCargos.map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}

@@ -18,8 +18,8 @@ const { ErrorApp, CODIGOS } = require('../src/utils/errors.js');
 const repo = require('../src/repositories/postulaciones.repository.js');
 const handler = require('../src/functions/postulaciones/handler.js');
 
-const COLABORADOR = { colaboradorId: 'c1', estado: 'ACTIVO', disponibilidad: 'DISPONIBLE' };
-const PROYECTO = { proyectoId: 'p1', estado: 'ACTIVO' };
+const COLABORADOR = { colaboradorId: 'c1', usuarioId: 'u-colaborador', estado: 'ACTIVO', disponibilidad: 'DISPONIBLE', dedicacionReservada: 0 };
+const PROYECTO = { proyectoId: 'p1', liderId: 'u-lider', estado: 'ACTIVO' };
 const POSTULACION = {
   proyectoId: 'p1', postulacionKey: 'POSTULACION#c1', postulacionId: 'post1', colaboradorId: 'c1',
   estado: 'PENDIENTE', fechaPostulacion: '2026-01-01T00:00:00.000Z', fechaActualizacion: '2026-01-01T00:00:00.000Z',
@@ -44,6 +44,24 @@ beforeEach(() => {
 });
 
 describe('Repositorio: postulaciones', () => {
+  test('impide que un líder se postule a su propio proyecto', async () => {
+    commandMocks.GetCommand.mockImplementation(async input => input.TableName === 'internal-marketplace-proyectos-dev'
+      ? { Item: PROYECTO } : { Item: { ...COLABORADOR, usuarioId: PROYECTO.liderId } });
+    await expect(repo.crearPostulacion({ proyectoId: 'p1', colaboradorId: 'c1' }))
+      .rejects.toMatchObject({ codigo: 409, message: expect.stringContaining('líder de proyecto') });
+    expect(commandMocks.PutCommand).not.toHaveBeenCalled();
+  });
+
+  test('impide aceptar la postulación del propio líder y evita crear la asignación', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: POSTULACION })
+      .mockResolvedValueOnce({ Item: PROYECTO })
+      .mockResolvedValueOnce({ Item: { ...COLABORADOR, usuarioId: PROYECTO.liderId } });
+    await expect(repo.aceptarPostulacion('p1', 'c1', {
+      revisadoPor: 'admin', porcentajeDedicacion: 20, horasAsignadas: 20,
+    })).rejects.toMatchObject({ codigo: 409, message: expect.stringContaining('líder de proyecto') });
+    expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
+  });
+
   test('handler rechaza JSON inválido sin registrar una postulación', async () => {
     const respuesta = await handler.crearPostulacion({ body: '{invalido' }, {});
     expect(respuesta.statusCode).toBe(400);
@@ -69,6 +87,17 @@ describe('Repositorio: postulaciones', () => {
     const error = new Error('DynamoDB no disponible');
     commandMocks.QueryCommand.mockRejectedValueOnce(error);
     await expect(repo.consultarPostulacionesProyecto('p1')).rejects.toBe(error);
+  });
+
+  test('aceptación con colaborador histórico sin reserva inicializada devuelve 409', async () => {
+    commandMocks.GetCommand
+      .mockResolvedValueOnce({ Item: POSTULACION })
+      .mockResolvedValueOnce({ Item: PROYECTO })
+      .mockResolvedValueOnce({ Item: { colaboradorId: 'c1', usuarioId: 'u-colaborador', estado: 'ACTIVO' } });
+    await expect(repo.aceptarPostulacion('p1', 'c1', {
+      revisadoPor: 'lider-1', porcentajeDedicacion: 25, horasAsignadas: 20,
+    })).rejects.toMatchObject({ codigo: 409 });
+    expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
   });
 
   test('convierte una postulación duplicada en conflicto', async () => {
@@ -141,12 +170,30 @@ describe('Repositorio: postulaciones', () => {
     expect(commandMocks.TransactWriteCommand).toHaveBeenCalledWith(expect.objectContaining({
       TransactItems: expect.arrayContaining([
         expect.objectContaining({ Update: expect.any(Object) }),
+        { ConditionCheck: expect.objectContaining({
+          TableName: 'internal-marketplace-proyectos-dev',
+          ConditionExpression: expect.stringContaining('#lider <> :usuario'),
+          ExpressionAttributeValues: expect.objectContaining({ ':usuario': 'u-colaborador' }),
+        }) },
         expect.objectContaining({ Put: expect.any(Object) }),
       ]),
     }));
     expect(resultado.postulacion.estado).toBe('ACEPTADA');
     expect(resultado.postulacion.revisadoPor).toBe('admin');
     expect(resultado.asignacion).toBeDefined();
+    const { idAsignacionUnica } = require('../src/services/dedicacion.service');
+    expect(resultado.asignacion.asignacionId).toBe(idAsignacionUnica('p1', 'c1'));
+  });
+
+  test('rechaza aceptar una postulación si el colaborador ya estuvo asignado a ese proyecto', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: POSTULACION });
+    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [{
+      asignacionId: 'anterior', colaboradorId: 'c1', proyectoId: 'p1', estado: 'FINALIZADA',
+    }] });
+    await expect(repo.aceptarPostulacion('p1', 'c1', {
+      revisadoPor: 'lider-1', porcentajeDedicacion: 25, horasAsignadas: 20,
+    })).rejects.toMatchObject({ codigo: 409 });
+    expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
   });
 
   test('aceptarPostulacion rechaza si ya fue procesada (no PENDIENTE)', async () => {

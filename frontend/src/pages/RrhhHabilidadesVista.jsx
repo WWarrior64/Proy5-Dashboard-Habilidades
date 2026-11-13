@@ -3,6 +3,9 @@ import { NavLink } from 'react-router-dom'
 import { Pencil, Plus, Search, UserRound, X } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import { habilidadesService } from '../services/habilidades.service.js'
+import { colaboradoresService } from '../services/colaboradores.service.js'
+import api from '../services/api.js'
+import { extractItems } from '../utils/apiResponses.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
 import './rrhh-habilidades.css'
 
@@ -40,10 +43,11 @@ export default function RrhhHabilidadesVista() {
   const [estadosEjemplo, setEstadosEjemplo] = useState({})
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
+  const [avisoMetricas, setAvisoMetricas] = useState('')
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [categoria, setCategoria] = useState('')
-  const [estado, setEstado] = useState('')
+  const [estado, setEstado] = useState('ACTIVO')
   const [modal, setModal] = useState(null)
   const [errorFormulario, setErrorFormulario] = useState('')
   const [formulario, setFormulario] = useState(formularioVacio)
@@ -54,9 +58,45 @@ export default function RrhhHabilidadesVista() {
     setCargando(true)
     setError('')
     try {
-      const respuesta = await habilidadesService.listAll()
-      const datos = respuesta.data?.datos
-      setHabilidades(Array.isArray(datos?.items) ? datos.items : Array.isArray(datos) ? datos : [])
+      // El catálogo es imprescindible; las métricas agregadas son consultas complementarias.
+      const catalogoResp = await habilidadesService.listAll()
+      const [proyectosResultado, colaboradoresResultado] = await Promise.allSettled([
+        api.get('/dashboard/habilidades'),
+        colaboradoresService.listAll(),
+      ])
+      const avisos = []
+      if (proyectosResultado.status === 'rejected') {
+        avisos.push('La cantidad de proyectos por habilidad no está disponible.')
+      }
+      if (colaboradoresResultado.status === 'rejected') {
+        avisos.push('La cantidad de colaboradores por habilidad no está disponible.')
+      }
+      const distribucion = proyectosResultado.status === 'fulfilled'
+        ? proyectosResultado.value.data?.datos?.distribucion : null
+      const proyectos = new Map((Array.isArray(distribucion) ? distribucion : [])
+        .map(item => [item.habilidadId, item.cantidadProyectos]))
+      const colaboradores = colaboradoresResultado.status === 'fulfilled'
+        ? extractItems(colaboradoresResultado.value.data) : []
+      const relaciones = await Promise.allSettled(colaboradores.map(item =>
+        colaboradoresService.listSkills(item.colaboradorId)))
+      const todosCompletos = colaboradoresResultado.status === 'fulfilled' &&
+        relaciones.every(item => item.status === 'fulfilled')
+      if (!todosCompletos && colaboradoresResultado.status === 'fulfilled') {
+        avisos.push('No se pudieron comprobar todas las relaciones de colaboradores.')
+      }
+      const totalesColaboradores = new Map()
+      if (todosCompletos) {
+        relaciones.forEach(resultado => {
+          new Set(extractItems(resultado.value.data).map(item => item.habilidadId)).forEach(id =>
+            totalesColaboradores.set(id, (totalesColaboradores.get(id) || 0) + 1))
+        })
+      }
+      setHabilidades(extractItems(catalogoResp.data).map(item => ({
+        ...item,
+        proyectos: proyectosResultado.status === 'fulfilled' ? proyectos.get(item.habilidadId) ?? 0 : null,
+        colaboradores: todosCompletos ? totalesColaboradores.get(item.habilidadId) || 0 : null,
+      })))
+      setAvisoMetricas(avisos.join(' '))
     } catch (fallo) {
       setError(getApiErrorMessage(fallo, 'No se pudo cargar el catálogo de habilidades.'))
     } finally {
@@ -67,7 +107,7 @@ export default function RrhhHabilidadesVista() {
   useEffect(() => { cargarCatalogo() }, [cargarCatalogo])
 
   // Los datos ficticios son solo una referencia visual en desarrollo.
-  const mostrandoEjemplo = import.meta.env.DEV && !cargando && habilidades.length === 0
+  const mostrandoEjemplo = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error && habilidades.length === 0
   const catalogo = mostrandoEjemplo
     ? ejemploCatalogo.map(item => ({ ...item, estado: estadosEjemplo[item.habilidadId] || item.estado }))
     : habilidades
@@ -83,7 +123,7 @@ export default function RrhhHabilidadesVista() {
         .filter(Boolean).join(' ').toLocaleLowerCase('es')
       return terminos.every(texto => contenido.includes(texto)) &&
         (!categoria || habilidad.categoria === categoria) &&
-        (!estado || (estaActiva(habilidad) ? 'ACTIVO' : 'INACTIVO') === estado)
+        (estado === 'TODOS' || (estaActiva(habilidad) ? 'ACTIVO' : 'INACTIVO') === estado)
     })
   }, [catalogo, busqueda, busquedaSuperior, categoria, estado])
 
@@ -219,13 +259,17 @@ export default function RrhhHabilidadesVista() {
                   {categorias.map(valor => <option key={valor} value={valor}>{etiquetaCategoria(valor)}</option>)}
                 </select>
                 <select aria-label="Filtrar por estado" value={estado} onChange={evento => setEstado(evento.target.value)}>
-                  <option value="">Estado: Todos</option>
-                  <option value="ACTIVO">Activas</option>
+                  <option value="ACTIVO">Estado: Activas</option>
+                   <option value="TODOS">Todos los estados</option>
+                  
                   <option value="INACTIVO">Inactivas</option>
                 </select>
               </div>
             </div>
 
+            {avisoMetricas && !error && (
+              <p className="rrhh-habilidades-feedback" role="status">{avisoMetricas}</p>
+            )}
             {error && (
               <div className="rrhh-habilidades-feedback rrhh-habilidades-error" role="alert">
                 <span>{error}</span>

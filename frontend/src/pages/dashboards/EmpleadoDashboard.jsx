@@ -10,6 +10,7 @@ import { asignacionesService } from '../../services/asignaciones.service.js'
 import { habilidadesService } from '../../services/habilidades.service.js'
 import { extractItems } from '../../utils/apiResponses.js'
 import { getApiErrorMessage } from '../../utils/apiErrors.js'
+import { rangoFechasProyecto } from '../../utils/proyectoFechas.js'
 import './empleado-dashboard.css'
 
 // Valores de ejemplo compartidos conceptualmente con las vistas del Empleado.
@@ -87,6 +88,7 @@ export default function EmpleadoDashboard() {
             habilidades: requeridas?.map(relacion =>
               `${nombresHabilidades.get(relacion.habilidadId) || relacion.habilidadId} · ${relacion.nivelMinimo || 'JUNIOR'}`).join(', ') || 'Requisitos sin registrar',
             horas: item.horasRequeridas,
+            fechas: rangoFechasProyecto(item),
             coincidencia,
           }
         })
@@ -244,6 +246,7 @@ export default function EmpleadoDashboard() {
                     <div className="emp-dashboard-row-copy">
                       <strong>{item.nombre}</strong>
                       <p>{item.habilidades} — {item.horas} h</p>
+                      {item.fechas && <p>{item.fechas}</p>}
                     </div>
                     <span className={'emp-dashboard-match ' + (
                       item.coincidencia == null ? 'baja' : item.coincidencia >= 85 ? 'alta' : item.coincidencia >= 60 ? 'media' : 'baja'

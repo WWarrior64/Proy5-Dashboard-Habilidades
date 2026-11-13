@@ -9,6 +9,8 @@ import { habilidadesService } from '../services/habilidades.service.js'
 import { postulacionesService } from '../services/postulaciones.service.js'
 import { extractItems } from '../utils/apiResponses.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
+import { nombreLiderProyecto } from '../utils/formatters.js'
+import { rangoFechasProyecto } from '../utils/proyectoFechas.js'
 import './empleado-proyectos.css'
 
 // Datos de demostración hasta conectar la vista con el backend.
@@ -52,7 +54,6 @@ const menu = [
 
 const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
 const niveles = { JUNIOR: 1, MID: 2, SENIOR: 3 }
-const fechaVisible = valor => valor ? new Date(valor).toLocaleDateString('es-SV', { timeZone: 'UTC' }) : '—'
 
 export default function EmpleadoProyectos() {
   const [proyectos, setProyectos] = useState(modoDemo ? proyectosIniciales : [])
@@ -97,11 +98,11 @@ export default function EmpleadoProyectos() {
           return {
             id: item.proyectoId,
             nombre: item.nombre,
-            lider: item.liderNombre || 'No registrado',
+            lider: nombreLiderProyecto(item),
             habilidades: requeridas?.map(relacion =>
               `${habilidadesCatalogo.get(relacion.habilidadId) || relacion.habilidadId} · ${relacion.nivelMinimo || 'Junior'}`) || [],
             horas: item.horasRequeridas,
-            fechas: `${fechaVisible(item.fechaInicio)} – ${fechaVisible(item.fechaFin)}`,
+            fechas: rangoFechasProyecto(item),
             coincidencia,
           }
         })

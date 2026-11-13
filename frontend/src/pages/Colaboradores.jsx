@@ -4,6 +4,7 @@ import { colaboradoresService } from '../services/colaboradores.service.js'
 import { usuariosService } from '../services/usuarios.service.js'
 import { cargosService } from '../services/cargos.service.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
+import { disponibilidadCalculada } from '../utils/disponibilidad.js'
 import Modal from '../components/common/Modal.jsx'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import Button from '../components/common/Button.jsx'
@@ -58,7 +59,7 @@ export default function Colaboradores() {
     // Axios agrega el ID Token a ambas peticiones; fetch() omitía Authorization.
     const [usuariosResult, cargosResult] = await Promise.allSettled([
       usuariosService.listAll(),
-      cargosService.list({ estado: 'ACTIVO' }),
+      cargosService.list({ estado: 'ACTIVO', limit: 100 }),
     ])
     if (usuariosResult.status === 'fulfilled') {
       const data = usuariosResult.value.data?.datos
@@ -100,10 +101,15 @@ export default function Colaboradores() {
     try {
       if (editMode && editingColaborador) {
         await colaboradoresService.update(editingColaborador.colaboradorId, {
-          cargoId: formData.cargoId, rolProfesional: formData.rolProfesional, observaciones: formData.observaciones,
+          cargoId: formData.cargoId, rolProfesional: formData.rolProfesional,
+          ...(formData.observaciones?.trim() ? { observaciones: formData.observaciones.trim() } : {}),
         })
       } else {
-        await colaboradoresService.create(formData)
+        const { observaciones, ...resto } = formData
+        await colaboradoresService.create({
+          ...resto,
+          ...(observaciones?.trim() ? { observaciones: observaciones.trim() } : {}),
+        })
       }
       setShowForm(false)
       setEditingColaborador(null)
@@ -121,6 +127,12 @@ export default function Colaboradores() {
     setShowConfirm(true)
   }
 
+  const handleReincorporate = colaborador => {
+    if (colaborador.estado !== 'INACTIVO') return
+    setConfirmTarget({ ...colaborador, accion: 'REINCORPORAR' })
+    setShowConfirm(true)
+  }
+
   const handleRemove = (colaborador) => {
     if (colaborador.estado === 'INACTIVO') return
     setConfirmTarget({ ...colaborador, accion: 'BAJA_PERFIL' })
@@ -130,7 +142,9 @@ export default function Colaboradores() {
   const handleConfirm = async () => {
     if (!confirmTarget) return
     try {
-      if (confirmTarget.accion === 'BAJA_PERFIL') {
+      if (confirmTarget.accion === 'REINCORPORAR') {
+        await colaboradoresService.changeStatus(confirmTarget.colaboradorId, { activo: true })
+      } else if (confirmTarget.accion === 'BAJA_PERFIL') {
         // El endpoint DELETE da de baja el perfil de colaborador, no su cuenta de usuario.
         await colaboradoresService.remove(confirmTarget.colaboradorId)
       } else {
@@ -149,12 +163,13 @@ export default function Colaboradores() {
   const canManage = user?.rol === 'ADMINISTRADOR' || user?.rol === 'RRHH'
 
   const total = colaboradores.length
-  const disponibles = colaboradores.filter((c) => c.disponibilidad === 'DISPONIBLE').length
-  const asignados = colaboradores.filter((c) => c.disponibilidad === 'ASIGNADA').length
+  const disponibles = colaboradores.filter((c) => disponibilidadCalculada(c) === 'DISPONIBLE').length
+  const asignados = colaboradores.filter((c) => c.estado === 'ACTIVO' &&
+    Number.isFinite(c.dedicacionReservada) && c.dedicacionReservada > 0).length
 
   return (
     <>
-      {user?.rol === 'RRHH' ? (
+      {['RRHH', 'ADMINISTRADOR'].includes(user?.rol) ? (
         <RrhhColaboradoresVista
           colaboradores={colaboradores}
           usuarios={usuarios}
@@ -165,11 +180,13 @@ export default function Colaboradores() {
           onCreate={handleCreate}
           onEdit={handleEdit}
           onRemove={handleRemove}
+          onReincorporate={handleReincorporate}
           onDetails={(colaborador) => {
             setDetailsColaborador(colaborador)
             setShowDetails(true)
           }}
           onRetry={loadColaboradores}
+          onUpdatedCargos={loadReferenceData}
         />
       ) : (
         <>
@@ -249,11 +266,15 @@ export default function Colaboradores() {
       isOpen={showConfirm}
       onConfirm={handleConfirm}
       onCancel={() => setShowConfirm(false)}
-      title={confirmTarget?.accion === 'BAJA_PERFIL' ? '¿Eliminar colaborador?' : '¿Cambiar estado de colaborador?'}
-      message={confirmTarget?.accion === 'BAJA_PERFIL'
+      title={confirmTarget?.accion === 'REINCORPORAR' ? '¿Reincorporar colaborador?' :
+        confirmTarget?.accion === 'BAJA_PERFIL' ? '¿Dar de baja colaborador?' : '¿Cambiar estado de colaborador?'}
+      message={confirmTarget?.accion === 'REINCORPORAR'
+        ? 'El colaborador volverá a estar activo con su mismo perfil e historial de habilidades y asignaciones. La cuenta de usuario debe estar activa.'
+        : confirmTarget?.accion === 'BAJA_PERFIL'
         ? 'Se dará de baja el perfil de colaborador. La cuenta de usuario no se desactivará ni se eliminará.'
         : `¿Está seguro de que desea ${confirmTarget?.estado === 'ACTIVO' ? 'activar' : 'dar de baja'} a este colaborador?`}
-      confirmLabel={confirmTarget?.accion === 'BAJA_PERFIL' ? 'Eliminar' : confirmTarget?.estado === 'ACTIVO' ? 'Activar' : 'Dar de baja'}
+      confirmLabel={confirmTarget?.accion === 'REINCORPORAR' ? 'Reincorporar' :
+        confirmTarget?.accion === 'BAJA_PERFIL' ? 'Dar de baja' : confirmTarget?.estado === 'ACTIVO' ? 'Activar' : 'Dar de baja'}
       danger={confirmTarget?.accion === 'BAJA_PERFIL'}
       cancelLabel="Volver"
     />

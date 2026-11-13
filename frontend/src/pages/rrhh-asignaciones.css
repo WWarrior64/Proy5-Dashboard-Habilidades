@@ -190,6 +190,16 @@
   white-space: nowrap;
 }
 
+.rrhh-asignaciones-status.desvinculada {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.rrhh-asignaciones-status.finalizada {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
 .rrhh-asignaciones-actions {
   display: flex;
   align-items: center;

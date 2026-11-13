@@ -14,7 +14,20 @@ async function readProfile(tokens) {
     const usuario = data?.datos || (data?.usuarioId ? data : null)
     if (!usuario?.usuarioId) throw new Error('La API no devolvió un perfil de usuario válido.')
     if (usuario.estado !== 'ACTIVO') throw new Error('Tu perfil de usuario está inactivo.')
-    return { user: usuario, tokens }
+    // Solo un nuevo inicio de sesión (incluido el cambio obligatorio de contraseña)
+    // registra el acceso. La restauración y el refresco de tokens usan GET y no lo alteran.
+    let perfilActualizado = usuario
+    try {
+      const respuesta = await api.post('/usuarios/yo/acceso')
+      if (respuesta.data?.datos?.usuarioId === usuario.usuarioId) {
+        perfilActualizado = respuesta.data.datos
+      }
+    } catch (registroError) {
+      if ([401, 403].includes(registroError.response?.status)) throw registroError
+      // Permite iniciar sesión durante una actualización gradual de API y frontend.
+      console.warn('No se pudo registrar el último acceso:', registroError.message)
+    }
+    return { user: perfilActualizado, tokens }
   } catch (error) {
     await cognitoSignOut()
     if (error.response?.status === 404) throw new Error('La cuenta Cognito existe, pero todavía no tiene perfil en DynamoDB.')

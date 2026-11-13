@@ -39,14 +39,14 @@ const crearColaboradorSchema = Joi.object({
   rolProfesional: Joi.string().min(1).max(100).required(),
   nombre: Joi.string().min(1).max(100),
   estado: Joi.string().valid(...ESTADOS_VALIDOS).default('ACTIVO'),
-  observaciones: Joi.string().max(500),
+  observaciones: Joi.string().max(500).allow('', null),
 });
 
 const actualizarColaboradorSchema = Joi.object({
   cargoId: Joi.string().min(1).max(50),
   rolProfesional: Joi.string().min(1).max(100),
   estado: Joi.string().valid(...ESTADOS_VALIDOS),
-  observaciones: Joi.string().max(500),
+  observaciones: Joi.string().max(500).allow('', null),
 });
 
 const crearCargoSchema = Joi.object({
@@ -83,13 +83,13 @@ const asociarHabilidadSchema = Joi.object({
   habilidadId: Joi.string().min(1).max(50).required(),
   nivel: Joi.string().valid(...NIVELES_VALIDOS).required(),
   anosExperiencia: Joi.number().integer().min(0).default(0),
-  observaciones: Joi.string().max(500),
+  observaciones: Joi.string().max(500).allow('', null),
 });
 
 const actualizarNivelHabilidadSchema = Joi.object({
   nivel: Joi.string().valid(...NIVELES_VALIDOS),
   anosExperiencia: Joi.number().integer().min(0),
-  observaciones: Joi.string().max(500),
+  observaciones: Joi.string().max(500).allow('', null),
 });
 
 const buscarCandidatosSchema = Joi.object({

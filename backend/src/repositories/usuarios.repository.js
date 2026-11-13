@@ -192,6 +192,31 @@ async function actualizar(usuarioId, data) {
   return result.Attributes;
 }
 
+/** Registra el último inicio de sesión confirmado de un usuario activo. */
+async function registrarUltimoAcceso(usuarioId) {
+  const fecha = new Date().toISOString();
+  try {
+    const resultado = await dynamoDb.send(new UpdateCommand({
+      TableName: tableUsuarios,
+      Key: { usuarioId },
+      UpdateExpression: 'SET #ultimoAcceso = :fecha',
+      ConditionExpression: 'attribute_exists(usuarioId) AND #estado = :activo',
+      ExpressionAttributeNames: {
+        '#ultimoAcceso': 'ultimoAcceso',
+        '#estado': 'estado',
+      },
+      ExpressionAttributeValues: { ':fecha': fecha, ':activo': 'ACTIVO' },
+      ReturnValues: 'ALL_NEW',
+    }));
+    return resultado.Attributes;
+  } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') {
+      throw new ErrorApp('Usuario inexistente o inactivo', 403, CODIGOS.PROHIBIDO);
+    }
+    throw err;
+  }
+}
+
 /**
  * Cambiar el rol de plataforma de un usuario.
  * @param {string} usuarioId
@@ -219,6 +244,7 @@ module.exports = {
   listar,
   crear,
   actualizar,
+  registrarUltimoAcceso,
   cambiarRol,
   cambiarEstado,
 };

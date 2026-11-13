@@ -7,6 +7,7 @@ import { postulacionesService } from '../services/postulaciones.service.js'
 import { proyectosService } from '../services/proyectos.service.js'
 import { extractItems } from '../utils/apiResponses.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
+import { nombreLiderProyecto } from '../utils/formatters.js'
 import './empleado-postulaciones.css'
 
 // Ejemplos visuales: se reemplazarán por las solicitudes reales al integrar el backend.
@@ -83,7 +84,7 @@ export default function EmpleadoPostulaciones() {
           ...item,
           id: item.postulacionId || item.proyectoId,
           proyecto: proyectos.get(item.proyectoId)?.nombre || item.proyectoId,
-          lider: proyectos.get(item.proyectoId)?.liderNombre || 'No registrado',
+          lider: nombreLiderProyecto(proyectos.get(item.proyectoId)),
           fechaPostulacion: fechaVisible(item.fechaPostulacion),
           fechaRevision: fechaVisible(item.fechaRevision),
           observacion: item.observacionRevision || 'Sin observación',

@@ -1,6 +1,6 @@
 # Arquitectura del Sistema — Internal Marketplace
 
-**Versión:** 2.0.0  
+**Versión documental:** 2.1.0 — actualización del diseño vigente (noviembre de 2026)  
 ---
 
 ## 1. Visión General de la Arquitectura
@@ -24,14 +24,14 @@ La plataforma **Internal Marketplace** implementa un modelo 100% Serverless desa
                                    ├──► [ Amazon Cognito ] (Authorizer / JWT)
                                    │
                                    ▼
-                       [ 10 Funciones AWS Lambda ]
+                       [ 11 Funciones AWS Lambda ]
                        (Node.js 24 / CommonJS)
                                    │
                                    ├──► [ In-Memory Cache (TTL) ]
                                    │
                                    ▼
                        [ Amazon DynamoDB ]
-                       (9 Tablas NoSQL en modo On-Demand)
+                       (11 Tablas NoSQL en modo On-Demand)
 ```
 
 ---
@@ -50,7 +50,7 @@ La plataforma **Internal Marketplace** implementa un modelo 100% Serverless desa
 
 ### 2.3 Capa de API y Cómputo (API Gateway + AWS Lambda)
 * **API Gateway REST API:** Expone los recursos bajo el prefijo unificado `/api/v1/`, con soporte nativo de CORS y enrutamiento estructurado hacia funciones Lambda modulares mediante integración Lambda Proxy.
-* **AWS Lambda (Node.js 24 LTS):** Arquitectura modular de 10 funciones organizadas por dominio de negocio (evitando dispersión de microfunciones CRUD individuales):
+* **AWS Lambda (Node.js 24):** Arquitectura modular de 11 funciones organizadas por dominio de negocio (evitando dispersión de microfunciones CRUD individuales):
   1. `HealthFunction`: Diagnóstico de salud y uptime (`/health`).
   2. `UsuariosFunction`: Administración de identidades y roles.
   3. `ColaboradoresFunction`: Ficha laboral y asignación de habilidades.
@@ -61,6 +61,7 @@ La plataforma **Internal Marketplace** implementa un modelo 100% Serverless desa
   8. `AsignacionesFunction`: Gestión de dedicación y vinculación formal.
   9. `BusquedaFunction`: Motor de coincidencia de perfiles y requerimientos.
   10. `DashboardFunction`: Agregación de indicadores y métricas de plataforma.
+  11. `AdministracionFunction`: Configuración administrativa, roles/permisos y consulta de la bitácora de auditoría.
 
 ### 2.4 Principio de Mínimo Privilegio (IAM Execution Roles)
 Cada función Lambda dispone de un rol de ejecución dedicado en IAM que restringe el acceso exclusivamente a las tablas e índices que necesita para operar:
@@ -72,7 +73,7 @@ Cada función Lambda dispone de un rol de ejecución dedicado en IAM que restrin
 
 ## 3. Modelo de Datos y Persistencia (Amazon DynamoDB)
 
-La persistencia se implementa sobre 9 tablas diseñadas bajo el modelo NoSQL de clave-valor y documentos, configuradas en modo **On-Demand (PAY_PER_REQUEST)** para optimizar costos dentro del Free Tier. Los nombres físicos con `-dev` de la siguiente tabla son ejemplos; el despliegue `prod` usa los mismos nombres con `-prod`:
+La persistencia se implementa sobre 11 tablas diseñadas bajo el modelo NoSQL de clave-valor y documentos, configuradas en modo **On-Demand (PAY_PER_REQUEST)** para optimizar costos dentro del Free Tier. Los nombres físicos con `-dev` de la siguiente tabla son ejemplos; el despliegue `prod` usa los mismos nombres con `-prod`:
 
 | Nombre Lógico SAM | Nombre Físico de Tabla | Partition Key (PK) | Sort Key (SK) | Índices Secundarios (GSIs) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -85,9 +86,21 @@ La persistencia se implementa sobre 9 tablas diseñadas bajo el modelo NoSQL de 
 | `ProyectoHabilidadTable` | `internal-marketplace-proyecto-habilidad-dev` | `proyectoId` (S) | `habilidadId` (S) | GSI1 (`habilidadId`, `proyectoId`) |
 | `PostulacionesTable` | `internal-marketplace-postulaciones-dev` | `proyectoId` (S) | `postulacionKey` (S; guarda `POSTULACION#colaboradorId`) | GSI1 (`colaboradorId`, `colaboradorFechaKey`) |
 | `AsignacionesTable` | `internal-marketplace-asignaciones-dev` | `asignacionId` (S) | *Ninguno* | GSI1 (`colaboradorId`, `colaboradorFechaKey`), GSI2 (`proyectoId`, `proyectoFechaKey`), GSI3 (`estado`, `estadoFechaKey`) |
+| `AdministracionTable` | `internal-marketplace-administracion-dev` | `configuracionId` (S) | *Ninguno* | Ninguno |
+| `AuditoriaTable` | `internal-marketplace-auditoria-dev` | `auditoriaId` (S) | *Ninguno* | GSI1 (`tipoRegistro`, `fechaId`) |
 
 ### Transacciones Atómicas (TransactWriteItems)
-Para procesos de negocio críticos (como la aceptación de una postulación que crea una asignación e incrementa el porcentaje de dedicación activa del colaborador), se emplea `TransactWriteItems`. Esto evita condiciones de carrera y asegura consistencia estricta en operaciones compuestas.
+Para procesos de negocio críticos (como la aceptación de una postulación que crea una asignación e incrementa el porcentaje de dedicación activa del colaborador), se emplea `TransactWriteItems`. Esto evita condiciones de carrera y asegura consistencia estricta en operaciones compuestas. Las condiciones también verifican que el colaborador no sea el mismo usuario que figura como líder del proyecto; ello **no impide** que un líder participe en un proyecto ajeno.
+
+El ciclo de publicación crea un proyecto como `BORRADOR`, añade habilidades requeridas y solo permite activarlo cuando existe al menos un requisito. La fecha de publicación queda registrada al pasar de borrador a activo; si faltan fechas planificadas, React estima el inicio desde la publicación y el cierre con jornadas de 8 horas de lunes a viernes, señalando que se trata de una estimación.
+
+La disponibilidad de cada perfil es la capacidad restante después de descontar `dedicacionReservada`, registrada transaccionalmente en Colaboradores. La baja es lógica y admite reincorporación conservando el identificador, siempre que la cuenta de usuario esté activa.
+
+### 3.1 Auditoría y acceso personal
+
+Las operaciones de escritura exitosas y el registro de inicio de sesión generan eventos en la tabla Auditoría cuando está activado `AUDIT_ENABLED`. El actor proviene de la identidad autenticada, y las consultas `GET /api/v1/administracion/auditoria` se limitan a administradores. La persistencia de auditoría es de mejor esfuerzo: un error de escritura se registra en CloudWatch sin revertir la operación de negocio confirmada.
+
+La ruta `GET /api/v1/asignaciones/mias` obtiene el perfil de colaborador del usuario autenticado y devuelve sus participaciones incluso si su rol es `LIDER_PROYECTO`; no otorga facultades de edición en proyectos ajenos. `POST /api/v1/usuarios/yo/acceso` actualiza `ultimoAcceso` tras autenticación correcta, sin alterar ese dato al recargar una página.
 
 ---
 

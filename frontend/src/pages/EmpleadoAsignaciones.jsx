@@ -7,6 +7,7 @@ import { asignacionesService } from '../services/asignaciones.service.js'
 import { proyectosService } from '../services/proyectos.service.js'
 import { extractItems } from '../utils/apiResponses.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
+import { nombreLiderProyecto } from '../utils/formatters.js'
 import './empleado-asignaciones.css'
 
 // Datos de ejemplo para el prototipo; no representan asignaciones del backend.
@@ -83,7 +84,7 @@ export default function EmpleadoAsignaciones() {
             ...item,
             id: item.asignacionId,
             proyecto: proyecto?.nombre || item.proyectoId,
-            lider: proyecto?.liderNombre || 'No registrado',
+            lider: nombreLiderProyecto(proyecto),
             dedicacion: item.porcentajeDedicacion || 0,
             horasCompletadas: item.horasCompletadas || 0,
             horasAsignadas: item.horasAsignadas || 0,

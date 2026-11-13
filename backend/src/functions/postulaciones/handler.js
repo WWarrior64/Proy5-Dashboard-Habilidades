@@ -32,7 +32,8 @@ function obtenerParametro(event, nombre) {
 
 function responderError(e) {
   if (e instanceof ErrorApp) return error(e.message, e.codigo, e.codigoError);
-  return error(e.message || 'Error interno del servidor', 500, CODIGOS.INTERNO);
+  console.error('Error no controlado en postulaciones', { tipo: e.name, mensaje: e.message });
+  return error('Error interno del servidor', 500, CODIGOS.INTERNO);
 }
 
 async function crearPostulacion(event, context) {

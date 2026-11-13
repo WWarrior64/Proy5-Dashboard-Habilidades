@@ -136,6 +136,27 @@ function signIn(email, password) {
   })
 }
 
+function solicitarRecuperacion(email) {
+  const user = new CognitoUser({ Username: email.trim().toLowerCase(), Pool: userPool })
+  return new Promise((resolve, reject) => {
+    user.forgotPassword({
+      onSuccess: () => resolve(),
+      onFailure: error => reject(new Error(error?.message || 'No se pudo enviar el código de recuperación.')),
+      inputVerificationCode: () => resolve(),
+    })
+  })
+}
+
+function confirmarRecuperacion(email, codigo, nuevaContrasena) {
+  const user = new CognitoUser({ Username: email.trim().toLowerCase(), Pool: userPool })
+  return new Promise((resolve, reject) => {
+    user.confirmPassword(codigo.trim(), nuevaContrasena, {
+      onSuccess: () => resolve(),
+      onFailure: error => reject(new Error(error?.message || 'El código de recuperación no es válido.')),
+    })
+  })
+}
+
 function refreshSession() {
   const oldRefreshToken = getRefreshToken()
   if (!oldRefreshToken) return Promise.reject(new Error('Sesión no renovable. Inicia sesión nuevamente.'))
@@ -174,7 +195,8 @@ function signOut() {
 }
 
 export {
-  signIn, completeNewPassword, refreshSession, signOut, getAccessToken, getIdToken, getRefreshToken,
+  signIn, completeNewPassword, solicitarRecuperacion, confirmarRecuperacion,
+  refreshSession, signOut, getAccessToken, getIdToken, getRefreshToken,
   isAuthenticated, clearTokens, storeTokens, decodeJwtPayload,
   USER_POOL_ID, CLIENT_ID, REGION,
 }

@@ -67,6 +67,21 @@ async function obtenerPerfil(event, context) {
   }
 }
 
+/** Se invoca una vez tras el inicio de sesión exitoso, no al consultar /usuarios/yo. */
+async function registrarAcceso(event, context) {
+  try {
+    // La identidad proviene exclusivamente del middleware Cognito autenticado.
+    const usuario = event.usuarioAutenticado;
+    if (!usuario?.usuarioId || usuario.estado !== 'ACTIVO') {
+      return error('Se requiere un usuario autenticado activo', 401, CODIGOS.NO_AUTORIZADO);
+    }
+    const actualizado = await usuariosRepository.registrarUltimoAcceso(usuario.usuarioId);
+    return exito(actualizado);
+  } catch (err) {
+    return error(err.message, err.codigo || 500, err.codigoError);
+  }
+}
+
 async function listarUsuarios(event, context) {
   try {
     const query = event.queryStringParameters || {};
@@ -254,11 +269,13 @@ const handler = crearDespachador({
   'PATCH /api/v1/usuarios/{usuarioId}/rol': cambiarRol,
   'PATCH /api/v1/usuarios/{usuarioId}/estado': cambiarEstado,
   'GET /api/v1/usuarios/yo': obtenerPerfil,
+  'POST /api/v1/usuarios/yo/acceso': registrarAcceso,
 });
 
 module.exports = {
   obtenerUsuario,
   obtenerPerfil,
+  registrarAcceso,
   listarUsuarios,
   crearUsuario,
   actualizarUsuario,

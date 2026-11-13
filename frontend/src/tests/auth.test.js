@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 vi.mock('../services/api.js', () => ({
   default: {
     get: vi.fn(),
+    post: vi.fn(),
   },
 }))
 
@@ -66,10 +67,14 @@ describe('Auth Service', () => {
       vi.mocked(cognitoSignIn).mockResolvedValue(mockTokens)
       const api = (await import('../services/api.js')).default
       vi.mocked(api.get).mockResolvedValue({ data: { datos: mockProfile } })
+      const accesoRegistrado = { ...mockProfile, ultimoAcceso: '2026-11-13T18:00:00.000Z' }
+      vi.mocked(api.post).mockResolvedValue({ data: { datos: accesoRegistrado } })
 
       const result = await login('m.torres@empresa.com', 'password123')
 
-      expect(result.user).toEqual(mockProfile)
+      expect(result.user).toEqual(accesoRegistrado)
+      expect(api.post).toHaveBeenCalledTimes(1)
+      expect(api.post).toHaveBeenCalledWith('/usuarios/yo/acceso')
       expect(result.tokens).toEqual(mockTokens)
       expect(cognitoSignIn).toHaveBeenCalledWith('m.torres@empresa.com', 'password123')
     })
@@ -82,6 +87,7 @@ describe('Auth Service', () => {
       })
 
       await expect(login('s.ramirez@empresa.com', 'password123')).rejects.toThrow('inactivo')
+      expect(api.post).not.toHaveBeenCalled()
     })
 
     it('debe lanzar error de red cuando no hay conexión', async () => {
@@ -90,6 +96,32 @@ describe('Auth Service', () => {
       vi.mocked(cognitoSignIn).mockRejectedValue(error)
 
       await expect(login('test@test.com', 'pass')).rejects.toThrow('No se pudo conectar')
+    })
+  })
+
+  describe('registro de acceso tras completar contraseña', () => {
+    it('registra un nuevo acceso con la sesión Cognito ya confirmada', async () => {
+      const api = (await import('../services/api.js')).default
+      const perfil = { usuarioId: 'usr_001', estado: 'ACTIVO' }
+      const actualizado = { ...perfil, ultimoAcceso: '2026-11-13T18:45:00.000Z' }
+      const tokens = { idToken: 'id_token', accessToken: 'access_token', refreshToken: 'refresh_token' }
+      vi.mocked(cognitoCompleteNewPassword).mockResolvedValue(tokens)
+      vi.mocked(api.get).mockResolvedValue({ data: { datos: perfil } })
+      vi.mocked(api.post).mockResolvedValue({ data: { datos: actualizado } })
+      expect((await completePasswordChange('password_nueva')).user).toEqual(actualizado)
+      expect(api.post).toHaveBeenCalledWith('/usuarios/yo/acceso')
+      expect(api.post).toHaveBeenCalledTimes(1)
+    })
+
+    it('permite iniciar sesión si el backend antiguo todavía no dispone de la ruta', async () => {
+      const api = (await import('../services/api.js')).default
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.mocked(cognitoSignIn).mockResolvedValue({ idToken: 'id', accessToken: 'access', refreshToken: 'refresh' })
+      vi.mocked(api.get).mockResolvedValue({ data: { datos: { usuarioId: 'usr_1', estado: 'ACTIVO' } } })
+      vi.mocked(api.post).mockRejectedValue({ response: { status: 404 }, message: 'Ruta no desplegada' })
+      expect((await login('usuario@example.com', 'clave')).user.usuarioId).toBe('usr_1')
+      expect(warn).toHaveBeenCalledOnce()
+      expect(cognitoSignOut).not.toHaveBeenCalled()
     })
   })
 

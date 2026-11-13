@@ -35,3 +35,4 @@ Catálogo de habilidades técnicas. Contiene las tecnologías, herramientas y co
 - Las habilidades se administran mediante un catálogo central.
 - Una transacción crea una reserva `UNIQUE#<nombreNormalizado>` para impedir duplicados por nombre normalizado; la unicidad no equipara sinónimos distintos.
 - Las habilidades inactivas no se ofrecen para nuevas relaciones en ColaboradorHabilidad ni ProyectoHabilidad.
+- Las vistas de gestión ocultan las habilidades desactivadas por defecto y las muestran cuando RRHH selecciona los filtros históricos. Al publicar un proyecto debe seleccionarse al menos una habilidad activa como requisito, con su nivel mínimo.
