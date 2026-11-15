@@ -25,7 +25,7 @@ export default function Login() {
     setLoading(true)
     setError('')
     try {
-      if (import.meta.env.VITE_DEMO_MODE === 'true') {
+      if ((import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')) {
         const demoUser = {
           usuarioId: 'demo_user',
           nombre: 'Usuario Demo',
@@ -196,7 +196,7 @@ export default function Login() {
             </button>
         </form>
 
-        {import.meta.env.VITE_DEMO_MODE === 'true' && (
+        {(import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && (
           <div className="demo-mode">
             <p className="demo-label">Modo demostración</p>
             <p className="demo-text">Cualquier credencial funciona en modo demo.</p>

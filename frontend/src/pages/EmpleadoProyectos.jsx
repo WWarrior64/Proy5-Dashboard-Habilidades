@@ -11,6 +11,7 @@ import { extractItems } from '../utils/apiResponses.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
 import { nombreLiderProyecto } from '../utils/formatters.js'
 import { rangoFechasProyecto } from '../utils/proyectoFechas.js'
+import { coincidenciaHabilidades, tieneAltaCoincidencia } from '../utils/coincidenciaHabilidades.js'
 import './empleado-proyectos.css'
 
 // Datos de demostración hasta conectar la vista con el backend.
@@ -52,8 +53,7 @@ const menu = [
   ['Mis asignaciones', '/asignaciones'],
 ]
 
-const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
-const niveles = { JUNIOR: 1, MID: 2, SENIOR: 3 }
+const modoDemo = import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true'
 
 export default function EmpleadoProyectos() {
   const [proyectos, setProyectos] = useState(modoDemo ? proyectosIniciales : [])
@@ -88,13 +88,11 @@ export default function EmpleadoProyectos() {
           ...proyectosReales.map(item => api.get(`/proyectos/${encodeURIComponent(item.proyectoId)}/habilidades`)
             .then(response => extractItems(response.data)).catch(() => null)),
         ])
-        const misNiveles = new Map(extractItems(skillsRespuesta.data).map(item => [item.habilidadId, niveles[item.nivel] || 0]))
+        const misHabilidades = extractItems(skillsRespuesta.data)
         const items = proyectosReales.map((item, indice) => {
           const requeridas = requisitos[indice]
-          const coincidencia = requeridas === null || !requeridas.length ? null
-            : Math.round(requeridas.filter(relacion =>
-              (misNiveles.get(relacion.habilidadId) || 0) >= (niveles[relacion.nivelMinimo] || 1),
-            ).length / requeridas.length * 100)
+          const resultado = coincidenciaHabilidades(requeridas, misHabilidades)
+          const coincidencia = resultado.porcentaje
           return {
             id: item.proyectoId,
             nombre: item.nombre,
@@ -104,6 +102,8 @@ export default function EmpleadoProyectos() {
             horas: item.horasRequeridas,
             fechas: rangoFechasProyecto(item),
             coincidencia,
+            cumpleObligatorias: resultado.cumpleObligatorias,
+            altaCoincidencia: tieneAltaCoincidencia(resultado),
           }
         })
         if (!cancelado) {
@@ -127,11 +127,11 @@ export default function EmpleadoProyectos() {
       const contenido = buscar([proyecto.nombre, proyecto.lider, ...proyecto.habilidades].join(' '))
       return contenido.includes(buscar(busqueda.trim())) &&
         contenido.includes(buscar(busquedaEncabezado.trim())) &&
-        (!soloAltaCoincidencia || proyecto.coincidencia >= 70)
+        (!soloAltaCoincidencia || proyecto.altaCoincidencia)
     })
   }, [proyectos, busqueda, busquedaEncabezado, soloAltaCoincidencia])
 
-  const coincidenciasAltas = proyectos.filter(proyecto => proyecto.coincidencia >= 70).length
+  const coincidenciasAltas = proyectos.filter(proyecto => proyecto.altaCoincidencia).length
 
   const postularme = async id => {
     if (postulandoId !== null || postulados.includes(id)) return
@@ -255,7 +255,7 @@ export default function EmpleadoProyectos() {
                 </thead>
                 <tbody>
                   {proyectosFiltrados.map(proyecto => {
-                    const alta = proyecto.coincidencia != null && proyecto.coincidencia >= 70
+                    const alta = proyecto.altaCoincidencia ?? (proyecto.coincidencia != null && proyecto.coincidencia >= 70)
                     const postulado = postulados.includes(proyecto.id)
                     return (
                       <tr key={proyecto.id}>
@@ -276,7 +276,7 @@ export default function EmpleadoProyectos() {
                         <td>
                           <div className="emp-projects-match-label">
                             <strong>{proyecto.coincidencia == null ? '—' : proyecto.coincidencia + '%'}</strong>
-                            <span>{proyecto.coincidencia == null ? 'Sin datos' : alta ? 'Alta' : 'Baja'}</span>
+                            <span>{proyecto.coincidencia == null ? 'Sin datos' : proyecto.cumpleObligatorias === false ? 'Faltan obligatorias' : alta ? 'Alta' : 'Baja'}</span>
                           </div>
                           <div
                             className="emp-projects-match-track"

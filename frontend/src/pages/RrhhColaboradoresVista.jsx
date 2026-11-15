@@ -36,9 +36,9 @@ const ejemploInactivo = {
   esEjemplo: true,
 }
 
-function disponibilidadReal(colaborador) {
+function disponibilidadReal(colaborador, usuario = null) {
   if (colaborador.esEjemplo) return colaborador.disponibilidad || 'SIN_DATOS'
-  if (colaborador.estado === 'INACTIVO') return 'NO_DISPONIBLE'
+  if (colaborador.estado !== 'ACTIVO' || usuario?.estado !== 'ACTIVO') return 'NO_DISPONIBLE'
   const reserva = colaborador.dedicacionReservada
   if (!Number.isFinite(reserva) || reserva < 0 || reserva > 100) return 'SIN_DATOS'
   return reserva > 0 ? 'ASIGNADA' : 'DISPONIBLE'
@@ -146,7 +146,7 @@ export default function RrhhColaboradoresVista({
     usuarios.some(usuario => usuario.usuarioId === item.usuarioId && usuario.estado === 'INACTIVO')
   ))
   const hayVistaRealDeHabilidades = colaboradoresConHabilidades.some(item => habilidadesColaborador(item).length >= 3)
-  const mostrarEjemploInactivo = import.meta.env.VITE_DEMO_MODE === 'true' && (!hayInactivoReal || !hayVistaRealDeHabilidades)
+  const mostrarEjemploInactivo = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && (!hayInactivoReal || !hayVistaRealDeHabilidades)
   const tarjetas = mostrarEjemploInactivo
     ? [...colaboradoresConHabilidades, ejemploInactivo]
     : colaboradoresConHabilidades
@@ -159,9 +159,9 @@ export default function RrhhColaboradoresVista({
       const habilidades = habilidadesColaborador(colaborador)
       const texto = [nombre, colaborador.rolProfesional, cargo?.nombre, ...habilidades]
         .filter(Boolean).join(' ').toLocaleLowerCase('es')
-      const estado = disponibilidadReal(colaborador)
       const usuario = usuarios.find(item => item.usuarioId === colaborador.usuarioId)
-      const activo = colaborador.estado !== 'INACTIVO' && usuario?.estado !== 'INACTIVO'
+      const estado = disponibilidadReal(colaborador, usuario)
+      const activo = colaborador.estado === 'ACTIVO' && usuario?.estado === 'ACTIVO'
       return (estadoPerfil === 'TODOS' || (estadoPerfil === 'ACTIVO' ? activo : !activo)) &&
         terminos.every(termino => texto.includes(termino)) &&
         (disponibilidad === 'Todas' ||
@@ -170,8 +170,8 @@ export default function RrhhColaboradoresVista({
     })
   }, [tarjetas, usuarios, cargos, busqueda, busquedaSuperior, disponibilidad, estadoPerfil])
 
-  const disponibles = colaboradores.filter(item => disponibilidadReal(item) === 'DISPONIBLE').length
-  const asignados = colaboradores.filter(item => disponibilidadReal(item) === 'ASIGNADA').length
+  const disponibles = colaboradores.filter(item => disponibilidadReal(item, usuarios.find(usuario => usuario.usuarioId === item.usuarioId)) === 'DISPONIBLE').length
+  const asignados = colaboradores.filter(item => disponibilidadReal(item, usuarios.find(usuario => usuario.usuarioId === item.usuarioId)) === 'ASIGNADA').length
 
   return (
     <div className="emp-dashboard rrhh-colaboradores-page">
@@ -301,10 +301,10 @@ export default function RrhhColaboradoresVista({
                   const nivel = nivelColaborador(colaborador)
                   const habilidades = habilidadesColaborador(colaborador)
                   const usuario = usuarios.find(item => item.usuarioId === colaborador.usuarioId)
-                  const estaActivo = colaborador.estado !== 'INACTIVO' && usuario?.estado !== 'INACTIVO'
+                  const estaActivo = colaborador.estado === 'ACTIVO' && (colaborador.esEjemplo || usuario?.estado === 'ACTIVO')
                   const yaDadoDeBaja = colaborador.estado === 'INACTIVO'
-                  const estadoDisponibilidad = disponibilidadReal(colaborador)
-                  const porcentajeLibre = colaborador.estado === 'ACTIVO' && Number.isFinite(colaborador.dedicacionReservada) &&
+                  const estadoDisponibilidad = disponibilidadReal(colaborador, usuario)
+                  const porcentajeLibre = estaActivo && Number.isFinite(colaborador.dedicacionReservada) &&
                     colaborador.dedicacionReservada >= 0 && colaborador.dedicacionReservada <= 100
                     ? 100 - colaborador.dedicacionReservada : null
                   const disponible = estadoDisponibilidad === 'DISPONIBLE'
@@ -330,6 +330,8 @@ export default function RrhhColaboradoresVista({
                       </div>
 
                       <div className="rrhh-colaborador-info">
+                        <p className="rrhh-colaborador-unknown">Dedicación reservada: {Number.isFinite(colaborador.dedicacionReservada) ? colaborador.dedicacionReservada + ' %' : 'Sin datos'}</p>
+                        {colaborador.fechaBaja && colaborador.estado === 'INACTIVO' && <p className="rrhh-colaborador-unknown">Fecha de baja: {new Date(colaborador.fechaBaja).toLocaleDateString('es-SV')}</p>}
                         <div className="rrhh-colaborador-skills">
                           <span>Habilidades</span>
                           <div className="rrhh-colaborador-chips">

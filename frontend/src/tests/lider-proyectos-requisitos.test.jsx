@@ -11,8 +11,9 @@ vi.mock('../hooks/useAuth.js', () => ({ useAuth: vi.fn() }))
 vi.mock('../components/layout/EmpleadoLogoutButton.jsx', () => ({
   default: () => <span>Cerrar sesión</span>,
 }))
-vi.mock('../services/proyectos.service.js', () => ({
-  proyectosService: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+vi.mock('../services/proyectos.service.js', async importOriginal => ({
+  ...(await importOriginal()),
+  proyectosService: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), saveWorkflow: vi.fn() },
 }))
 vi.mock('../services/habilidades.service.js', () => ({
   habilidadesService: { listAll: vi.fn() },
@@ -28,6 +29,7 @@ describe('Habilidades requeridas al publicar un proyecto', () => {
     vi.mocked(proyectosService.list).mockResolvedValue({ data: { datos: [] } })
     vi.mocked(proyectosService.create).mockResolvedValue({ data: { datos: { proyectoId: 'p1' } } })
     vi.mocked(proyectosService.update).mockResolvedValue({ data: { success: true } })
+    vi.mocked(proyectosService.saveWorkflow).mockResolvedValue({ proyectoId: 'p1', estado: 'ACTIVO' })
     vi.mocked(habilidadesService.listAll).mockResolvedValue({ data: {
       datos: { items: [{ habilidadId: 'hab-1', nombre: 'JavaScript', estado: 'ACTIVO' }] },
     } })
@@ -57,12 +59,12 @@ describe('Habilidades requeridas al publicar un proyecto', () => {
     expect(screen.getByLabelText('Nivel mínimo').value).toBe('JUNIOR')
     fireEvent.click(screen.getByRole('button', { name: 'Publicar proyecto' }))
 
-    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/proyectos/p1/habilidades', {
-      habilidadId: 'hab-1', nivelMinimo: 'JUNIOR', esObligatoria: true,
-    }))
-    expect(proyectosService.create).toHaveBeenCalledWith(expect.objectContaining({
-      nombre: 'Nuevo portal', estado: 'BORRADOR', liderId: 'lider-1',
-    }))
-    expect(proyectosService.update).toHaveBeenCalledWith('p1', { estado: 'ACTIVO' })
+    await waitFor(() => expect(proyectosService.saveWorkflow).toHaveBeenCalledWith(expect.objectContaining({
+      proyectoId: null,
+      datos: expect.objectContaining({ nombre: 'Nuevo portal', estado: 'ACTIVO', liderId: 'lider-1' }),
+      requisitos: [expect.objectContaining({ habilidadId: 'hab-1', nivelMinimo: 'JUNIOR', esObligatoria: true, peso: 1 })],
+    })))
+    expect(proyectosService.create).not.toHaveBeenCalled()
+    expect(api.post).not.toHaveBeenCalled()
   })
 })

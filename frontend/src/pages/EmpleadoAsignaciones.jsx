@@ -50,7 +50,7 @@ const estilosEstado = {
   Desvinculada: 'desvinculada',
 }
 
-const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
+const modoDemo = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')
 const estadosBackend = { ACTIVA: 'Activa', FINALIZADA: 'Finalizada', DESVINCULADA: 'Desvinculada' }
 const fechaVisible = valor => valor ? new Date(valor).toLocaleDateString('es-SV', { timeZone: 'UTC' }) : '—'
 

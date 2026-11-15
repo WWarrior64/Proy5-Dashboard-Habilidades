@@ -32,7 +32,7 @@ export default function AdministradorDashboard() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
-  const demoMode = import.meta.env.VITE_DEMO_MODE === 'true'
+  const demoMode = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')
 
   const loadDashboardData = useCallback(async () => {
     if (demoMode) return

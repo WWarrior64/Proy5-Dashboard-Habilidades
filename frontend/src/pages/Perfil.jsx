@@ -309,11 +309,11 @@ export default function Perfil() {
     setGuardando(true)
     setErrorEdicion('')
     try {
-      if (import.meta.env.VITE_DEMO_MODE !== 'true') {
+      if (!(import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')) {
         await usuariosService.update(perfil.usuarioId, { nombre })
       }
       setPerfil(actual => ({ ...actual, nombre }))
-      setMensaje(import.meta.env.VITE_DEMO_MODE === 'true'
+      setMensaje((import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')
         ? 'Nombre cambiado solo en esta sesión de demostración.'
         : 'Nombre actualizado. La cuenta mostrará el cambio al volver a consultar el perfil.')
       setEditar(false)

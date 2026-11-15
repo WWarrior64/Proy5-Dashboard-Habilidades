@@ -84,4 +84,6 @@ jobs:
         working-directory: frontend
         run: npm run build
         env:
-          VITE_API_URL: https://placeholder.execute-api.us-east-2.amazonaws.com/prod/api/v1
+          # Configurar la variable VITE_API_URL para el entorno de despliegue.
+          # Sin ella, la SPA no enviará solicitudes a otra API accidentalmente.
+          VITE_API_URL: ${{ vars.VITE_API_URL }}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Button from '../common/Button.jsx'
+import { proyectoEditable, estadosPermitidos, puedeQuitarRequisito } from '../../utils/proyectoEstados.js'
 
 export default function ProyectoForm({ proyecto, onSave, onCancel, loading = false,
   lideres = [], habilidades = [], requisitosIniciales = [] }) {
@@ -12,6 +13,8 @@ export default function ProyectoForm({ proyecto, onSave, onCancel, loading = fal
     creadoPor: proyecto?.creadoPor || '',
     requisitos: requisitosIniciales.map(item => ({
       habilidadId: item.habilidadId, nivelMinimo: item.nivelMinimo || 'JUNIOR',
+        esObligatoria: item.esObligatoria !== false,
+        ...(item.peso !== undefined && { peso: item.peso }),
     })),
   })
   const [errors, setErrors] = useState({})
@@ -33,6 +36,9 @@ export default function ProyectoForm({ proyecto, onSave, onCancel, loading = fal
     if (!form.estado) newErrors.estado = 'El estado es obligatorio'
     if (form.estado === 'ACTIVO' && form.requisitos.length === 0) {
       newErrors.requisitos = 'Selecciona al menos una habilidad antes de publicar el proyecto'
+    }
+    if (form.requisitos.some(item => !Number.isFinite(Number(item.peso ?? 1)) || Number(item.peso ?? 1) < 0)) {
+      newErrors.requisitos = 'El peso de cada habilidad debe ser un número no negativo'
     }
     if (form.requisitos.some(item => !habilidades.some(habilidad =>
       habilidad.habilidadId === item.habilidadId && habilidad.estado === 'ACTIVO'))) {
@@ -103,7 +109,7 @@ export default function ProyectoForm({ proyecto, onSave, onCancel, loading = fal
           value={form.estado}
           onChange={(e) => setForm({ ...form, estado: e.target.value })}
         >
-          {estados.map((est) => (
+          {estados.filter(est => estadosPermitidos(proyecto?.estado).includes(est.value)).map((est) => (
             <option key={est.value} value={est.value}>{est.label}</option>
           ))}
         </select>
@@ -134,8 +140,19 @@ export default function ProyectoForm({ proyecto, onSave, onCancel, loading = fal
               <option value="MID">Mid</option>
               <option value="SENIOR">Senior</option>
             </select>
+            <label className="label">Obligatoria
+              <input type="checkbox" checked={requisito.esObligatoria !== false} disabled={loading}
+                onChange={e => setForm(actual => ({ ...actual, requisitos: actual.requisitos.map((item, posicion) =>
+                  posicion === indice ? { ...item, esObligatoria: e.target.checked } : item) }))} />
+            </label>
+            <label className="label">Peso
+              <input className="input" type="number" min="0" step="1" aria-label={'Peso ' + (indice + 1)}
+                value={requisito.peso ?? 1} disabled={loading}
+                onChange={e => setForm(actual => ({ ...actual, requisitos: actual.requisitos.map((item, posicion) =>
+                  posicion === indice ? { ...item, peso: e.target.value } : item) }))} />
+            </label>
             <button type="button" className="btn btn-outline" aria-label={'Quitar habilidad ' + (indice + 1)}
-              disabled={loading}
+              disabled={loading || !proyectoEditable(proyecto) || !puedeQuitarRequisito(proyecto?.estado, form.requisitos.length)}
               onClick={() => setForm(actual => ({
                 ...actual, requisitos: actual.requisitos.filter((_, posicion) => posicion !== indice),
               }))}>Quitar</button>
@@ -149,7 +166,7 @@ export default function ProyectoForm({ proyecto, onSave, onCancel, loading = fal
               !form.requisitos.some(actual => actual.habilidadId === item.habilidadId))
             if (siguiente) setForm(actual => ({
               ...actual, requisitos: [...actual.requisitos, {
-                habilidadId: siguiente.habilidadId, nivelMinimo: 'JUNIOR',
+                habilidadId: siguiente.habilidadId, nivelMinimo: 'JUNIOR', esObligatoria: true,
               }],
             }))
           }}>+ Añadir habilidad</button>
@@ -159,7 +176,7 @@ export default function ProyectoForm({ proyecto, onSave, onCancel, loading = fal
         <Button variant="outline" onClick={onCancel} disabled={loading}>
           Cancelar
         </Button>
-        <Button variant="primary" type="submit" disabled={loading}>
+        <Button variant="primary" type="submit" disabled={loading || !proyectoEditable(proyecto)}>
           Guardar
         </Button>
       </div>

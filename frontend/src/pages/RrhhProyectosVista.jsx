@@ -7,6 +7,7 @@ import { asignacionesService } from '../services/asignaciones.service.js'
 import { habilidadesService } from '../services/habilidades.service.js'
 import { obtenerFechasProyecto, formatoFechaProyecto } from '../utils/proyectoFechas.js'
 import api from '../services/api.js'
+import { proyectoEditable } from '../utils/proyectoEstados.js'
 import './rrhh-proyectos.css'
 
 const menu = [
@@ -98,7 +99,7 @@ export default function RrhhProyectosVista({
   }, [proyectos])
 
   // Vista previa exclusivamente en desarrollo, si la API aún no devuelve proyectos.
-  const mostrandoEjemplo = import.meta.env.VITE_DEMO_MODE === 'true' && !loading && !error && proyectos.length === 0
+  const mostrandoEjemplo = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && !loading && !error && proyectos.length === 0
   const catalogo = useMemo(() => {
     if (mostrandoEjemplo) return proyectosEjemplo.map(item => ({ ...item, esEjemplo: true }))
     const liderPorId = new Map(lideres.map(item => [item.usuarioId || item.id, item.nombre || item.email || 'Sin nombre']))
@@ -327,7 +328,7 @@ export default function RrhhProyectosVista({
                                   <Eye size={16} aria-hidden="true" />
                                 </button>
                                 {canManage && (
-                                  <button type="button" aria-label={'Editar ' + item.nombre} title={item.esEjemplo ? 'Vista previa: no se puede editar' : 'Editar ' + item.nombre} disabled={loading || item.esEjemplo} onClick={() => onEdit(item)}>
+                                  <button type="button" aria-label={'Editar ' + item.nombre} title={item.esEjemplo ? 'Vista previa: no se puede editar' : 'Editar ' + item.nombre} disabled={loading || item.esEjemplo || !proyectoEditable(item)} onClick={() => onEdit(item)}>
                                     <Pencil size={16} aria-hidden="true" />
                                   </button>
                                 )}

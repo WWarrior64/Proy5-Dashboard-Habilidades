@@ -35,7 +35,7 @@ const postulacionesEjemplo = [
   { id: 4, proyecto: 'App móvil', estado: 'Rechazada', fecha: '18/10/2026' },
 ]
 
-const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
+const modoDemo = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')
 const niveles = { JUNIOR: 1, MID: 2, SENIOR: 3 }
 const fechas = valor => valor ? new Date(valor).toLocaleDateString('es-SV', { timeZone: 'UTC' }) : '—'
 const estados = { PENDIENTE: 'En revisión', ACEPTADA: 'Aceptada', RECHAZADA: 'Rechazada', RETIRADA: 'Retirada' }

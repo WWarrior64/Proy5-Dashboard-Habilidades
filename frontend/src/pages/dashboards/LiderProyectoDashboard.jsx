@@ -124,7 +124,7 @@ export default function LiderProyectoDashboard() {
     return () => { cancelado = true }
   }, [user?.usuarioId, recarga])
 
-  const vistaPrevia = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error
+  const vistaPrevia = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && !cargando && !error
   const mostrarProyectosEjemplo = vistaPrevia && datos.proyectos?.length === 0
   const mostrarPostulacionesEjemplo = vistaPrevia && datos.postulaciones?.length === 0
   const mostrarCandidatosEjemplo = vistaPrevia && datos.colaboradores?.length === 0

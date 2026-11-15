@@ -7,7 +7,7 @@ import { proyectosService } from '../services/proyectos.service.js'
 import { colaboradoresService } from '../services/colaboradores.service.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
 import { nombreColaborador } from '../utils/formatters.js'
-import api from '../services/api.js'
+import { postulacionesService } from '../services/postulaciones.service.js'
 import './lider-postulaciones.css'
 
 const menu = [
@@ -83,7 +83,7 @@ export default function LiderPostulacionesVista() {
       const proyectos = obtenerItems(respuestaProyectos).filter(item => item.liderId === user.usuarioId)
       const [respuestaPersonas, ...resultados] = await Promise.allSettled([
         colaboradoresService.listAll(),
-        ...proyectos.map(item => api.get(`/proyectos/${encodeURIComponent(item.proyectoId)}/postulaciones`)),
+        ...proyectos.map(item => postulacionesService.listByProject(item.proyectoId)),
       ])
 
       const personas = respuestaPersonas.status === 'fulfilled'
@@ -122,7 +122,7 @@ export default function LiderPostulacionesVista() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  const mostrarEjemplos = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error
+  const mostrarEjemplos = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && !cargando && !error
   const postulaciones = useMemo(() => [
     ...reales,
     ...(mostrarEjemplos ? ejemplos : []),
@@ -146,6 +146,7 @@ export default function LiderPostulacionesVista() {
   }
 
   const abrirDecision = item => {
+    if (item.estado !== 'PENDIENTE') return
     setPorDecidir(item)
     setErrorDecision('')
     setObservacion('')
@@ -181,19 +182,23 @@ export default function LiderPostulacionesVista() {
         ))
         setMensaje('Decisión de ejemplo registrada en esta pantalla. No se modificó el backend.')
       } else {
-        await api.patch(
-          `/proyectos/${encodeURIComponent(porDecidir.proyectoId)}/postulaciones/${encodeURIComponent(porDecidir.colaboradorId)}/estado`,
-          {
-            estado: nuevoEstado,
+        const confirmacion = await postulacionesService.decide(
+          porDecidir.proyectoId, porDecidir.colaboradorId, {
+            estado: nuevoEstado, revisadoPor: user.usuarioId,
             observacionRevision: observacion.trim(),
             ...(nuevoEstado === 'ACEPTADA' ? { porcentajeDedicacion, horasAsignadas } : {}),
           },
         )
+        if (nuevoEstado === 'ACEPTADA' && (!confirmacion.data?.datos?.asignacion?.asignacionId ||
+          confirmacion.data?.datos?.postulacion?.estado !== 'ACEPTADA')) {
+          throw new Error('No se pudo confirmar la asignación generada por el servidor. Recarga las postulaciones.')
+        }
         await cargar()
         setMensaje(nuevoEstado === 'ACEPTADA' ? 'Postulación aceptada y asignación creada.' : 'Postulación rechazada.')
       }
       setPorDecidir(null)
     } catch (fallo) {
+      if (fallo.response?.status === 409) await cargar()
       setErrorDecision(getApiErrorMessage(fallo, 'No se pudo registrar la decisión.'))
     } finally {
       setGuardando(false)

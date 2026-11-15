@@ -49,7 +49,7 @@ function claseEstado(estado) {
   return estados.find(item => item.nombre === estado)?.estilo || 'retirada'
 }
 
-const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
+const modoDemo = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')
 const nombreEstado = { PENDIENTE: 'En revisión', ACEPTADA: 'Aceptada', RECHAZADA: 'Rechazada', RETIRADA: 'Retirada' }
 const fechaVisible = valor => valor ? new Date(valor).toLocaleDateString('es-SV', { timeZone: 'UTC' }) : '—'
 
@@ -127,7 +127,12 @@ export default function EmpleadoPostulaciones() {
     setGuardando(true)
     setError('')
     try {
-      if (!modoDemo) await postulacionesService.withdraw(postulacion.proyectoId, colaboradorId)
+      if (!modoDemo) {
+        const respuesta = await postulacionesService.withdraw(postulacion.proyectoId, colaboradorId)
+        if (respuesta.data?.datos?.estado !== 'RETIRADA') {
+          throw new Error('La API no confirmó el retiro. Actualiza las postulaciones antes de repetirlo.')
+        }
+      }
       setPostulaciones(actuales => actuales.map(item => item.id === porRetirar
         ? { ...item, estado: 'Retirada', fechaRevision: fechaVisible(new Date().toISOString()) }
         : item))

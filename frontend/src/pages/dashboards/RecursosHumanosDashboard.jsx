@@ -49,7 +49,7 @@ const menu = [
   ['Asignaciones', '/asignaciones'],
 ]
 
-const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
+const modoDemo = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')
 const fechaVisible = valor => valor ? new Date(valor).toLocaleDateString('es-SV', { timeZone: 'UTC' }) : '—'
 
 export default function RecursosHumanosDashboard() {

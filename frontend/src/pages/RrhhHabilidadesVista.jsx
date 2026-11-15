@@ -107,7 +107,7 @@ export default function RrhhHabilidadesVista() {
   useEffect(() => { cargarCatalogo() }, [cargarCatalogo])
 
   // Los datos ficticios son solo una referencia visual en desarrollo.
-  const mostrandoEjemplo = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error && habilidades.length === 0
+  const mostrandoEjemplo = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && !cargando && !error && habilidades.length === 0
   const catalogo = mostrandoEjemplo
     ? ejemploCatalogo.map(item => ({ ...item, estado: estadosEjemplo[item.habilidadId] || item.estado }))
     : habilidades

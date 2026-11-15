@@ -9,7 +9,7 @@ import { asignacionesService } from '../services/asignaciones.service.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
 import { nombreColaborador } from '../utils/formatters.js'
 import { rangoFechasProyecto } from '../utils/proyectoFechas.js'
-import { esCandidatoAsignable } from '../utils/asignacionElegibilidad.js'
+import { esCandidatoAsignable, evaluarAsignacion } from '../utils/asignacionElegibilidad.js'
 import MisParticipaciones from '../components/asignaciones/MisParticipaciones.jsx'
 import api from '../services/api.js'
 import './lider-asignaciones.css'
@@ -65,6 +65,8 @@ export default function LiderAsignacionesVista() {
   const [asignaciones, setAsignaciones] = useState([])
   const [historialCompleto, setHistorialCompleto] = useState(false)
   const [colaboradores, setColaboradores] = useState([])
+  const [requisitosPorProyecto, setRequisitosPorProyecto] = useState({})
+  const [habilidadesPorPersona, setHabilidadesPorPersona] = useState({})
   const [ejemplos, setEjemplos] = useState(demoAsignacionesIniciales)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
@@ -119,6 +121,21 @@ export default function LiderAsignacionesVista() {
     setProyectos(listaProyectos)
     setColaboradores(personas)
     setAsignaciones(filas)
+    const verificaciones = await Promise.allSettled([
+      ...listaProyectos.map(item => proyectosService.listRequirements(item.proyectoId)),
+      ...personas.map(item => colaboradoresService.listSkills(item.colaboradorId)),
+    ])
+    const requisitos = {}
+    const habilidades = {}
+    listaProyectos.forEach((item, indice) => {
+      if (verificaciones[indice]?.status === 'fulfilled') requisitos[item.proyectoId] = extraer(verificaciones[indice].value)
+    })
+    personas.forEach((item, indice) => {
+      const resultado = verificaciones[listaProyectos.length + indice]
+      if (resultado?.status === 'fulfilled') habilidades[item.colaboradorId] = extraer(resultado.value)
+    })
+    setRequisitosPorProyecto(requisitos)
+    setHabilidadesPorPersona(habilidades)
     setHistorialCompleto(proyectosResp.status === 'fulfilled' &&
       respuestas.every(item => item.status === 'fulfilled'))
     if (proyectosResp.status === 'rejected') {
@@ -133,7 +150,7 @@ export default function LiderAsignacionesVista() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  const mostrarEjemplos = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error
+  const mostrarEjemplos = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && !cargando && !error
   const listaProyectos = mostrarEjemplos ? [...proyectos, ...demoProyectos] : proyectos
   const listaAsignaciones = mostrarEjemplos ? [...asignaciones, ...ejemplos] : asignaciones
   const listaPersonas = mostrarEjemplos ? [...colaboradores, ...demoPersonas] : colaboradores
@@ -173,10 +190,8 @@ export default function LiderAsignacionesVista() {
     const disponibles = listaProyectos.filter(item => item.estado === 'ACTIVO')
     const proyectoSeleccionado = proyectoId || disponibles.find(hayCandidatosPara)?.proyectoId || disponibles[0]?.proyectoId || ''
     const proyecto = listaProyectos.find(item => item.proyectoId === proyectoSeleccionado)
-    const candidatos = listaPersonas.filter(item => item.estado !== 'INACTIVO' &&
-      esCandidatoAsignable(item, proyecto) &&
-      !listaAsignaciones.some(asignacion => asignacion.proyectoId === proyectoSeleccionado &&
-        asignacion.colaboradorId === item.colaboradorId))
+    const candidatos = listaPersonas.filter(item =>
+      evaluarOpcion(item, proyecto, Number(formularioInicial.porcentajeDedicacion)).elegible)
     setFormulario({
       ...formularioInicial,
       proyectoId: proyectoSeleccionado,
@@ -228,6 +243,10 @@ export default function LiderAsignacionesVista() {
       return
     }
     const esDemo = modal.item?.esEjemplo || proyecto?.esEjemplo || colaborador?.esEjemplo
+    if (!esDemo) {
+      const evaluacion = evaluarOpcion(colaborador, proyecto, porcentajeDedicacion, modal.tipo === 'editar' ? modal.item : null)
+      if (!evaluacion.elegible) { setErrorFormulario(evaluacion.motivos.join('. ')); return }
+    }
     const cambios = { porcentajeDedicacion, horasAsignadas, horasCompletadas }
     setGuardando(true)
     setErrorFormulario('')
@@ -266,6 +285,7 @@ export default function LiderAsignacionesVista() {
       }
       setModal(null)
     } catch (fallo) {
+      if (fallo.response?.status === 409) await cargar()
       setErrorFormulario(getApiErrorMessage(fallo, 'No se pudo guardar la asignación.'))
     } finally {
       setGuardando(false)
@@ -317,16 +337,20 @@ export default function LiderAsignacionesVista() {
     }
   }
 
+  const evaluarOpcion = (persona, proyecto, porcentaje, asignacionActual = null) =>
+    evaluarAsignacion({
+      colaborador: persona, proyecto, porcentaje, asignacionActual,
+      asignaciones: listaAsignaciones,
+      requisitos: requisitosPorProyecto[proyecto?.proyectoId],
+      habilidades: habilidadesPorPersona[persona?.colaboradorId],
+    })
   const opcionesProyectos = listaProyectos.filter(item => item.estado === 'ACTIVO')
   const hayCandidatosPara = proyecto => listaPersonas.some(persona =>
-    persona.estado !== 'INACTIVO' && esCandidatoAsignable(persona, proyecto) &&
-    !listaAsignaciones.some(asignacion => asignacion.proyectoId === proyecto.proyectoId &&
-      asignacion.colaboradorId === persona.colaboradorId))
-  const opcionesPersonas = listaPersonas.filter(item => item.estado !== 'INACTIVO' &&
-    (modal?.tipo === 'editar' || esCandidatoAsignable(item,
-      listaProyectos.find(proyecto => proyecto.proyectoId === formulario.proyectoId))) &&
-    (modal?.tipo === 'editar' || !listaAsignaciones.some(asignacion =>
-      asignacion.proyectoId === formulario.proyectoId && asignacion.colaboradorId === item.colaboradorId)))
+    evaluarOpcion(persona, proyecto, Number(formularioInicial.porcentajeDedicacion)).elegible)
+  const opcionesPersonas = listaPersonas.filter(item => modal?.tipo === 'editar'
+    ? item.colaboradorId === formulario.colaboradorId
+    : evaluarOpcion(item, listaProyectos.find(proyecto =>
+      proyecto.proyectoId === formulario.proyectoId), Number(formulario.porcentajeDedicacion)).elegible)
 
   return (
     <div className="emp-dashboard lider-asignaciones-page">
@@ -519,10 +543,8 @@ export default function LiderAsignacionesVista() {
               onChange={evento => {
                 const nuevoProyecto = evento.target.value
                 const proyecto = listaProyectos.find(item => item.proyectoId === nuevoProyecto)
-                const candidato = listaPersonas.find(item => item.estado !== 'INACTIVO' &&
-                  esCandidatoAsignable(item, proyecto) &&
-                  !listaAsignaciones.some(asignacion => asignacion.proyectoId === nuevoProyecto &&
-                    asignacion.colaboradorId === item.colaboradorId))
+                const candidato = listaPersonas.find(item =>
+                  evaluarOpcion(item, proyecto, Number(formulario.porcentajeDedicacion)).elegible)
                 setFormulario({ ...formulario, proyectoId: nuevoProyecto, colaboradorId: candidato?.colaboradorId || '' })
               }}>
               <option value="">Seleccionar proyecto</option>
@@ -534,7 +556,7 @@ export default function LiderAsignacionesVista() {
               onChange={evento => setFormulario({ ...formulario, colaboradorId: evento.target.value })}>
               <option value="">Seleccionar colaborador</option>
               {opcionesPersonas.map(item => <option key={item.colaboradorId} value={item.colaboradorId}>
-                {item.nombre}{item.esEjemplo ? ' (ejemplo)' : item.nombre === 'Colaborador ' + item.colaboradorId ? '' : ' · ' + item.colaboradorId}
+                {item.nombre}{item.esEjemplo ? ' (ejemplo)' : ' · ' + evaluarOpcion(item, listaProyectos.find(proyecto => proyecto.proyectoId === formulario.proyectoId), 1).libre + '% libre'}
               </option>)}
             </select>
             {modal.tipo === 'crear' && !opcionesPersonas.length && (

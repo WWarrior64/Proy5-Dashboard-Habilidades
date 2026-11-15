@@ -8,6 +8,7 @@ export function getApiErrorMessage(error, fallback = 'No se pudo completar la op
   if (status === 403) return 'Acceso rechazado (403) por API Gateway o el backend. Comprueba permisos y método publicado.'
   if (status === 404) return 'No se encontró el recurso solicitado (404).'
   if (status === 400) return 'La API rechazó los datos o filtros de esta solicitud (400).'
+  if (status === 409) return 'Conflicto (409): el recurso cambió o la operación ya fue realizada. Actualiza los datos antes de reintentar.'
   if (error?.code === 'ERR_NETWORK' || error?.message === 'Network Error') {
     return 'No se pudo leer la respuesta de API Gateway. Revisa red, token y cabeceras CORS.'
   }

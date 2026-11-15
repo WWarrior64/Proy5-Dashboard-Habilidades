@@ -67,7 +67,7 @@ function nombreGrupo(fecha) {
   return fechaMostrada(fecha)
 }
 
-const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
+const modoDemo = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')
 
 export default function AdministradorAuditoriaVista() {
   const [actividad, setActividad] = useState([])
