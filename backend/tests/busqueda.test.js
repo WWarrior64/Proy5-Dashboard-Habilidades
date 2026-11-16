@@ -1,9 +1,13 @@
 const busquedaHandler = require('../src/functions/busqueda/handler');
 const colaboradorHabilidadRepository = require('../src/repositories/colaborador-habilidad.repository');
 const colaboradoresRepository = require('../src/repositories/colaboradores.repository');
+const usuariosRepository = require('../src/repositories/usuarios.repository');
+const proyectoHabilidadRepository = require('../src/repositories/proyecto-habilidad.repository');
 
 jest.mock('../src/repositories/colaborador-habilidad.repository');
 jest.mock('../src/repositories/colaboradores.repository');
+jest.mock('../src/repositories/usuarios.repository');
+jest.mock('../src/repositories/proyecto-habilidad.repository');
 jest.mock('../../repositories/proyectos.repository', () => ({
   listarProyectos: jest.fn(),
 }), { virtual: true });
@@ -18,6 +22,7 @@ describe('Módulo de Búsqueda de Candidatos - Handler', () => {
 
   describe('buscarCandidatos', () => {
     it('debe retornar 400 si no se envían habilidades en la consulta', async () => {
+      usuariosRepository.obtenerPorId.mockResolvedValue(null);
       const event = {
         queryStringParameters: {},
       };
@@ -74,6 +79,13 @@ describe('Módulo de Búsqueda de Candidatos - Handler', () => {
         return null;
       });
 
+      // Mock de usuarios vinculados (ambos activos)
+      usuariosRepository.obtenerPorId.mockImplementation(async (id) => {
+        if (id === 'usr_1') return { usuarioId: 'usr_1', estado: 'ACTIVO' };
+        if (id === 'usr_2') return { usuarioId: 'usr_2', estado: 'ACTIVO' };
+        return null;
+      });
+
       const event = {
         queryStringParameters: {
           habilidades: 'hab_react',
@@ -100,6 +112,8 @@ describe('Módulo de Búsqueda de Candidatos - Handler', () => {
         lastKey: null,
       });
 
+      usuariosRepository.obtenerPorId.mockResolvedValue(null);
+
       const event = {
         queryStringParameters: {
           habilidades: 'hab_inexistente',
@@ -111,6 +125,143 @@ describe('Módulo de Búsqueda de Candidatos - Handler', () => {
 
       const body = JSON.parse(result.body);
       expect(body.datos.candidatos).toHaveLength(0);
+    });
+
+    it('debe buscar candidatos por proyectoId usando requisitos del repositorio', async () => {
+      proyectoHabilidadRepository.consultarHabilidadesProyecto.mockResolvedValue([
+        { habilidadId: 'hab_react', nivelMinimo: 'SENIOR', esObligatoria: true, peso: 3 },
+        { habilidadId: 'hab_sql', nivelMinimo: 'MID', esObligatoria: true, peso: 1 },
+      ]);
+
+      colaboradorHabilidadRepository.listarPorHabilidad
+        .mockResolvedValueOnce({
+          items: [{ colaboradorId: 'col_1', habilidadId: 'hab_react', nivel: 'SENIOR', anosExperiencia: 5 }],
+          lastKey: null,
+        })
+        .mockResolvedValueOnce({
+          items: [{ colaboradorId: 'col_1', habilidadId: 'hab_sql', nivel: 'MID', anosExperiencia: 3 }],
+          lastKey: null,
+        });
+
+      colaboradoresRepository.obtenerPorId.mockResolvedValue({
+        colaboradorId: 'col_1', usuarioId: 'usr_1', cargoId: 'crg_1',
+        rolProfesional: 'Dev', estado: 'ACTIVO', dedicacionReservada: 0,
+      });
+      usuariosRepository.obtenerPorId.mockResolvedValue({ usuarioId: 'usr_1', estado: 'ACTIVO' });
+
+      const event = {
+        queryStringParameters: { proyectoId: 'proj_1', considerarDisponibilidad: 'true' },
+      };
+
+      const result = await busquedaHandler.buscarCandidatos(event, {});
+      expect(result.statusCode).toBe(200);
+
+      const body = JSON.parse(result.body);
+      expect(body.datos.candidatos.length).toBe(1);
+      expect(body.datos.candidatos[0].colaboradorId).toBe('col_1');
+      expect(body.datos.candidatos[0].puntuacion).toBe(100);
+      expect(body.datos.candidatos[0].elegible).toBe(true);
+      expect(body.datos.criterios.tipo).toBe('proyecto');
+      expect(body.datos.criterios.proyectoId).toBe('proj_1');
+    });
+
+    it('debe excluir colaborador cuando incumple habilidad obligatoria del proyecto', async () => {
+      proyectoHabilidadRepository.consultarHabilidadesProyecto.mockResolvedValue([
+        { habilidadId: 'hab_react', nivelMinimo: 'SENIOR', esObligatoria: true, peso: 3 },
+        { habilidadId: 'hab_sql', nivelMinimo: 'MID', esObligatoria: true, peso: 1 },
+      ]);
+
+      colaboradorHabilidadRepository.listarPorHabilidad
+        .mockResolvedValueOnce({
+          items: [{ colaboradorId: 'col_1', habilidadId: 'hab_react', nivel: 'JUNIOR', anosExperiencia: 1 }],
+          lastKey: null,
+        })
+        .mockResolvedValueOnce({
+          items: [{ colaboradorId: 'col_1', habilidadId: 'hab_sql', nivel: 'MID', anosExperiencia: 3 }],
+          lastKey: null,
+        });
+
+      colaboradoresRepository.obtenerPorId.mockResolvedValue({
+        colaboradorId: 'col_1', usuarioId: 'usr_1', cargoId: 'crg_1',
+        rolProfesional: 'Dev', estado: 'ACTIVO', dedicacionReservada: 0,
+      });
+      usuariosRepository.obtenerPorId.mockResolvedValue({ usuarioId: 'usr_1', estado: 'ACTIVO' });
+
+      const event = { queryStringParameters: { proyectoId: 'proj_1' } };
+      const result = await busquedaHandler.buscarCandidatos(event, {});
+
+      const body = JSON.parse(result.body);
+      expect(body.datos.candidatos.length).toBe(0);
+    });
+
+    it('debe evitar resultados duplicados cuando un colaborador tiene múltiples habilidades', async () => {
+      colaboradorHabilidadRepository.listarPorHabilidad
+        .mockResolvedValueOnce({
+          items: [
+            { colaboradorId: 'col_1', habilidadId: 'hab_react', nivel: 'SENIOR', anosExperiencia: 5 },
+            { colaboradorId: 'col_1', habilidadId: 'hab_sql', nivel: 'SENIOR', anosExperiencia: 3 },
+          ],
+          lastKey: null,
+        });
+
+      colaboradoresRepository.obtenerPorId.mockResolvedValue({
+        colaboradorId: 'col_1', usuarioId: 'usr_1', cargoId: 'crg_1',
+        rolProfesional: 'Dev', estado: 'ACTIVO', dedicacionReservada: 0,
+      });
+      usuariosRepository.obtenerPorId.mockResolvedValue({ usuarioId: 'usr_1', estado: 'ACTIVO' });
+
+      const event = {
+        queryStringParameters: {
+          habilidades: 'hab_react,hab_sql',
+          nivelMinimo: 'MID',
+          tipoCoincidencia: 'todas',
+        },
+      };
+
+      const result = await busquedaHandler.buscarCandidatos(event, {});
+      const body = JSON.parse(result.body);
+      expect(body.datos.candidatos.length).toBe(1);
+      expect(body.datos.candidatos[0].colaboradorId).toBe('col_1');
+    });
+
+    it('debe retornar 404 cuando el proyecto no tiene habilidades requeridas', async () => {
+      proyectoHabilidadRepository.consultarHabilidadesProyecto.mockResolvedValue([]);
+
+      const event = { queryStringParameters: { proyectoId: 'proj_vacio' } };
+      const result = await busquedaHandler.buscarCandidatos(event, {});
+      expect(result.statusCode).toBe(404);
+    });
+
+    it('debe retornar puntuación ponderada según pesos del proyecto', async () => {
+      proyectoHabilidadRepository.consultarHabilidadesProyecto.mockResolvedValue([
+        { habilidadId: 'hab_react', nivelMinimo: 'JUNIOR', esObligatoria: true, peso: 5 },
+        { habilidadId: 'hab_sql', nivelMinimo: 'JUNIOR', esObligatoria: false, peso: 1 },
+      ]);
+
+      colaboradorHabilidadRepository.listarPorHabilidad
+        .mockResolvedValueOnce({
+          items: [{ colaboradorId: 'col_1', habilidadId: 'hab_react', nivel: 'SENIOR', anosExperiencia: 5 }],
+          lastKey: null,
+        })
+        .mockResolvedValueOnce({
+          items: [],
+          lastKey: null,
+        });
+
+      colaboradoresRepository.obtenerPorId.mockResolvedValue({
+        colaboradorId: 'col_1', usuarioId: 'usr_1', cargoId: 'crg_1',
+        rolProfesional: 'Dev', estado: 'ACTIVO', dedicacionReservada: 0,
+      });
+      usuariosRepository.obtenerPorId.mockResolvedValue({ usuarioId: 'usr_1', estado: 'ACTIVO' });
+
+      const event = { queryStringParameters: { proyectoId: 'proj_1' } };
+      const result = await busquedaHandler.buscarCandidatos(event, {});
+
+      const body = JSON.parse(result.body);
+      expect(body.datos.candidatos.length).toBe(1);
+      // hab_react cumplido (peso 5), hab_sql faltante opcional (peso 1): 5/6 = 83.33 -> 83
+      expect(body.datos.candidatos[0].puntuacion).toBe(83);
+      expect(body.datos.candidatos[0].elegible).toBe(true);
     });
   });
 });

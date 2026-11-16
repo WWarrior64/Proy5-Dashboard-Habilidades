@@ -119,6 +119,54 @@ function construirFiltroDynamoDB(habilidades, opciones = {}) {
   };
 }
 
+/**
+ * Calcula una puntuación ponderada entre 0 y 100 basada en los pesos de los requisitos.
+ * @param {Array} cumplidos - Detalles de requisitos cumplidos con campo peso.
+ * @param {Array} faltantes - Detalles de requisitos faltantes con campo peso.
+ * @param {boolean} hayObligatoriosIncumplidos - Si hay obligatorias incumplidas.
+ * @returns {number} Puntuación entre 0 y 100.
+ */
+function calcularPuntuacionPonderada(cumplidos = [], faltantes = [], hayObligatoriosIncumplidos = false) {
+  if (hayObligatoriosIncumplidos) return 0;
+
+  let pesoTotal = 0;
+  let pesoCumplido = 0;
+
+  for (const c of cumplidos) {
+    const peso = Number(c.peso) || 1;
+    pesoTotal += peso;
+    pesoCumplido += peso;
+  }
+
+  for (const f of faltantes) {
+    const peso = Number(f.peso) || 1;
+    pesoTotal += peso;
+  }
+
+  if (pesoTotal === 0) return 0;
+
+  return Math.round((pesoCumplido / pesoTotal) * 100);
+}
+
+/**
+ * Normaliza requisitos de habilidades de un proyecto aplicando valores por defecto.
+ * Cada requisito proviene de proyecto-habilidad.repository con:
+ *   habilidadId, nivelMinimo, esObligatoria, peso
+ * @param {Array} requisitosRaw - Requisitos crudos del repositorio.
+ * @returns {Array} Requisitos normalizados.
+ */
+function normalizarRequisitosProyecto(requisitosRaw = []) {
+  if (!Array.isArray(requisitosRaw)) return [];
+
+  return requisitosRaw.map((r) => ({
+    habilidadId: r.habilidadId,
+    nivelMinimo: r.nivelMinimo || 'JUNIOR',
+    esObligatoria: r.esObligatoria !== undefined ? r.esObligatoria : false,
+    peso: r.peso !== undefined && r.peso !== null && Number.isFinite(r.peso) && r.peso >= 0 ? Number(r.peso) : 1,
+    observaciones: r.observaciones || null,
+  }));
+}
+
 module.exports = {
   calcularPuntuacion,
   cumpleNivelMinimo,
@@ -126,6 +174,8 @@ module.exports = {
   ordenarPorPuntuacion,
   filtrarPorHabilidades,
   construirFiltroDynamoDB,
+  calcularPuntuacionPonderada,
+  normalizarRequisitosProyecto,
   NIVELES_VALIDOS,
   NIVELES_VALOR,
 };
