@@ -178,10 +178,20 @@ async function actualizarUsuario(event, context) {
       return error('No tiene autorización para modificar este usuario', 403, CODIGOS.PROHIBIDO);
     }
 
+    const usuarioObjetivo = esPropioPerfil ? solicitante : await usuariosRepository.obtenerPorId(usuarioId);
+    if (!usuarioObjetivo) {
+      return error('Usuario no encontrado', 404, CODIGOS.NO_ENCONTRADO);
+    }
+
     const body = obtenerBody(event);
 
     // Política de seguridad: el correo se gestiona en Cognito para evitar desincronizaciones
-    if (body.email !== undefined && body.email !== solicitante.email) {
+    const emailNormalizado = typeof body.email === 'string' ? body.email.trim().toLowerCase() : body.email;
+    const emailObjetivoNormalizado = typeof usuarioObjetivo.email === 'string'
+      ? usuarioObjetivo.email.trim().toLowerCase()
+      : usuarioObjetivo.email;
+
+    if (body.email !== undefined && emailNormalizado !== emailObjetivoNormalizado) {
       return error(
         'El correo electrónico no puede modificarse directamente en el perfil; debe actualizarse mediante el flujo de identidad de Cognito',
         400,
