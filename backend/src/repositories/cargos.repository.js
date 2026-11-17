@@ -9,6 +9,41 @@ const {
 const { tableCargos, tableColaboradores } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
 const { randomUUID } = require('node:crypto');
+const cache = require('../services/cache.service.js');
+
+// TTL de los catálogos de cargos en segundos. Sobrescribible por variable de
+// entorno (E02: catálogo de cargos con caché temporal, expiración e invalidación).
+const ttlCatalogoCargosEnv = Number(process.env.CACHE_TTL_CATALOG_SECONDS);
+const TTL_CARGO_SEGUNDOS =
+  Number.isFinite(ttlCatalogoCargosEnv) && ttlCatalogoCargosEnv > 0
+    ? ttlCatalogoCargosEnv
+    : 60;
+const TTL_CARGO_MS = TTL_CARGO_SEGUNDOS * 1000;
+
+function claveListarCargos(filtros) {
+  return cache.construirClave(
+    'cargos',
+    'list',
+    filtros.estado || '',
+    String(filtros.limit || 25),
+    filtros.lastKey ? JSON.stringify(filtros.lastKey) : ''
+  );
+}
+
+function claveObtenerCargo(cargoId) {
+  return cache.construirClave('cargos', 'obtener', cargoId);
+}
+
+/**
+ * Invalida las claves de caché de cargos afectadas por una escritura.
+ * Se ejecuta solo tras una escritura exitosa en DynamoDB (E06).
+ * @param {string} [cargoId] - Identificador del cargo modificado, si aplica
+ */
+function invalidarCachéCargos(cargoId) {
+  cache.eliminarPorPrefijo('cargos:list:');
+  cache.eliminarPorPrefijo('cargos:obtener:');
+  if (cargoId) {cache.eliminar(claveObtenerCargo(cargoId));}
+}
 
 /**
  * Crear un cargo.
@@ -44,6 +79,7 @@ async function crear(data) {
     }
     throw err;
   }
+  invalidarCachéCargos();
   return item;
 }
 
@@ -53,6 +89,10 @@ async function crear(data) {
  * @returns {Promise<{ items: Array, lastKey: Object|null }>}
  */
 async function listar(filtros = {}) {
+  const clave = claveListarCargos(filtros);
+  const cacheado = cache.obtener(clave);
+  if (cacheado !== undefined) {return cacheado;}
+
   const { estado, limit = 25, lastKey } = filtros;
 
   const params = {
@@ -69,13 +109,15 @@ async function listar(filtros = {}) {
     };
   }
 
-  if (lastKey) params.ExclusiveStartKey = lastKey;
+  if (lastKey) {params.ExclusiveStartKey = lastKey;}
 
   const result = await dynamoDb.send(estado ? new QueryCommand(params) : new ScanCommand(params));
-  return {
+  const respuesta = {
     items: result.Items || [],
     lastKey: result.LastEvaluatedKey || null,
   };
+  cache.guardar(clave, respuesta, TTL_CARGO_MS);
+  return respuesta;
 }
 
 /**
@@ -84,13 +126,19 @@ async function listar(filtros = {}) {
  * @returns {Promise<Object|null>}
  */
 async function obtenerPorId(cargoId) {
+  const clave = claveObtenerCargo(cargoId);
+  const cacheado = cache.obtener(clave);
+  if (cacheado !== undefined) {return cacheado;}
+
   const result = await dynamoDb.send(
     new GetCommand({
       TableName: tableCargos,
       Key: { cargoId },
     })
   );
-  return result.Item || null;
+  const item = result.Item || null;
+  cache.guardar(clave, item, TTL_CARGO_MS);
+  return item;
 }
 
 /**
@@ -153,6 +201,7 @@ async function actualizar(cargoId, data) {
     })
   );
 
+  invalidarCachéCargos(cargoId);
   return result.Attributes;
 }
 
@@ -187,7 +236,7 @@ async function tieneColaboradoresAsociados(cargoId) {
       ConsistentRead: true,
       ...(lastKey && { ExclusiveStartKey: lastKey }),
     }));
-    if ((result.Items || []).length > 0) return true;
+    if ((result.Items || []).length > 0) {return true;}
     lastKey = result.LastEvaluatedKey;
   } while (lastKey);
   return false;

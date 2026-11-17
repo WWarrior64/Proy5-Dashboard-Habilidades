@@ -7,9 +7,51 @@ const {
 const { tableHabilidades } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
 const { randomUUID } = require('node:crypto');
+const cache = require('../services/cache.service.js');
+
+// TTL de los catálogos de habilidades en segundos. Sobrescribible por variable
+// de entorno (E02: catálogo de habilidades con caché temporal, expiración e invalidación).
+const ttlCatalogoHabilidadesEnv = Number(process.env.CACHE_TTL_CATALOG_SECONDS);
+const TTL_HABILIDAD_SEGUNDOS =
+  Number.isFinite(ttlCatalogoHabilidadesEnv) && ttlCatalogoHabilidadesEnv > 0
+    ? ttlCatalogoHabilidadesEnv
+    : 60;
+const TTL_HABILIDAD_MS = TTL_HABILIDAD_SEGUNDOS * 1000;
 
 function normalizarNombre(nombre) {
   return nombre.trim().toLowerCase();
+}
+
+function claveListarHabilidades(filtros) {
+  return cache.construirClave(
+    'habilidades',
+    'list',
+    filtros.categoria || '',
+    filtros.nombre || '',
+    filtros.estado || '',
+    String(filtros.limit || 25),
+    filtros.lastKey ? JSON.stringify(filtros.lastKey) : ''
+  );
+}
+
+function claveObtenerHabilidad(habilidadId) {
+  return cache.construirClave('habilidades', 'obtener', habilidadId);
+}
+
+function claveHabilidadPorNombre(nombreNormalizado) {
+  return cache.construirClave('habilidades', 'nombre', nombreNormalizado);
+}
+
+/**
+ * Invalida las claves de caché de habilidades afectadas por una escritura.
+ * Se ejecuta solo tras una escritura exitosa en DynamoDB (E06).
+ * @param {string} [habilidadId] - Identificador de la habilidad modificada, si aplica
+ */
+function invalidarCachéHabilidades(habilidadId) {
+  cache.eliminarPorPrefijo('habilidades:list:');
+  cache.eliminarPorPrefijo('habilidades:obtener:');
+  cache.eliminarPorPrefijo('habilidades:nombre:');
+  if (habilidadId) {cache.eliminar(claveObtenerHabilidad(habilidadId));}
 }
 
 async function crear(data) {
@@ -32,17 +74,22 @@ async function crear(data) {
     fechaActualizacion: new Date().toISOString(),
   };
 
-  if (item.habilidadId.startsWith('UNIQUE#')) throw new ErrorApp('Identificador reservado', 400, CODIGOS.VALIDACION);
+  if (item.habilidadId.startsWith('UNIQUE#')) {throw new ErrorApp('Identificador reservado', 400, CODIGOS.VALIDACION);}
   await escribir([
     { Put: { TableName: tableHabilidades, Item: item, ConditionExpression: 'attribute_not_exists(habilidadId)' } },
     { Put: { TableName: tableHabilidades, Item: { habilidadId: `UNIQUE#${nombreNormalizado}`, propietarioId: item.habilidadId },
       ConditionExpression: 'attribute_not_exists(habilidadId)' } },
   ]);
 
+  invalidarCachéHabilidades();
   return item;
 }
 
 async function listar(filtros = {}) {
+  const clave = claveListarHabilidades(filtros);
+  const cacheado = cache.obtener(clave);
+  if (cacheado !== undefined) {return cacheado;}
+
   const { categoria, nombre, estado, limit = 25, lastKey } = filtros;
 
   const filterParts = ['attribute_exists(#nombreReal)'];
@@ -79,24 +126,33 @@ async function listar(filtros = {}) {
     }
   }
 
-  if (lastKey) params.ExclusiveStartKey = lastKey;
+  if (lastKey) {params.ExclusiveStartKey = lastKey;}
 
   const result = await dynamoDb.send(new ScanCommand(params));
-  return {
+  const respuesta = {
     items: result.Items || [],
     lastKey: result.LastEvaluatedKey || null,
   };
+  cache.guardar(clave, respuesta, TTL_HABILIDAD_MS);
+  return respuesta;
 }
 
 async function obtenerPorId(habilidadId) {
-  if (String(habilidadId).startsWith('UNIQUE#')) return null;
+  if (String(habilidadId).startsWith('UNIQUE#')) {return null;}
+
+  const clave = claveObtenerHabilidad(habilidadId);
+  const cacheado = cache.obtener(clave);
+  if (cacheado !== undefined) {return cacheado;}
+
   const result = await dynamoDb.send(
     new GetCommand({
       TableName: tableHabilidades,
       Key: { habilidadId },
     })
   );
-  return result.Item || null;
+  const item = result.Item || null;
+  cache.guardar(clave, item, TTL_HABILIDAD_MS);
+  return item;
 }
 
 async function actualizar(habilidadId, data) {
@@ -113,7 +169,7 @@ async function actualizar(habilidadId, data) {
 
   const siguiente = { ...existente, fechaActualizacion: new Date().toISOString() };
   for (const campo of ['nombre', 'categoria', 'descripcion', 'estado']) {
-    if (data[campo] !== undefined) siguiente[campo] = data[campo];
+    if (data[campo] !== undefined) {siguiente[campo] = data[campo];}
   }
   siguiente.nombreNormalizado = normalizarNombre(siguiente.nombre);
   const items = [{ Put: { TableName: tableHabilidades, Item: siguiente,
@@ -128,13 +184,14 @@ async function actualizar(habilidadId, data) {
       ConditionExpression: 'attribute_not_exists(habilidadId)' } });
   }
   await escribir(items);
+  invalidarCachéHabilidades(habilidadId);
   return siguiente;
 }
 
 async function escribir(items) {
   try { await dynamoDb.send(new TransactWriteCommand({ TransactItems: items })); }
   catch (err) {
-    if (err.name === 'TransactionCanceledException') throw new ErrorApp('Nombre duplicado o modificación concurrente', 409, CODIGOS.CONFLICTO);
+    if (err.name === 'TransactionCanceledException') {throw new ErrorApp('Nombre duplicado o modificación concurrente', 409, CODIGOS.CONFLICTO);}
     throw err;
   }
 }
@@ -145,10 +202,16 @@ async function cambiarEstado(habilidadId, activo) {
 }
 
 async function obtenerPorNombreNormalizado(nombreNormalizado) {
+  const clave = claveHabilidadPorNombre(nombreNormalizado);
+  const cacheado = cache.obtener(clave);
+  if (cacheado !== undefined) {return cacheado;}
+
   const result = await dynamoDb.send(new GetCommand({
     TableName: tableHabilidades, Key: { habilidadId: `UNIQUE#${normalizarNombre(nombreNormalizado)}` }, ConsistentRead: true,
   }));
-  return result.Item ? obtenerPorId(result.Item.propietarioId) : null;
+  const habilidad = result.Item ? obtenerPorId(result.Item.propietarioId) : null;
+  cache.guardar(clave, habilidad, TTL_HABILIDAD_MS);
+  return habilidad;
 }
 
 module.exports = {
