@@ -56,7 +56,7 @@ const iniciales = nombre => String(nombre || 'C').trim().split(/\s+/).slice(0, 2
 const nombreNivel = nivel => nivel ? (nivel === 'MID' ? 'Mid' : nivel.charAt(0) + nivel.slice(1).toLowerCase()) : ''
 
 function tipoDisponibilidad(item) {
-  if (item.estado === 'INACTIVO') return 'NO_DISPONIBLE'
+  if (item.estado !== 'ACTIVO' || (!item.esEjemplo && item.usuarioEstado !== 'ACTIVO')) return 'NO_DISPONIBLE'
   if (!item.esEjemplo) {
     if (!Number.isFinite(item.dedicacion)) return 'SIN_DATOS'
     if (item.dedicacion >= 100) return 'NO_DISPONIBLE'
@@ -237,7 +237,7 @@ export default function LiderBuscarTalentoVista() {
   const criteriosActivos = Boolean(proyectoFiltro || habilidadFiltro)
   const claveHabilidades = habilidadesBuscadas.join(',')
   useEffect(() => {
-    if (!criteriosActivos || !claveHabilidades) {
+    if (!criteriosActivos || (!claveHabilidades && !proyectoFiltro)) {
       setResultadosBusqueda(null)
       setTotalCoincidencias(0)
       setConsultando(false)

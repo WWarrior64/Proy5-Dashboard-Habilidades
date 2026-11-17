@@ -202,6 +202,10 @@ describe('Módulo de Búsqueda de Candidatos - Handler', () => {
             { colaboradorId: 'col_1', habilidadId: 'hab_sql', nivel: 'SENIOR', anosExperiencia: 3 },
           ],
           lastKey: null,
+        })
+        .mockResolvedValueOnce({
+          items: [{ colaboradorId: 'col_1', habilidadId: 'hab_sql', nivel: 'SENIOR', anosExperiencia: 3 }],
+          lastKey: null,
         });
 
       colaboradoresRepository.obtenerPorId.mockResolvedValue({
@@ -222,6 +226,41 @@ describe('Módulo de Búsqueda de Candidatos - Handler', () => {
       const body = JSON.parse(result.body);
       expect(body.datos.candidatos.length).toBe(1);
       expect(body.datos.candidatos[0].colaboradorId).toBe('col_1');
+    });
+
+    it('J03 evalúa candidatos sin coincidencias cuando todos los requisitos son opcionales', async () => {
+      proyectoHabilidadRepository.consultarHabilidadesProyecto.mockResolvedValue([
+        { habilidadId: 'h1', nivelMinimo: 'JUNIOR', esObligatoria: false, peso: 2 },
+        { habilidadId: 'h2', nivelMinimo: 'MID', esObligatoria: false, peso: 1 },
+      ]);
+      colaboradorHabilidadRepository.listarPorHabilidad.mockResolvedValue({ items: [], lastKey: null });
+      colaboradoresRepository.listar.mockResolvedValue({ items: [{ colaboradorId: 'c1' }], lastKey: null });
+      colaboradoresRepository.obtenerPorId.mockResolvedValue({
+        colaboradorId: 'c1', usuarioId: 'u1', estado: 'ACTIVO', dedicacionReservada: 0,
+      });
+      usuariosRepository.obtenerPorId.mockResolvedValue({ usuarioId: 'u1', estado: 'ACTIVO' });
+      const respuesta = await busquedaHandler.buscarCandidatos({
+        queryStringParameters: { proyectoId: 'p1' },
+      }, {});
+      expect(respuesta.statusCode).toBe(200);
+      const [candidato] = JSON.parse(respuesta.body).datos.candidatos;
+      expect(candidato).toMatchObject({ colaboradorId: 'c1', elegible: true, puntuacion: 0 });
+      expect(candidato.habilidadesFaltantes).toHaveLength(2);
+    });
+
+    it('J05 excluye colaboradores cuya cuenta vinculada no puede verificarse', async () => {
+      colaboradorHabilidadRepository.listarPorHabilidad.mockResolvedValue({
+        items: [{ colaboradorId: 'c1', habilidadId: 'h1', nivel: 'SENIOR' }], lastKey: null,
+      });
+      colaboradoresRepository.obtenerPorId.mockResolvedValue({
+        colaboradorId: 'c1', usuarioId: 'u1', estado: 'ACTIVO', dedicacionReservada: 0,
+      });
+      usuariosRepository.obtenerPorId.mockResolvedValue(null);
+      const respuesta = await busquedaHandler.buscarCandidatos({
+        queryStringParameters: { habilidades: 'h1' },
+      }, {});
+      expect(respuesta.statusCode).toBe(200);
+      expect(JSON.parse(respuesta.body).datos.candidatos).toEqual([]);
     });
 
     it('debe retornar 404 cuando el proyecto no tiene habilidades requeridas', async () => {

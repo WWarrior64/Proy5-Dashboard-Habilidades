@@ -14,11 +14,14 @@ describe('RRHH: colaboradores activos y reincorporaciones', () => {
     vi.mocked(useAuth).mockReturnValue({ user: { rol: 'RRHH' } })
     const reincorporar = vi.fn()
     const colaboradores = [
-      { colaboradorId: 'c1', nombre: 'Ana Activa', estado: 'ACTIVO', habilidades: ['React'], dedicacionReservada: 0 },
-      { colaboradorId: 'c2', nombre: 'Luis Inactivo', estado: 'INACTIVO', habilidades: ['SQL'], dedicacionReservada: 0 },
+      { colaboradorId: 'c1', usuarioId: 'u1', nombre: 'Ana Activa', estado: 'ACTIVO', habilidades: ['React'], dedicacionReservada: 0 },
+      { colaboradorId: 'c2', usuarioId: 'u2', nombre: 'Luis Inactivo', estado: 'INACTIVO', habilidades: ['SQL'], dedicacionReservada: 0 },
     ]
     render(<MemoryRouter><RrhhColaboradoresVista
-      colaboradores={colaboradores} usuarios={[]} cargos={[]} loading={false} error=""
+      colaboradores={colaboradores} usuarios={[
+        { usuarioId: 'u1', nombre: 'Ana Activa', estado: 'ACTIVO' },
+        { usuarioId: 'u2', nombre: 'Luis Inactivo', estado: 'ACTIVO' },
+      ]} cargos={[]} loading={false} error=""
       canManage onCreate={vi.fn()} onEdit={vi.fn()} onRemove={vi.fn()}
       onReincorporate={reincorporar} onDetails={vi.fn()} onRetry={vi.fn()}
     /></MemoryRouter>)

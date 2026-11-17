@@ -133,13 +133,13 @@ function calcularPuntuacionPonderada(cumplidos = [], faltantes = [], hayObligato
   let pesoCumplido = 0;
 
   for (const c of cumplidos) {
-    const peso = Number(c.peso) || 1;
+    const peso = Number.isFinite(c.peso) && c.peso >= 0 ? c.peso : 1;
     pesoTotal += peso;
     pesoCumplido += peso;
   }
 
   for (const f of faltantes) {
-    const peso = Number(f.peso) || 1;
+    const peso = Number.isFinite(f.peso) && f.peso >= 0 ? f.peso : 1;
     pesoTotal += peso;
   }
 

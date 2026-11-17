@@ -53,14 +53,15 @@ async function crearColaborador(event, context) {
   }
 }
 
-function mostrarIdentidadPublica(item, nombreUsuario) {
-  const nombreValido = typeof nombreUsuario === 'string' && nombreUsuario.trim()
-    ? nombreUsuario.trim() : null;
+function mostrarIdentidadPublica(item, cuenta) {
+  const nombreValido = typeof cuenta?.nombre === 'string' && cuenta.nombre.trim()
+    ? cuenta.nombre.trim() : null;
   const esNombreProfesional = item.nombre?.trim().toLocaleLowerCase('es') ===
     item.rolProfesional?.trim().toLocaleLowerCase('es');
   return {
     ...item,
     nombreUsuario: nombreValido,
+    usuarioEstado: cuenta?.estado === 'ACTIVO' ? 'ACTIVO' : 'INACTIVO',
     nombre: nombreValido || (esNombreProfesional
       ? `Colaborador ${item.colaboradorId}` : item.nombre || `Colaborador ${item.colaboradorId}`),
   };
@@ -100,15 +101,15 @@ async function listarColaboradores(event, context) {
     if (event.usuarioAutenticado?.rol === 'LIDER_PROYECTO') {
       // El Líder puede ver nombres profesionales, pero no consultar la API privada de Usuarios.
       const ids = [...new Set(items.map(item => item.usuarioId).filter(Boolean))];
-      const nombres = new Map();
+      const cuentas = new Map();
       for (let inicio = 0; inicio < ids.length; inicio += 10) {
         const lote = await Promise.all(ids.slice(inicio, inicio + 10).map(async id => {
           const usuario = await usuariosRepository.obtenerPorId(id);
-          return [id, usuario?.nombre || null];
+          return [id, usuario || null];
         }));
-        lote.forEach(([id, nombre]) => nombres.set(id, nombre));
+        lote.forEach(([id, cuenta]) => cuentas.set(id, cuenta));
       }
-      items = items.map(item => mostrarIdentidadPublica(item, nombres.get(item.usuarioId)));
+      items = items.map(item => mostrarIdentidadPublica(item, cuentas.get(item.usuarioId)));
     }
     return exito({ ...resultado, items, nextCursor: resultado.lastKey ? Buffer.from(JSON.stringify(resultado.lastKey)).toString('base64url') : null });
   } catch (err) {
@@ -131,7 +132,7 @@ async function obtenerColaborador(event, context) {
     if (event.usuarioAutenticado?.rol === 'LIDER_PROYECTO') {
       const usuario = colaborador.usuarioId
         ? await usuariosRepository.obtenerPorId(colaborador.usuarioId) : null;
-      return exito(mostrarIdentidadPublica(colaborador, usuario?.nombre));
+      return exito(mostrarIdentidadPublica(colaborador, usuario));
     }
     return exito(colaborador);
   } catch (err) {

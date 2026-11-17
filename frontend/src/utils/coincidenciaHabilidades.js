@@ -1,7 +1,7 @@
 const niveles = { JUNIOR: 1, MID: 2, SENIOR: 3 }
 
 // Coincidencia del empleado: aplica los niveles y pesos registrados en el proyecto.
-// El buscador /busqueda/colaboradores aún aplica un nivel global sin pesos.
+// Aplica niveles individuales, obligatoriedad y pesos según el contrato del backend.
 export function coincidenciaHabilidades(requisitos, habilidades = []) {
   if (!Array.isArray(requisitos) || !Array.isArray(habilidades)) {
     return { porcentaje: null, cumpleObligatorias: false, faltantes: [] }
@@ -21,10 +21,10 @@ export function coincidenciaHabilidades(requisitos, habilidades = []) {
     if (cumple) pesosCumplidos += peso
     else {
       faltantes.push(requisito)
-      if (requisito.esObligatoria !== false) cumpleObligatorias = false
+      if (requisito.esObligatoria === true) cumpleObligatorias = false
     }
   }
-  return { porcentaje: sumaPesos > 0 ? Math.round(pesosCumplidos / sumaPesos * 100) : null,
+  return { porcentaje: cumpleObligatorias && sumaPesos > 0 ? Math.round(pesosCumplidos / sumaPesos * 100) : 0,
     cumpleObligatorias, faltantes }
 }
 

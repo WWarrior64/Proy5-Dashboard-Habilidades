@@ -1,9 +1,10 @@
 const dedicacion = require('../services/dedicacion.service');
+const { recolectarPaginas } = require('../utils/paginacion');
 const { v4: uuidv4 } = require('uuid');
 const {
   dynamoDb,
   GetCommand,
-  PutCommand,
+  TransactWriteCommand,
   UpdateCommand,
   QueryCommand,
 } = require('../../src/config/dynamodb.js');
@@ -12,6 +13,7 @@ const {
   tableProyectos,
   tableColaboradores,
   tableAsignaciones,
+  tableUsuarios,
 } = require('../../src/config/environment.js');
 const { ErrorApp, CODIGOS } = require('../../src/utils/errors.js');
 
@@ -26,17 +28,10 @@ function ahoraISO() {
 }
 
 async function consultarTodasPaginas(parametros) {
-  const items = [];
-  let lastKey;
-  do {
-    const pagina = await dynamoDb.send(new QueryCommand({
-      ...parametros,
-      ...(lastKey && { ExclusiveStartKey: lastKey }),
-    }));
-    items.push(...(pagina.Items || []));
-    lastKey = pagina.LastEvaluatedKey;
-  } while (lastKey);
-  return items;
+  return recolectarPaginas(lastKey => dynamoDb.send(new QueryCommand({
+    ...parametros,
+    ...(lastKey && { ExclusiveStartKey: lastKey }),
+  })));
 }
 
 function validarEstadoPostulacion(estado) {
@@ -66,6 +61,18 @@ async function validarColaboradorActivo(colaboradorId) {
   return colaborador;
 }
 
+async function validarCuentaActiva(colaborador) {
+  if (!colaborador?.usuarioId) {
+    throw new ErrorApp('No se pudo comprobar la identidad del colaborador', 409, CODIGOS.CONFLICTO);
+  }
+  const cuenta = await dynamoDb.send(new GetCommand({
+    TableName: tableUsuarios, Key: { usuarioId: colaborador.usuarioId }, ConsistentRead: true,
+  }));
+  if (cuenta.Item?.estado !== 'ACTIVO') {
+    throw new ErrorApp('La cuenta del colaborador no existe o está inactiva', 409, CODIGOS.CONFLICTO);
+  }
+}
+
 async function validarProyectoActivo(proyectoId) {
   const resultado = await dynamoDb.send(
     new GetCommand({
@@ -93,6 +100,8 @@ async function crearPostulacion(datos) {
   const colaborador = await validarColaboradorActivo(colaboradorId);
   const proyecto = await validarProyectoActivo(proyectoId);
   dedicacion.verificarLiderDistinto(proyecto, colaborador);
+  await validarCuentaActiva(colaborador);
+  await dedicacion.verificarAsignacionUnica(proyectoId, colaboradorId);
 
   const id = postulacionId || uuidv4();
   const ahora = ahoraISO();
@@ -113,16 +122,36 @@ async function crearPostulacion(datos) {
     // colaborador no puede tener dos registros de postulación para el mismo
     // proyecto; el historial se conserva con estados ACEPTADA/RECHAZADA/RETIRADA.
     await dynamoDb.send(
-      new PutCommand({
-        TableName: tablePostulaciones,
-        Item: item,
-        ConditionExpression: 'attribute_not_exists(postulacionKey)',
-      })
+      new TransactWriteCommand({ TransactItems: [
+        { ConditionCheck: {
+          TableName: tableAsignaciones,
+          Key: { asignacionId: dedicacion.idAsignacionUnica(proyectoId, colaboradorId) },
+          ConditionExpression: 'attribute_not_exists(asignacionId)',
+        } },
+        { ConditionCheck: {
+          TableName: tableProyectos, Key: { proyectoId },
+          ConditionExpression: '#estado = :activo AND #lider <> :usuario',
+          ExpressionAttributeNames: { '#estado': 'estado', '#lider': 'liderId' },
+          ExpressionAttributeValues: { ':activo': 'ACTIVO', ':usuario': colaborador.usuarioId },
+        } },
+        { ConditionCheck: {
+          TableName: tableColaboradores, Key: { colaboradorId },
+          ConditionExpression: '#estado = :activo',
+          ExpressionAttributeNames: { '#estado': 'estado' },
+          ExpressionAttributeValues: { ':activo': 'ACTIVO' },
+        } },
+        dedicacion.cuentaActiva(colaborador.usuarioId, tableUsuarios),
+        { Put: {
+          TableName: tablePostulaciones,
+          Item: item,
+          ConditionExpression: 'attribute_not_exists(postulacionKey)',
+        } },
+      ] })
     );
   } catch (e) {
-    if (e.name === 'ConditionalCheckFailedException') {
+    if (['ConditionalCheckFailedException', 'TransactionCanceledException', 'TransactionConflictException'].includes(e.name)) {
       throw new ErrorApp(
-        'Ya existe una postulación de este colaborador para el proyecto',
+        'Ya existe una asignación o postulación para este colaborador y proyecto, o sus datos cambiaron',
         409,
         CODIGOS.CONFLICTO
       );
@@ -194,6 +223,8 @@ async function aceptarPostulacion(proyectoId, colaboradorId, datosRevision) {
 
   const colaborador = await validarColaboradorActivo(colaboradorId);
   dedicacion.verificarLiderDistinto(proyecto, colaborador);
+  await validarCuentaActiva(colaborador);
+  const elegibilidad = await dedicacion.verificarHabilidadesObligatorias(proyectoId, colaboradorId);
   const reservaPrevia = colaborador.dedicacionReservada;
   if (!Number.isFinite(reservaPrevia) || reservaPrevia < 0 || reservaPrevia > 100) {
     throw new ErrorApp('El colaborador requiere inicializar su dedicación reservada antes de aceptar la postulación',
@@ -238,8 +269,9 @@ async function aceptarPostulacion(proyectoId, colaboradorId, datosRevision) {
 
   try {
     await dedicacion.ejecutar([
-        dedicacion.reserva(colaboradorId, porcentajeDedicacion),
-        dedicacion.condicionProyectoAsignable(proyectoId, colaborador.usuarioId, tableProyectos),
+        dedicacion.reserva(colaboradorId, porcentajeDedicacion, elegibilidad.habilidadesRevision ?? 0),
+        dedicacion.actividadProyecto(proyectoId, 1, colaborador.usuarioId, elegibilidad.requisitosRevision ?? 0),
+        dedicacion.cuentaActiva(colaborador.usuarioId, tableUsuarios),
         {
           Update: {
             TableName: tablePostulaciones,

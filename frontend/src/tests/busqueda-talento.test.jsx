@@ -51,7 +51,14 @@ describe('F01: buscador de talento', () => {
     })
   })
 
-  it('sin habilidades no realiza ninguna petición', async () => {
+  it('consulta por proyectoId aunque no se envíe una lista manual de habilidades', async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: { datos: { candidatos: [], total: 0 } } })
+    await busquedaService.colaboradores({ proyectoId: 'p1', habilidades: [] })
+    expect(api.get).toHaveBeenCalledWith('/busqueda/colaboradores',
+      expect.objectContaining({ params: expect.objectContaining({ proyectoId: 'p1' }) }))
+  })
+
+  it('sin habilidades ni proyecto no realiza ninguna petición', async () => {
     const respuesta = await busquedaService.colaboradores({ habilidades: [] })
     expect(respuesta.data.datos.candidatos).toEqual([])
     expect(api.get).not.toHaveBeenCalled()

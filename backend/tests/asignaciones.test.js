@@ -12,12 +12,17 @@ jest.mock('../src/services/cache.service.js', () => ({
 
 jest.mock('../src/config/environment.js', () => ({
   tableAsignaciones: 'internal-marketplace-asignaciones-dev', tableColaboradores: 'internal-marketplace-colaboradores-dev', tableProyectos: 'internal-marketplace-proyectos-dev',
+  tableUsuarios: 'internal-marketplace-usuarios-dev',
+  tableProyectoHabilidad: 'internal-marketplace-proyecto-habilidad-dev',
+  tableColaboradorHabilidad: 'internal-marketplace-colaborador-habilidad-dev',
+  tablePostulaciones: 'internal-marketplace-postulaciones-dev',
 }));
 
 const { dynamoDb, commandMocks } = require('../src/config/dynamodb.js');
 const cache = require('../src/services/cache.service.js');
 const { ErrorApp, CODIGOS } = require('../src/utils/errors.js');
 const repo = require('../src/repositories/asignaciones.repository.js');
+const dedicacion = require('../src/services/dedicacion.service.js');
 const handler = require('../src/functions/asignaciones/handler.js');
 
 
@@ -35,11 +40,16 @@ beforeEach(() => {
   commandMocks.GetCommand.mockImplementation(async (input) => {
     if (input.TableName === 'internal-marketplace-proyectos-dev') return { Item: PROYECTO };
     if (input.TableName === 'internal-marketplace-colaboradores-dev') return { Item: COLABORADOR };
+    if (input.TableName === 'internal-marketplace-usuarios-dev') return { Item: { usuarioId: 'u-colaborador', estado: 'ACTIVO' } };
     return {};
   });
   commandMocks.QueryCommand.mockResolvedValue({ Items: [] });
+  commandMocks.ScanCommand.mockResolvedValue({ Items: [] });
   commandMocks.PutCommand.mockResolvedValue({});
+  jest.spyOn(dedicacion, 'verificarHabilidadesObligatorias').mockResolvedValue({ elegible: true });
 });
+
+afterEach(() => jest.restoreAllMocks());
 
 describe('Repositorio: asignaciones', () => {
   test('impide que el líder se asigne a su mismo proyecto, sin reservar dedicación', async () => {
@@ -85,25 +95,25 @@ describe('Repositorio: asignaciones', () => {
   });
 
   test('impide asignar otra vez al mismo colaborador al mismo proyecto, incluso si ya fue desvinculado', async () => {
-    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [] })
-      .mockResolvedValueOnce({ Items: [{
-        asignacionId: 'anterior', colaboradorId: 'c1', proyectoId: 'p1', estado: 'DESVINCULADA',
-      }] });
+    commandMocks.ScanCommand.mockResolvedValueOnce({ Items: [{
+      asignacionId: 'anterior', colaboradorId: 'c1', proyectoId: 'p1', estado: 'DESVINCULADA',
+    }] });
     await expect(repo.crearAsignacion({
       colaboradorId: 'c1', proyectoId: 'p1', porcentajeDedicacion: 25, horasAsignadas: 20,
     })).rejects.toMatchObject({ codigo: 409, message: expect.stringContaining('ya tiene una asignación') });
     expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
   });
 
-  test('verifica todas las páginas del GSI2 antes de aceptar una asignación', async () => {
-    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [] })
+  test('W08 examina todas las páginas de la tabla base antes de aceptar una asignación histórica', async () => {
+    commandMocks.ScanCommand
       .mockResolvedValueOnce({ Items: [], LastEvaluatedKey: { asignacionId: 'pagina-1' } })
       .mockResolvedValueOnce({ Items: [{ asignacionId: 'historica', colaboradorId: 'c1' }] });
     await expect(repo.crearAsignacion({
       colaboradorId: 'c1', proyectoId: 'p1', porcentajeDedicacion: 25, horasAsignadas: 20,
     })).rejects.toMatchObject({ codigo: 409 });
-    expect(commandMocks.QueryCommand).toHaveBeenCalledWith(expect.objectContaining({
-      IndexName: 'GSI2', ExclusiveStartKey: { asignacionId: 'pagina-1' },
+    expect(commandMocks.ScanCommand).toHaveBeenCalledWith(expect.objectContaining({
+      TableName: 'internal-marketplace-asignaciones-dev',
+      ConsistentRead: true, ExclusiveStartKey: { asignacionId: 'pagina-1' },
     }));
   });
 
@@ -138,11 +148,19 @@ describe('Repositorio: asignaciones', () => {
     );
     expect(commandMocks.TransactWriteCommand).toHaveBeenCalledWith({ TransactItems: expect.arrayContaining([
       { Put: expect.objectContaining({ TableName: 'internal-marketplace-asignaciones-dev', Item: expect.objectContaining({ porcentajeDedicacion: 40, estado: 'ACTIVA' }), ConditionExpression: 'attribute_not_exists(asignacionId)' }) },
-      { ConditionCheck: expect.objectContaining({ TableName: 'internal-marketplace-proyectos-dev',
+      { Update: expect.objectContaining({ TableName: 'internal-marketplace-proyectos-dev',
         ConditionExpression: expect.stringContaining('#lider <> :usuario'),
         ExpressionAttributeValues: expect.objectContaining({ ':usuario': 'u-colaborador', ':activo': 'ACTIVO' }),
       }) },
       { Update: expect.objectContaining({ TableName: 'internal-marketplace-colaboradores-dev', ExpressionAttributeValues: expect.objectContaining({ ':delta': 40, ':max': 60 }) }) },
+      { ConditionCheck: expect.objectContaining({
+        TableName: 'internal-marketplace-postulaciones-dev',
+        ConditionExpression: expect.stringContaining('#estado <> :pendiente'),
+      }) },
+      { ConditionCheck: expect.objectContaining({
+        TableName: 'internal-marketplace-usuarios-dev',
+        ConditionExpression: '#estado = :activo',
+      }) },
     ]) });
     expect(asignacion.asignacionId).toBeDefined();
     const { idAsignacionUnica } = require('../src/services/dedicacion.service');
@@ -150,6 +168,24 @@ describe('Repositorio: asignaciones', () => {
     expect(idAsignacionUnica('p1', 'c1')).not.toBe(idAsignacionUnica('p1', 'c2'));
     expect(cache.eliminar).toHaveBeenCalledWith(expect.stringMatching(/^asignacion:/));
     expect(cache.eliminarPorPrefijo).toHaveBeenCalledWith('asignaciones:');
+  });
+
+  test('W07 no crea una asignación directa si aparece una postulación pendiente concurrente', async () => {
+    commandMocks.TransactWriteCommand.mockRejectedValueOnce(Object.assign(
+      new Error('Existe una postulación pendiente'), { name: 'TransactionCanceledException' },
+    ));
+    await expect(repo.crearAsignacion({
+      colaboradorId: 'c1', proyectoId: 'p1', porcentajeDedicacion: 20, horasAsignadas: 15,
+    })).rejects.toMatchObject({ codigo: 409 });
+    expect(commandMocks.TransactWriteCommand).toHaveBeenCalledWith({
+      TransactItems: expect.arrayContaining([
+        { ConditionCheck: expect.objectContaining({
+          TableName: 'internal-marketplace-postulaciones-dev',
+          Key: { proyectoId: 'p1', postulacionKey: 'POSTULACION#c1' },
+        }) },
+      ]),
+    });
+    expect(cache.eliminarPorPrefijo).not.toHaveBeenCalled();
   });
 
   test('convierte un conflicto transaccional concurrente en HTTP 409 sin invalidar caché', async () => {
@@ -317,6 +353,91 @@ describe('Repositorio: asignaciones', () => {
       ]),
     });
     expect(commandMocks.DeleteCommand).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    [{ horasAsignadas: -1 }, 'horas asignadas negativas'],
+    [{ horasAsignadas: 5 }, 'horas asignadas menores a las completadas'],
+    [{ horasCompletadas: -1 }, 'horas completadas negativas'],
+    [{ horasCompletadas: 51 }, 'horas completadas superiores a las asignadas'],
+  ])('W09 rechaza %s (%s)', async cambios => {
+    const existente = {
+      asignacionId: 'a1', colaboradorId: 'c1', proyectoId: 'p1',
+      estado: 'ACTIVA', horasAsignadas: 50, horasCompletadas: 10, porcentajeDedicacion: 30,
+    };
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: existente });
+    await expect(repo.actualizarAsignacion('a1', cambios)).rejects.toMatchObject({ codigo: 400 });
+    expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
+  });
+
+  test('W09 impide modificar una asignación finalizada', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
+      asignacionId: 'a1', colaboradorId: 'c1', proyectoId: 'p1',
+      estado: 'FINALIZADA', horasAsignadas: 50, horasCompletadas: 40, porcentajeDedicacion: 30,
+    } });
+    await expect(repo.actualizarAsignacion('a1', { horasCompletadas: 45 }))
+      .rejects.toMatchObject({ codigo: 404 });
+    expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
+  });
+
+  test('W08 convierte cambios concurrentes en conflicto sin modificar la reserva', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
+      asignacionId: 'a1', proyectoId: 'p1', colaboradorId: 'c1',
+      estado: 'ACTIVA', porcentajeDedicacion: 40, horasAsignadas: 50, horasCompletadas: 10,
+    } });
+    commandMocks.TransactWriteCommand.mockRejectedValueOnce(Object.assign(
+      new Error('Versión anterior cambió'), { name: 'TransactionCanceledException' },
+    ));
+    await expect(repo.actualizarAsignacion('a1', {
+      porcentajeDedicacion: 60, horasAsignadas: 60,
+    })).rejects.toMatchObject({ codigo: 409 });
+    expect(commandMocks.TransactWriteCommand).toHaveBeenCalledWith({
+      TransactItems: expect.arrayContaining([
+        { Update: expect.objectContaining({
+          TableName: 'internal-marketplace-asignaciones-dev',
+          ConditionExpression: expect.stringContaining('horasCompletadas = :completadasPrevias'),
+        }) },
+      ]),
+    });
+    expect(cache.eliminarPorPrefijo).not.toHaveBeenCalled();
+  });
+
+  test('W08 libera el contador de actividad del proyecto al finalizar una asignación', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
+      asignacionId: 'a1', proyectoId: 'p1', colaboradorId: 'c1',
+      estado: 'ACTIVA', porcentajeDedicacion: 40,
+    } });
+    await repo.finalizarAsignacion('a1');
+    expect(commandMocks.TransactWriteCommand).toHaveBeenCalledWith({
+      TransactItems: expect.arrayContaining([
+        { Update: expect.objectContaining({
+          TableName: 'internal-marketplace-proyectos-dev',
+          ExpressionAttributeValues: expect.objectContaining({ ':delta': -1 }),
+        }) },
+      ]),
+    });
+  });
+
+  test('W06 rechaza asignaciones sin habilidades obligatorias', async () => {
+    dedicacion.verificarHabilidadesObligatorias.mockRejectedValueOnce(
+      new ErrorApp('No cumple las habilidades obligatorias', 409, CODIGOS.CONFLICTO));
+    await expect(repo.crearAsignacion({
+      colaboradorId: 'c1', proyectoId: 'p1', porcentajeDedicacion: 25,
+      horasAsignadas: 20,
+    })).rejects.toMatchObject({ codigo: 409 });
+    expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
+  });
+
+  test('W04 rechaza asignaciones cuando la cuenta está desactivada', async () => {
+    commandMocks.GetCommand.mockImplementation(async input => {
+      if (input.TableName === 'internal-marketplace-usuarios-dev') {
+        return { Item: { usuarioId: 'u-colaborador', estado: 'INACTIVO' } };
+      }
+      return { Item: input.TableName === 'internal-marketplace-proyectos-dev' ? PROYECTO : COLABORADOR };
+    });
+    await expect(repo.crearAsignacion({
+      colaboradorId: 'c1', proyectoId: 'p1', porcentajeDedicacion: 25, horasAsignadas: 20,
+    })).rejects.toMatchObject({ codigo: 409 });
   });
 });
 

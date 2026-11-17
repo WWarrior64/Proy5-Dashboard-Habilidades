@@ -18,6 +18,8 @@ Gestión de proyectos internos. Almacena los requerimientos de los proyectos que
 | fechaInicio | No | String (ISO 8601) | Fecha prevista de inicio. |
 | fechaFin | No | String (ISO 8601) | Fecha prevista de finalización. |
 | estado | Sí | String | BORRADOR, ACTIVO, PAUSADO, COMPLETADO o CANCELADO. |
+| asignacionesActivas | Sí para registros nuevos | Number | Contador de asignaciones en estado ACTIVA, actualizado mediante transacciones; los históricos requieren reconciliación. |
+| requisitosRevision | Sí para registros nuevos | Number | Revisión de requisitos utilizada para prevenir eliminaciones simultáneas de la última habilidad. |
 | fechaPublicacion | No | String (ISO 8601) | Primera activación del proyecto desde `BORRADOR`, registrada por el backend; los borradores nuevos carecen de ella. |
 | fechaCreacion | Sí | String (ISO 8601) | Fecha de creación. |
 | fechaActualizacion | Sí | String (ISO 8601) | Fecha de última modificación. |
@@ -41,5 +43,7 @@ Gestión de proyectos internos. Almacena los requerimientos de los proyectos que
 - Los proyectos nuevos se guardan primero como `BORRADOR` y no pueden crearse directamente como `ACTIVO`. Antes de publicar deben tener al menos una habilidad requerida en ProyectoHabilidad. Al activarse se fija la primera `fechaPublicacion` y no se sustituye durante ediciones posteriores.
 - Las horas requeridas representan el total de horas que necesita el proyecto. Si no hay `fechaInicio`/`fechaFin` planificadas, el frontend muestra como inicio la fecha de publicación y estima el fin usando 8 horas por jornada de lunes a viernes, sin descontar festivos. Ese fin **es una estimación visual**, no un campo `fechaFin` automáticamente persistido.
 - Los proyectos cancelados y completados se conservan en la base de datos; las vistas de gestión muestran los proyectos vigentes por defecto, permitiendo revelar los históricos mediante filtros.
+- Transiciones válidas: `BORRADOR → ACTIVO/CANCELADO`, `ACTIVO → PAUSADO/COMPLETADO/CANCELADO` y `PAUSADO → ACTIVO/COMPLETADO/CANCELADO`. Los estados `COMPLETADO` y `CANCELADO` son terminales. Para cerrarlos se requiere `asignacionesActivas = 0`.
+- Los cambios de estado y de requisitos comprueban condiciones concurrentes mediante DynamoDB. Las nuevas relaciones y asignaciones deben respetar el estado vigente del proyecto.
 - Las habilidades requeridas se almacenan en ProyectoHabilidad, no como una lista sin estructura.
 - El mismo usuario no puede liderar y participar como colaborador en un proyecto que dirige; sí puede participar en proyectos liderados por otras personas.

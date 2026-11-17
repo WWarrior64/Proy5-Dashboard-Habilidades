@@ -75,7 +75,8 @@ suite('Contratos y concurrencia con DynamoDB Local', () => {
     await habilidades.actualizar('h1', { nombre: 'Node' });
     expect((await habilidades.obtenerPorNombreNormalizado('node')).habilidadId).toBe('h1');
     await relaciones.asociar({ colaboradorId: 'col1', habilidadId: 'h1', nivel: 'SENIOR' });
-    expect((await relaciones.listarPorHabilidad('h1')).items).toHaveLength(1);
+    await relaciones.asociar({ colaboradorId: 'col2', habilidadId: 'h1', nivel: 'MID' });
+    expect((await relaciones.listarPorHabilidad('h1')).items).toHaveLength(2);
     await proyectos.crearProyecto({ proyectoId: 'p1', nombre: 'Proyecto', descripcion: 'Prueba', liderId: 'u1', horasRequeridas: 100, creadoPor: 'u1', estado: 'BORRADOR' });
     await proyectoHabilidad.asociarHabilidad({ proyectoId: 'p1', habilidadId: 'h1', nivelMinimo: 'JUNIOR', esObligatoria: true, peso: 1 });
     await proyectos.cambiarEstado('p1', 'ACTIVO');

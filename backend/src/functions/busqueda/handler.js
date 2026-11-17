@@ -123,6 +123,21 @@ async function buscarCandidatos(event, context) {
       }
     }
 
+    // Cuando todos los requisitos son opcionales, también hay candidatos con cero coincidencias.
+    // La paginación evita limitar la evaluación a la primera página del catálogo.
+    if (params.proyectoId && requisitos.every(r => r.esObligatoria === false)) {
+      let cursor;
+      do {
+        const pagina = await colaboradoresRepository.listar({ estado: 'ACTIVO', limit: 100, lastKey: cursor });
+        for (const persona of pagina.items || []) {
+          if (persona.colaboradorId && !colaboradoresVistos.has(persona.colaboradorId)) {
+            colaboradoresVistos.set(persona.colaboradorId, []);
+          }
+        }
+        cursor = pagina.lastKey;
+      } while (cursor);
+    }
+
     // Paso 2: Para cada colaborador, obtener datos completos y evaluar elegibilidad
     const candidatos = [];
     const usuariosCache = new Map();
@@ -138,6 +153,7 @@ async function buscarCandidatos(event, context) {
         }
         usuario = usuariosCache.get(colaborador.usuarioId);
       }
+      if (!colaborador.usuarioId || usuario?.estado !== 'ACTIVO') continue;
 
       const disponibilidad = verificarDisponibilidad(colaborador, usuario, params.considerarDisponibilidad);
       if (!disponibilidad.disponible) continue;

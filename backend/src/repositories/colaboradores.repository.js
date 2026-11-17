@@ -6,11 +6,51 @@ const {
   QueryCommand,
   ScanCommand,
 } = require('../config/dynamodb');
-const { tableColaboradores } = require('../config/environment');
+const { tableColaboradores, tableUsuarios, tableAsignaciones } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
 const { randomUUID } = require('node:crypto');
 const usuariosRepository = require('./usuarios.repository');
 const cargosRepository = require('./cargos.repository');
+const { recorrerPaginas } = require('../utils/paginacion');
+
+async function obtenerPerfilPorCuentaConsistente(usuarioId) {
+  const reserva = await dynamoDb.send(new GetCommand({
+    TableName: tableColaboradores,
+    Key: { colaboradorId: 'USUARIO#' + usuarioId },
+    ConsistentRead: true,
+  }));
+  if (reserva.Item) {
+    if (!reserva.Item.propietarioColaboradorId) {
+      throw new ErrorApp('Reserva de perfil incompleta; debe reconciliarse', 409, CODIGOS.CONFLICTO);
+    }
+    const perfil = await dynamoDb.send(new GetCommand({
+      TableName: tableColaboradores,
+      Key: { colaboradorId: reserva.Item.propietarioColaboradorId },
+      ConsistentRead: true,
+    }));
+    if (!perfil.Item || perfil.Item.usuarioId !== usuarioId) {
+      throw new ErrorApp('Reserva de perfil inconsistente; debe reconciliarse', 409, CODIGOS.CONFLICTO);
+    }
+    return perfil.Item;
+  }
+  // Fallback exclusivo de perfiles históricos sin reserva. El GSI1 no permite
+  // confirmar unicidad porque sus lecturas son eventualmente consistentes.
+  const encontrados = [];
+  await recorrerPaginas(cursor => dynamoDb.send(new ScanCommand({
+    TableName: tableColaboradores,
+    ConsistentRead: true,
+    FilterExpression: '#usuario = :usuario',
+    ExpressionAttributeNames: { '#usuario': 'usuarioId' },
+    ExpressionAttributeValues: { ':usuario': usuarioId },
+    ...(cursor && { ExclusiveStartKey: cursor }),
+  })), items => {
+    encontrados.push(...items);
+    if (encontrados.length > 1) {
+      throw new ErrorApp('Un usuario tiene múltiples perfiles históricos; requiere reconciliación', 409, CODIGOS.CONFLICTO);
+    }
+  });
+  return encontrados[0] || null;
+}
 
 async function validarReglas(data, colaboradorIdExcluir = null) {
   const usuario = await usuariosRepository.obtenerPorId(data.usuarioId);
@@ -29,7 +69,7 @@ async function validarReglas(data, colaboradorIdExcluir = null) {
     throw new ErrorApp('No se puede asignar un colaborador a un cargo inactivo', 400, CODIGOS.VALIDACION);
   }
 
-  const existentePorUsuario = await obtenerPorUsuarioId(data.usuarioId);
+  const existentePorUsuario = await obtenerPerfilPorCuentaConsistente(data.usuarioId);
   if (existentePorUsuario && existentePorUsuario.colaboradorId !== colaboradorIdExcluir) {
     throw new ErrorApp('El usuario ya tiene un perfil de colaborador asociado', 409, CODIGOS.CONFLICTO);
   }
@@ -51,6 +91,7 @@ async function crear(data) {
     nombre,
     'rolProfesional#nombre': `${data.rolProfesional}#${nombre}`,
     dedicacionReservada: 0,
+    habilidadesRevision: 0,
     disponibilidad: data.disponibilidad || 'DISPONIBLE',
     estado: data.estado || 'ACTIVO',
     fechaAlta: new Date().toISOString(),
@@ -63,6 +104,13 @@ async function crear(data) {
     // Guardar la reserva de usuario en la misma transacción impide que dos
     // solicitudes simultáneas creen perfiles para una misma cuenta.
     await dynamoDb.send(new TransactWriteCommand({ TransactItems: [
+      { ConditionCheck: {
+        TableName: tableUsuarios,
+        Key: { usuarioId: data.usuarioId },
+        ConditionExpression: '#estado = :activo',
+        ExpressionAttributeNames: { '#estado': 'estado' },
+        ExpressionAttributeValues: { ':activo': 'ACTIVO' },
+      } },
       { Put: { TableName: tableColaboradores, Item: item,
         ConditionExpression: 'attribute_not_exists(colaboradorId)' } },
       { Put: { TableName: tableColaboradores,
@@ -171,6 +219,22 @@ async function actualizar(colaboradorId, data) {
     throw new ErrorApp('Colaborador no encontrado', 404, CODIGOS.NO_ENCONTRADO);
   }
 
+  if (data.estado === 'INACTIVO' && existente.estado !== 'INACTIVO') {
+    if (existente.dedicacionReservada !== 0) {
+      throw new ErrorApp('Debe finalizar las asignaciones y reconciliar la dedicación antes de dar de baja', 409, CODIGOS.CONFLICTO);
+    }
+    const activas = await dynamoDb.send(new QueryCommand({
+      TableName: tableAsignaciones, IndexName: 'GSI1',
+      KeyConditionExpression: '#colaborador = :colaborador AND begins_with(#clave, :activa)',
+      ExpressionAttributeNames: { '#colaborador': 'colaboradorId', '#clave': 'colaboradorFechaKey' },
+      ExpressionAttributeValues: { ':colaborador': colaboradorId, ':activa': 'ACTIVA#' },
+      Limit: 1,
+    }));
+    if (activas.Items?.length) {
+      throw new ErrorApp('Finalice o desvincule las asignaciones activas antes de dar de baja', 409, CODIGOS.CONFLICTO);
+    }
+  }
+
   if (data.estado === 'ACTIVO' && existente.estado === 'INACTIVO') {
     const cuenta = await usuariosRepository.obtenerPorId(existente.usuarioId);
     if (!cuenta || cuenta.estado !== 'ACTIVO') {
@@ -230,19 +294,48 @@ async function actualizar(colaboradorId, data) {
   expressionAttributeNames['#fechaActualizacion'] = 'fechaActualizacion';
   expressionAttributeValues[':fechaActualizacion'] = new Date().toISOString();
 
-  const result = await dynamoDb.send(
-    new UpdateCommand({
-      TableName: tableColaboradores,
-      Key: { colaboradorId },
-      UpdateExpression: `SET ${updateParts.join(', ')}`,
-      ConditionExpression: 'attribute_exists(colaboradorId)',
-      ExpressionAttributeNames: expressionAttributeNames,
-      ExpressionAttributeValues: expressionAttributeValues,
-      ReturnValues: 'ALL_NEW',
-    })
-  );
+  const parametros = {
+    TableName: tableColaboradores,
+    Key: { colaboradorId },
+    UpdateExpression: `SET ${updateParts.join(', ')}`,
+    ConditionExpression: 'attribute_exists(colaboradorId)' +
+      (data.estado !== undefined ? ' AND #estado = :estadoAnterior' : '') +
+      (data.estado === 'INACTIVO' ? ' AND dedicacionReservada = :cero' : ''),
+    ExpressionAttributeNames: expressionAttributeNames,
+    ExpressionAttributeValues: expressionAttributeValues,
+  };
+  if (data.estado !== undefined) expressionAttributeValues[':estadoAnterior'] = existente.estado;
+  if (data.estado === 'INACTIVO') expressionAttributeValues[':cero'] = 0;
 
-  return result.Attributes;
+  try {
+    if (data.estado === 'ACTIVO') {
+      // Evita reincorporar un perfil mientras otra operación desactiva su cuenta.
+      await dynamoDb.send(new TransactWriteCommand({ TransactItems: [
+        { ConditionCheck: {
+          TableName: tableUsuarios, Key: { usuarioId: existente.usuarioId },
+          ConditionExpression: '#estado = :activo',
+          ExpressionAttributeNames: { '#estado': 'estado' },
+          ExpressionAttributeValues: { ':activo': 'ACTIVO' },
+        } },
+        { Update: parametros },
+      ] }));
+      return {
+        ...existente, ...data, fechaActualizacion: expressionAttributeValues[':fechaActualizacion'],
+        ...(existente.estado === 'INACTIVO' && {
+          fechaReincorporacion: expressionAttributeValues[':fechaReincorporacion'],
+          ultimaFechaBaja: existente.fechaBaja || existente.ultimaFechaBaja,
+          fechaBaja: null,
+        }),
+      };
+    }
+    const result = await dynamoDb.send(new UpdateCommand({ ...parametros, ReturnValues: 'ALL_NEW' }));
+    return result.Attributes;
+  } catch (err) {
+    if (['ConditionalCheckFailedException', 'TransactionCanceledException', 'TransactionConflictException'].includes(err.name)) {
+      throw new ErrorApp('El perfil, su cuenta o la dedicación cambiaron; recargue antes de reintentar', 409, CODIGOS.CONFLICTO);
+    }
+    throw err;
+  }
 }
 
 async function darBaja(colaboradorId) {

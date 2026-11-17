@@ -88,6 +88,17 @@ Resources:
             TableName: !Ref UsuariosTable
         - DynamoDBReadPolicy:
             TableName: !Ref ColaboradoresTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref AsignacionesTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt ColaboradoresTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource: !Sub '${AsignacionesTable.Arn}/index/*'
         # La creación de cuentas se hace en la Lambda de Usuarios, no desde React.
         - Statement:
             - Effect: Allow
@@ -171,6 +182,17 @@ Resources:
             TableName: !Ref ColaboradorHabilidadTable
         - DynamoDBReadPolicy:
             TableName: !Ref HabilidadesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref AsignacionesTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:ConditionCheckItem
+              Resource: !GetAtt UsuariosTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource: !Sub '${AsignacionesTable.Arn}/index/*'
       Events:
         Route1:
           Type: Api
@@ -370,6 +392,8 @@ Resources:
             TableName: !Ref UsuariosTable
         - DynamoDBReadPolicy:
             TableName: !Ref ProyectosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProyectoHabilidadTable
       Events:
         Route1:
           Type: Api
@@ -510,6 +534,22 @@ Resources:
             TableName: !Ref AsignacionesTable
         - DynamoDBReadPolicy:
             TableName: !Ref UsuariosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProyectoHabilidadTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradorHabilidadTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt ProyectosTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:ConditionCheckItem
+              Resource:
+                - !GetAtt UsuariosTable.Arn
+                - !GetAtt ColaboradoresTable.Arn
+                - !GetAtt AsignacionesTable.Arn
       Events:
         Route1:
           Type: Api
@@ -576,6 +616,21 @@ Resources:
             TableName: !Ref PostulacionesTable
         - DynamoDBReadPolicy:
             TableName: !Ref UsuariosTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProyectoHabilidadTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ColaboradorHabilidadTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt ProyectosTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:ConditionCheckItem
+              Resource:
+                - !GetAtt UsuariosTable.Arn
+                - !GetAtt PostulacionesTable.Arn
       Events:
         Route1:
           Type: Api
