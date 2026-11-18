@@ -474,6 +474,50 @@
               }
             }
           ]
+        },
+        {
+          "name": "Registrar ultimo acceso del usuario autenticado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/usuarios/yo/acceso",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "usuarios",
+                "yo",
+                "acceso"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
         }
       ]
     },
@@ -1010,6 +1054,74 @@
               }
             }
           ]
+        },
+        {
+          "name": "Obtener mi ficha de colaborador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200 o 404)\", function () {",
+                  "    pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/colaboradores/yo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "colaboradores",
+                "yo"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Dar de baja colaborador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200 o 409)\", function () {",
+                  "    pm.expect([200, 409]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/colaboradores/{{colaboradorId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "colaboradores",
+                "{{colaboradorId}}"
+              ]
+            }
+          }
         }
       ]
     },
@@ -2204,6 +2316,74 @@
               }
             }
           ]
+        },
+        {
+          "name": "Listar proyectos activos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/proyectos/activos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "proyectos",
+                "activos"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancelar / eliminar proyecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200 o 409)\", function () {",
+                  "    pm.expect([200, 409]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/proyectos/{{proyectoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "proyectos",
+                "{{proyectoId}}"
+              ]
+            }
+          }
         }
       ]
     },
@@ -2560,6 +2740,52 @@
               }
             }
           ]
+        },
+        {
+          "name": "Retirar postulacion de un proyecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200 o 400 o 404)\", function () {",
+                  "    pm.expect([200, 400, 404]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/proyectos/{{proyectoId}}/postulaciones/{{colaboradorId}}/retirar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "proyectos",
+                "{{proyectoId}}",
+                "postulaciones",
+                "{{colaboradorId}}",
+                "retirar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
         }
       ]
     },
@@ -2916,6 +3142,144 @@
               }
             }
           ]
+        },
+        {
+          "name": "Obtener mis asignaciones",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/asignaciones/mias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "asignaciones",
+                "mias"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar asignaciones de un colaborador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/colaboradores/{{colaboradorId}}/asignaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "colaboradores",
+                "{{colaboradorId}}",
+                "asignaciones"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar asignaciones de un proyecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/proyectos/{{proyectoId}}/asignaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "proyectos",
+                "{{proyectoId}}",
+                "asignaciones"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Desvincular asignacion",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200 o 404)\", function () {",
+                  "    pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/asignaciones/{{asignacionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "asignaciones",
+                "{{asignacionId}}"
+              ]
+            }
+          }
         }
       ]
     },
@@ -2924,17 +3288,28 @@
       "item": [
         {
           "name": "Buscar colaboradores por habilidad",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
+            "header": [],
             "url": {
-              "raw": "{{baseUrl}}/busqueda/colaboradores?habilidadId={{habilidadId}}",
+              "raw": "{{baseUrl}}/busqueda/colaboradores?habilidades={{habilidadId}}&nivelMinimo=JUNIOR&tipoCoincidencia=todas",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2944,66 +3319,45 @@
               ],
               "query": [
                 {
-                  "key": "habilidadId",
+                  "key": "habilidades",
                   "value": "{{habilidadId}}"
+                },
+                {
+                  "key": "nivelMinimo",
+                  "value": "JUNIOR"
+                },
+                {
+                  "key": "tipoCoincidencia",
+                  "value": "todas"
                 }
               ]
             }
-          },
+          }
+        },
+        {
+          "name": "Buscar colaboradores por nivel minimo",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Buscar colaboradores por habilidad - Código de estado válido\", function () {",
-                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
                   "});",
-                  "",
-                  "pm.test(\"Buscar colaboradores por habilidad - Respuesta en formato JSON válido\", function () {",
-                  "    pm.response.to.be.json;",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
                   "    const json = pm.response.json();",
-                  "    pm.expect(json).to.be.an(\"object\");",
-                  "    if (pm.response.code < 400) {",
-                  "        pm.expect(json).to.have.property(\"datos\");",
-                  "    }",
-                  "});",
-                  "",
-                  "// Captura automática de IDs para encadenar peticiones",
-                  "try {",
-                  "    const res = pm.response.json();",
-                  "    const datos = res && res.datos ? res.datos : null;",
-                  "    if (datos) {",
-                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
-                  "        if (item && typeof item === \"object\") {",
-                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
-                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
-                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
-                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
-                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
-                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
-                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
-                  "        }",
-                  "    }",
-                  "} catch (e) {}"
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
                 ]
               }
             }
-          ]
-        },
-        {
-          "name": "Buscar colaboradores por nivel",
+          ],
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
+            "header": [],
             "url": {
-              "raw": "{{baseUrl}}/busqueda/colaboradores?nivel=SENIOR",
+              "raw": "{{baseUrl}}/busqueda/colaboradores?habilidades={{habilidadId}}&nivelMinimo=MID&considerarDisponibilidad=true&limit=20",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3013,66 +3367,97 @@
               ],
               "query": [
                 {
-                  "key": "nivel",
-                  "value": "SENIOR"
+                  "key": "habilidades",
+                  "value": "{{habilidadId}}"
+                },
+                {
+                  "key": "nivelMinimo",
+                  "value": "MID"
+                },
+                {
+                  "key": "considerarDisponibilidad",
+                  "value": "true"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
                 }
               ]
             }
-          },
+          }
+        },
+        {
+          "name": "Buscar candidatos por proyecto (contrato Jorge)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Buscar colaboradores por nivel - Código de estado válido\", function () {",
-                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "pm.test(\"Estado HTTP esperado (200 o 404)\", function () {",
+                  "    pm.expect([200, 404]).to.include(pm.response.code);",
                   "});",
-                  "",
-                  "pm.test(\"Buscar colaboradores por nivel - Respuesta en formato JSON válido\", function () {",
-                  "    pm.response.to.be.json;",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
                   "    const json = pm.response.json();",
-                  "    pm.expect(json).to.be.an(\"object\");",
-                  "    if (pm.response.code < 400) {",
-                  "        pm.expect(json).to.have.property(\"datos\");",
-                  "    }",
-                  "});",
-                  "",
-                  "// Captura automática de IDs para encadenar peticiones",
-                  "try {",
-                  "    const res = pm.response.json();",
-                  "    const datos = res && res.datos ? res.datos : null;",
-                  "    if (datos) {",
-                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
-                  "        if (item && typeof item === \"object\") {",
-                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
-                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
-                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
-                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
-                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
-                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
-                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
-                  "        }",
-                  "    }",
-                  "} catch (e) {}"
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
                 ]
               }
             }
-          ]
-        },
-        {
-          "name": "Buscar por coincidencia de habilidades",
+          ],
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
+            "header": [],
             "url": {
-              "raw": "{{baseUrl}}/busqueda/proyectos?habilidadId={{habilidadId}}",
+              "raw": "{{baseUrl}}/busqueda/colaboradores?proyectoId={{proyectoId}}&considerarDisponibilidad=true&limit=25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "busqueda",
+                "colaboradores"
+              ],
+              "query": [
+                {
+                  "key": "proyectoId",
+                  "value": "{{proyectoId}}"
+                },
+                {
+                  "key": "considerarDisponibilidad",
+                  "value": "true"
+                },
+                {
+                  "key": "limit",
+                  "value": "25"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Buscar proyectos activos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/busqueda/proyectos?estado=ACTIVO",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3082,52 +3467,52 @@
               ],
               "query": [
                 {
-                  "key": "habilidadId",
-                  "value": "{{habilidadId}}"
+                  "key": "estado",
+                  "value": "ACTIVO"
                 }
               ]
             }
-          },
+          }
+        },
+        {
+          "name": "Buscar habilidades en catalogo (D02)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Buscar por coincidencia de habilidades - Código de estado válido\", function () {",
-                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
                   "});",
-                  "",
-                  "pm.test(\"Buscar por coincidencia de habilidades - Respuesta en formato JSON válido\", function () {",
-                  "    pm.response.to.be.json;",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
                   "    const json = pm.response.json();",
-                  "    pm.expect(json).to.be.an(\"object\");",
-                  "    if (pm.response.code < 400) {",
-                  "        pm.expect(json).to.have.property(\"datos\");",
-                  "    }",
-                  "});",
-                  "",
-                  "// Captura automática de IDs para encadenar peticiones",
-                  "try {",
-                  "    const res = pm.response.json();",
-                  "    const datos = res && res.datos ? res.datos : null;",
-                  "    if (datos) {",
-                  "        const item = Array.isArray(datos) ? datos[0] : (Array.isArray(datos.items) ? datos.items[0] : datos);",
-                  "        if (item && typeof item === \"object\") {",
-                  "            if (item.usuarioId) pm.environment.set(\"usuarioId\", item.usuarioId);",
-                  "            if (item.colaboradorId) pm.environment.set(\"colaboradorId\", item.colaboradorId);",
-                  "            if (item.cargoId) pm.environment.set(\"cargoId\", item.cargoId);",
-                  "            if (item.habilidadId) pm.environment.set(\"habilidadId\", item.habilidadId);",
-                  "            if (item.proyectoId) pm.environment.set(\"proyectoId\", item.proyectoId);",
-                  "            if (item.postulacionId) pm.environment.set(\"postulacionId\", item.postulacionId);",
-                  "            if (item.asignacionId) pm.environment.set(\"asignacionId\", item.asignacionId);",
-                  "        }",
-                  "    }",
-                  "} catch (e) {}"
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
                 ]
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/busqueda/habilidades?estado=ACTIVA",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "busqueda",
+                "habilidades"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "ACTIVA"
+                }
+              ]
+            }
+          }
         }
       ]
     },
@@ -3457,6 +3842,427 @@
               }
             }
           ]
+        },
+        {
+          "name": "Obtener actividad reciente del dashboard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/actividad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "actividad"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Administración",
+      "item": [
+        {
+          "name": "Obtener configuracion del sistema",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/administracion/configuracion",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "administracion",
+                "configuracion"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar configuracion del sistema",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/administracion/configuracion",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "administracion",
+                "configuracion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parametros\": [\n    {\n      \"id\": \"limite-dedicacion\",\n      \"nombre\": \"Limite de dedicacion\",\n      \"descripcion\": \"Maximo permitido por colaborador\",\n      \"valor\": \"100\",\n      \"tipo\": \"porcentaje\"\n    },\n    {\n      \"id\": \"nombre-organizacion\",\n      \"nombre\": \"Organizacion\",\n      \"descripcion\": \"Nombre institucional\",\n      \"valor\": \"Internal Marketplace\",\n      \"tipo\": \"texto\"\n    }\n  ],\n  \"catalogos\": [\n    {\n      \"id\": \"niveles-habilidad\",\n      \"nombre\": \"Niveles\",\n      \"descripcion\": \"Niveles de dominio\",\n      \"valores\": [\n        \"Junior\",\n        \"Mid\",\n        \"Senior\"\n      ]\n    },\n    {\n      \"id\": \"estados-proyecto\",\n      \"nombre\": \"Estados\",\n      \"descripcion\": \"Ciclo de vida de proyectos\",\n      \"valores\": [\n        \"Borrador\",\n        \"Activo\",\n        \"Pausado\",\n        \"Completado\",\n        \"Cancelado\"\n      ]\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Obtener roles y permisos descriptivos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/administracion/roles-permisos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "administracion",
+                "roles-permisos"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar roles y permisos descriptivos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/administracion/roles-permisos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "administracion",
+                "roles-permisos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roles\": [\n    {\n      \"id\": \"EMPLEADO\",\n      \"nombre\": \"Empleado\",\n      \"descripcion\": \"Colaborador interno\"\n    },\n    {\n      \"id\": \"RRHH\",\n      \"nombre\": \"RRHH\",\n      \"descripcion\": \"Gestion de talento\"\n    },\n    {\n      \"id\": \"LIDER_PROYECTO\",\n      \"nombre\": \"Lider de proyecto\",\n      \"descripcion\": \"Gestion de proyectos y asignaciones\"\n    },\n    {\n      \"id\": \"ADMINISTRADOR\",\n      \"nombre\": \"Administrador\",\n      \"descripcion\": \"Control total del sistema\"\n    }\n  ],\n  \"permisos\": [\n    {\n      \"id\": \"gestion-usuarios\",\n      \"nombre\": \"Gestion de usuarios\",\n      \"descripcion\": \"Crear y administrar cuentas\",\n      \"roles\": [\n        \"ADMINISTRADOR\"\n      ]\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Consultar historial de auditoria",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (200)\", function () {",
+                  "    pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/administracion/auditoria?limite=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "administracion",
+                "auditoria"
+              ],
+              "query": [
+                {
+                  "key": "limite",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Validaciones y Casos Negativos (D04)",
+      "item": [
+        {
+          "name": "Acceso denegado sin token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Debe rechazar peticion sin token con 401\", function () { pm.expect(pm.response.code).to.equal(401); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/usuarios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "usuarios"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Rechazar cambio directo de correo en perfil (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (400)\", function () {",
+                  "    pm.expect([400]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/usuarios/{{usuarioId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "usuarios",
+                "{{usuarioId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"otro.correo@empresa.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Recurso inexistente en proyectos (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (404)\", function () {",
+                  "    pm.expect([404]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/proyectos/proy_inexistente_99999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "proyectos",
+                "proy_inexistente_99999"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Busqueda sin parametros obligatorios (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (400)\", function () {",
+                  "    pm.expect([400]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/busqueda/colaboradores",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "busqueda",
+                "colaboradores"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Asignacion con dedicacion superior al 100% (400/409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Estado HTTP esperado (400 o 409)\", function () {",
+                  "    pm.expect([400, 409]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Respuesta JSON con bandera success\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"success\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/asignaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "asignaciones"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proyectoId\": \"{{proyectoId}}\",\n  \"colaboradorId\": \"{{colaboradorId}}\",\n  \"porcentajeDedicacion\": 150,\n  \"rolEnProyecto\": \"Desarrollador\"\n}"
+            }
+          }
         }
       ]
     }
