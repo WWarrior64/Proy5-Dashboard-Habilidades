@@ -1,3 +1,4 @@
+import BrandName from '../../components/common/BrandName.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { BriefcaseBusiness, CheckCircle2, Clock3, UserRound, UsersRound } from 'lucide-react'
@@ -11,6 +12,7 @@ import { proyectosService } from '../../services/proyectos.service.js'
 import { asignacionesService } from '../../services/asignaciones.service.js'
 import { extractItems } from '../../utils/apiResponses.js'
 import { getApiErrorMessage } from '../../utils/apiErrors.js'
+import { etiquetaCodigo } from '../../utils/formatters.js'
 import './recursos-humanos-dashboard.css'
 
 // Resumen de demostración: los valores sirven para revisar el diseño del dashboard.
@@ -163,7 +165,7 @@ export default function RecursosHumanosDashboard() {
     <div className="emp-dashboard rrhh-dashboard">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de recursos humanos">
             {menu.map(([nombre, ruta]) => (
@@ -304,7 +306,7 @@ export default function RecursosHumanosDashboard() {
                   <Link to="/habilidades" className="rrhh-dashboard-row rrhh-dashboard-skill" key={item.id}>
                     <div className="rrhh-dashboard-row-copy">
                       <strong>{item.nombre}</strong>
-                      <p>{item.categoria}</p>
+                      <p>{etiquetaCodigo(item.categoria)}</p>
                     </div>
                     <span className="rrhh-dashboard-skill-count">{item.colaboradores} colaboradores</span>
                   </Link>

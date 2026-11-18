@@ -68,10 +68,9 @@
 
 .rrhh-colaboradores-panel-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
   margin-bottom: 14px;
 }
 
@@ -83,17 +82,45 @@
 }
 
 .rrhh-colaboradores-filters {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
-  gap: 10px;
+  gap: 12px 16px;
+  width: 100%;
   min-width: 0;
 }
+
+.rrhh-colaboradores-filters .rrhh-colaboradores-rol-filtro,
+.rrhh-colaboradores-filters .rrhh-colaboradores-filtro-inline,
+.rrhh-colaboradores-filters .estado-filtro-inline {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  gap: 8px;
+  min-width: 0;
+  color: #16255a;
+  font-size: 12px;
+  font-weight: 600;
+}
+.rrhh-colaboradores-filters .rrhh-colaboradores-rol-filtro select,
+.rrhh-colaboradores-filters .rrhh-colaboradores-filtro-inline select,
+.rrhh-colaboradores-filters .estado-filtro-inline select {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+.rrhh-colaboradores-filtro-inline span,
+.rrhh-colaboradores-rol-filtro span {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.rrhh-colaboradores-filters label select { max-width: 100%; }
 
 .rrhh-colaboradores-search {
   display: flex;
   align-items: center;
   gap: 6px;
-  width: 210px;
+  width: 100%;
   min-width: 0;
   height: 35px;
   padding: 0 10px;
@@ -173,6 +200,14 @@
 .rrhh-colaborador-identity {
   flex: 1;
   min-width: 0;
+}
+
+.rrhh-colaborador-cargo {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 400;
 }
 
 .rrhh-colaborador-identity h4 {
@@ -382,12 +417,12 @@
   .rrhh-colaboradores-page .emp-content.rrhh-colaboradores-content { padding: 14px; }
 }
 
+@media (max-width: 950px) {
+  .rrhh-colaboradores-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 700px) {
   .rrhh-colaboradores-grid { grid-template-columns: minmax(0, 1fr); }
-  .rrhh-colaboradores-panel-header { align-items: stretch; }
-  .rrhh-colaboradores-filters { width: 100%; }
-  .rrhh-colaboradores-search { flex: 1; width: auto; }
-  .rrhh-colaboradores-filters select { width: 155px; }
 }
 
 @media (max-width: 620px) {
@@ -412,8 +447,8 @@
   .rrhh-colaboradores-page .rrhh-colaboradores-metrics .emp-card-value { font-size: 20px; }
   .rrhh-colaboradores-heading { flex-wrap: wrap; }
   .rrhh-colaboradores-add { font-size: 11px; padding: 8px 10px; }
-  .rrhh-colaboradores-filters { flex-wrap: wrap; }
-  .rrhh-colaboradores-search, .rrhh-colaboradores-filters select { width: 100%; flex: 1 1 100%; }
+  .rrhh-colaboradores-filters { grid-template-columns: minmax(0, 1fr); }
+  .rrhh-colaboradores-search, .rrhh-colaboradores-filters label select { width: 100%; }
   .rrhh-colaborador-top { flex-wrap: wrap; }
   .rrhh-colaborador-estados { margin-left: auto; }
 }

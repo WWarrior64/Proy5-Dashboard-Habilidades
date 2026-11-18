@@ -13,7 +13,7 @@ const {
 
 const cache = require('../src/services/cache.service.js');
 
-describe('Script de mediciones de rendimiento - medirRendimiento.js (E07)', () => {
+describe('Script de mediciones de rendimiento - medirRendimiento.js', () => {
   beforeEach(() => {
     cache.limpiar();
     resetOperaciones();
@@ -57,7 +57,7 @@ describe('Script de mediciones de rendimiento - medirRendimiento.js (E07)', () =
   });
 
   describe('medirInvalidacion', () => {
-    it('invalida la caché tras escritura y obtiene el dato actualizado (T26)', async () => {
+    it('invalida la caché tras escritura y obtiene el dato actualizado', async () => {
       const reporte = await medirInvalidacion();
 
       expect(reporte.nombre).toBe('Invalidación inmediata tras escritura');

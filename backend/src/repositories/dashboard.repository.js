@@ -12,7 +12,7 @@ const ESTADOS_PROYECTO = ['BORRADOR', 'ACTIVO', 'PAUSADO', 'COMPLETADO', 'CANCEL
 const ESTADOS_POSTULACION = ['PENDIENTE', 'ACEPTADA', 'RECHAZADA', 'RETIRADA'];
 
 /*
- * Índices aprovechados por las consultas de dashboard (E03):
+ * Índices aprovechados por las consultas de dashboard:
  *   - Colaboradores:     GSI2 (estado)            → contarColaboradoresActivos (Query)
  *   - Proyectos:         GSI1 (estado)            → contarProyectosPorEstado / actividad (Query por estado)
  *   - Asignaciones:      GSI3 (estado)            → contarAsignacionesActivas / actividad (Query por estado)

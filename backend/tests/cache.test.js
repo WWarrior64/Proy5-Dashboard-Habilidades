@@ -3,7 +3,7 @@ const cache = require('../src/services/cache.service.js');
 
 const TTL_CORTO_MS = 60;
 
-describe('Caché de proceso por instancia (compatible con AWS Lambda - E01)', () => {
+describe('Caché de proceso por instancia (compatible con AWS Lambda)', () => {
   beforeEach(() => {
     // La caché está siempre activa (ya no se desactiva por AWS_LAMBDA_FUNCTION_NAME).
     // Cada test empieza con la caché vacía y contadores de estadística reiniciados.
@@ -198,14 +198,14 @@ describe('Caché de proceso por instancia (compatible con AWS Lambda - E01)', ()
     });
   });
 
-  describe('caso T26: invalidación inmediata tras escritura', () => {
+  describe('invalidación inmediata tras escritura', () => {
     test('lectura repetida con caché, escritura e invalidación: la siguiente lectura obtiene el dato actualizado', () => {
       // Primera lectura: miss y guarda versión 1 (simula repositorio leyendo DynamoDB)
       cache.guardar('cargos:list:ACTIVO:25:', { version: 1, items: [{ cargoId: 'c1' }] });
       let lectura = cache.obtener('cargos:list:ACTIVO:25:');
       expect(lectura.version).toBe(1);
 
-      // Escritura en el repositorio: invalida inmediatamente los prefijos afectados (E06)
+      // Escritura en el repositorio: invalida inmediatamente los prefijos afectados
       cache.eliminarPorPrefijo('cargos:list:');
       expect(cache.obtener('cargos:list:ACTIVO:25:')).toBeUndefined(); // dato obsoleto retirado
 

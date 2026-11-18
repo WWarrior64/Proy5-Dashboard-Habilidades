@@ -13,7 +13,7 @@ describe('F02: coincidencia y filtros del empleado', () => {
     const resultado = coincidenciaHabilidades([
       requisito('react', 'SENIOR', 3), requisito('sql', 'MID', 1),
     ], [skill('react', 'MID'), skill('sql', 'MID')])
-    expect(resultado.porcentaje).toBe(0)
+    expect(resultado.porcentaje).toBe(25)
     expect(resultado.cumpleObligatorias).toBe(false)
     expect(tieneAltaCoincidencia(resultado)).toBe(false)
   })
@@ -31,7 +31,7 @@ describe('F02: coincidencia y filtros del empleado', () => {
     const resultado = coincidenciaHabilidades([
       requisito('react', 'SENIOR', 1), requisito('sql', 'JUNIOR', 4, false),
     ], [skill('sql', 'MID')])
-    expect(resultado.porcentaje).toBe(0)
+    expect(resultado.porcentaje).toBe(80)
     expect(tieneAltaCoincidencia(resultado)).toBe(false)
   })
   it('si falló la consulta de requisitos no calcula porcentaje', () => {

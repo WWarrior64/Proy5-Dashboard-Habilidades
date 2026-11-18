@@ -31,7 +31,7 @@ beforeEach(() => {
   });
 });
 
-describe('W06: elegibilidad verificable por el backend', () => {
+describe('elegibilidad verificable por el backend', () => {
   test('acepta al candidato con la habilidad obligatoria y devuelve la puntuación', async () => {
     const resultado = await dedicacion.verificarHabilidadesObligatorias('p1', 'c1');
     expect(resultado.elegible).toBe(true);

@@ -104,7 +104,7 @@ describe('Repositorio: asignaciones', () => {
     expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
   });
 
-  test('W08 examina todas las páginas de la tabla base antes de aceptar una asignación histórica', async () => {
+  test('examina todas las páginas de la tabla base antes de aceptar una asignación histórica', async () => {
     commandMocks.ScanCommand
       .mockResolvedValueOnce({ Items: [], LastEvaluatedKey: { asignacionId: 'pagina-1' } })
       .mockResolvedValueOnce({ Items: [{ asignacionId: 'historica', colaboradorId: 'c1' }] });
@@ -170,7 +170,7 @@ describe('Repositorio: asignaciones', () => {
     expect(cache.eliminarPorPrefijo).toHaveBeenCalledWith('asignaciones:');
   });
 
-  test('W07 no crea una asignación directa si aparece una postulación pendiente concurrente', async () => {
+  test('no crea una asignación directa si aparece una postulación pendiente concurrente', async () => {
     commandMocks.TransactWriteCommand.mockRejectedValueOnce(Object.assign(
       new Error('Existe una postulación pendiente'), { name: 'TransactionCanceledException' },
     ));
@@ -360,7 +360,7 @@ describe('Repositorio: asignaciones', () => {
     [{ horasAsignadas: 5 }, 'horas asignadas menores a las completadas'],
     [{ horasCompletadas: -1 }, 'horas completadas negativas'],
     [{ horasCompletadas: 51 }, 'horas completadas superiores a las asignadas'],
-  ])('W09 rechaza %s (%s)', async cambios => {
+  ])('rechaza %s (%s)', async cambios => {
     const existente = {
       asignacionId: 'a1', colaboradorId: 'c1', proyectoId: 'p1',
       estado: 'ACTIVA', horasAsignadas: 50, horasCompletadas: 10, porcentajeDedicacion: 30,
@@ -370,7 +370,7 @@ describe('Repositorio: asignaciones', () => {
     expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
   });
 
-  test('W09 impide modificar una asignación finalizada', async () => {
+  test('impide modificar una asignación finalizada', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
       asignacionId: 'a1', colaboradorId: 'c1', proyectoId: 'p1',
       estado: 'FINALIZADA', horasAsignadas: 50, horasCompletadas: 40, porcentajeDedicacion: 30,
@@ -380,7 +380,7 @@ describe('Repositorio: asignaciones', () => {
     expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
   });
 
-  test('W08 convierte cambios concurrentes en conflicto sin modificar la reserva', async () => {
+  test('convierte cambios concurrentes en conflicto sin modificar la reserva', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
       asignacionId: 'a1', proyectoId: 'p1', colaboradorId: 'c1',
       estado: 'ACTIVA', porcentajeDedicacion: 40, horasAsignadas: 50, horasCompletadas: 10,
@@ -402,7 +402,7 @@ describe('Repositorio: asignaciones', () => {
     expect(cache.eliminarPorPrefijo).not.toHaveBeenCalled();
   });
 
-  test('W08 libera el contador de actividad del proyecto al finalizar una asignación', async () => {
+  test('libera el contador de actividad del proyecto al finalizar una asignación', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
       asignacionId: 'a1', proyectoId: 'p1', colaboradorId: 'c1',
       estado: 'ACTIVA', porcentajeDedicacion: 40,
@@ -418,7 +418,7 @@ describe('Repositorio: asignaciones', () => {
     });
   });
 
-  test('W06 rechaza asignaciones sin habilidades obligatorias', async () => {
+  test('rechaza asignaciones sin habilidades obligatorias', async () => {
     dedicacion.verificarHabilidadesObligatorias.mockRejectedValueOnce(
       new ErrorApp('No cumple las habilidades obligatorias', 409, CODIGOS.CONFLICTO));
     await expect(repo.crearAsignacion({
@@ -428,7 +428,7 @@ describe('Repositorio: asignaciones', () => {
     expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
   });
 
-  test('W04 rechaza asignaciones cuando la cuenta está desactivada', async () => {
+  test('rechaza asignaciones cuando la cuenta está desactivada', async () => {
     commandMocks.GetCommand.mockImplementation(async input => {
       if (input.TableName === 'internal-marketplace-usuarios-dev') {
         return { Item: { usuarioId: 'u-colaborador', estado: 'INACTIVO' } };

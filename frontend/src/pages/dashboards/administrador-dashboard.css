@@ -167,6 +167,16 @@
 }
 
 .admin-dashboard-user-row:last-child { border-bottom: 0; }
+.admin-dashboard-user-date { margin: 4px 0 0; font-size: 10px; color: #718096; }
+.admin-dashboard-actualizar { font-size: 12px; color: #2563eb; background: transparent; border: 0; cursor: pointer; }
+.admin-dashboard-actualizar:disabled { opacity: .5; cursor: wait; }
+.admin-dashboard-paginacion { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: auto; padding: 11px 14px; font-size: 11px; color: #475569; }
+.admin-dashboard-paginacion span { margin-right: auto; }
+.admin-dashboard-paginacion button { padding: 5px 9px; border: 1px solid #c9d4e0; background: #fff; border-radius: 5px; color: #1d4ed8; cursor: pointer; }
+.admin-dashboard-paginacion button:disabled { opacity: .45; cursor: not-allowed; }
+.admin-dashboard-activity { min-height: 0; }
+.admin-dashboard-activity > .card { flex: 1; }
+.admin-dashboard-activity .admin-dashboard-paginacion { flex-shrink: 0; }
 .admin-dashboard-user-row > div:first-child { min-width: 0; }
 .admin-dashboard-user-name {
   margin: 0;

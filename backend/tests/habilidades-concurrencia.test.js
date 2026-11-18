@@ -24,7 +24,7 @@ beforeEach(() => {
   commandMocks.TransactWriteCommand.mockResolvedValue({});
 });
 
-describe('W06: revisiones transaccionales de las habilidades del colaborador', () => {
+describe('revisiones transaccionales de las habilidades del colaborador', () => {
   test('asociar una habilidad modifica también la revisión del perfil', async () => {
     await relaciones.asociar({ colaboradorId: 'c1', habilidadId: 'h1', nivel: 'MID' });
     expect(commandMocks.TransactWriteCommand).toHaveBeenCalledWith({

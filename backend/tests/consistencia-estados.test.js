@@ -32,7 +32,7 @@ beforeEach(() => {
   commandMocks.TransactWriteCommand.mockResolvedValue({});
 });
 
-describe('W04: estado de cuentas y perfiles vinculados', () => {
+describe('estado de cuentas y perfiles vinculados', () => {
   test('desactiva usuario y perfil en una sola transacción y conserva la baja', async () => {
     const resultado = await usuarios.cambiarEstado('u1', false);
     expect(resultado.estado).toBe('INACTIVO');
@@ -73,7 +73,7 @@ describe('W04: estado de cuentas y perfiles vinculados', () => {
     await expect(usuarios.cambiarEstado('u1', false)).rejects.toMatchObject({ codigo: 409 });
   });
 
-  test('W04 encuentra un perfil histórico sin reserva mediante Scan consistente y desactiva ambos registros', async () => {
+  test('encuentra un perfil histórico sin reserva mediante Scan consistente y desactiva ambos registros', async () => {
     commandMocks.GetCommand.mockImplementation(async input => {
       if (input.TableName === 'usuarios-test') return { Item: USUARIO };
       if (input.Key.colaboradorId === 'USUARIO#u1') return {};
@@ -96,7 +96,7 @@ describe('W04: estado de cuentas y perfiles vinculados', () => {
     });
   });
 
-  test('W04 rechaza perfiles históricos duplicados y no desactiva la cuenta', async () => {
+  test('rechaza perfiles históricos duplicados y no desactiva la cuenta', async () => {
     commandMocks.GetCommand.mockImplementation(async input => {
       if (input.TableName === 'usuarios-test') return { Item: USUARIO };
       if (input.Key.colaboradorId === 'USUARIO#u1') return {};
@@ -121,7 +121,18 @@ describe('W04: estado de cuentas y perfiles vinculados', () => {
   });
 });
 
-describe('W04: impedir perfiles nuevos sobre cuentas inactivadas o históricas', () => {
+describe('impedir perfiles nuevos sobre cuentas inactivadas o históricas', () => {
+  test.each(['RRHH', 'ADMINISTRADOR'])('no permite registrar como colaborador a un usuario con rol %s', async rol => {
+    commandMocks.GetCommand.mockImplementation(async input => {
+      if (input.TableName === 'usuarios-test') return { Item: { ...USUARIO, rol } };
+      return {};
+    });
+    await expect(colaboradores.crear({
+      usuarioId: 'u1', cargoId: 'cargo1', rolProfesional: 'Backend',
+    })).rejects.toMatchObject({ codigo: 400 });
+    expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
+  });
+
   test('la creación exige que la cuenta permanezca activa en la misma transacción', async () => {
     commandMocks.GetCommand.mockImplementation(async input => {
       if (input.TableName === 'usuarios-test') return { Item: USUARIO };
@@ -173,7 +184,7 @@ describe('W04: impedir perfiles nuevos sobre cuentas inactivadas o históricas',
   });
 });
 
-describe('W05: baja y reincorporación coherente de colaboradores', () => {
+describe('baja y reincorporación coherente de colaboradores', () => {
   test('rechaza la baja con dedicación reservada distinta de cero', async () => {
     commandMocks.GetCommand.mockImplementation(async input => {
       if (input.TableName === 'colaboradores-test') return { Item: { ...PERFIL, dedicacionReservada: 25 } };

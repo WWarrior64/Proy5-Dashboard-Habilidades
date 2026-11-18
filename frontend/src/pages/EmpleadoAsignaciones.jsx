@@ -1,7 +1,9 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Eye, Search, UserRound, X } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
+import AvisoSinPerfilColaborador, { esAvisoSinPerfilColaborador } from '../components/common/AvisoSinPerfilColaborador.jsx'
 import { colaboradoresService } from '../services/colaboradores.service.js'
 import { asignacionesService } from '../services/asignaciones.service.js'
 import { proyectosService } from '../services/proyectos.service.js'
@@ -122,7 +124,7 @@ export default function EmpleadoAsignaciones() {
     <div className="emp-dashboard emp-assignments-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de empleado">
             {menu.map(([nombre, ruta]) => (
@@ -165,7 +167,9 @@ export default function EmpleadoAsignaciones() {
           <h2 className="emp-assignments-title" id="assignments-title">Mis asignaciones</h2>
 
           {cargando && <p role="status">Consultando asignaciones...</p>}
-          {error && <p role="alert">{error}</p>}
+          {error && (esAvisoSinPerfilColaborador(error)
+              ? <AvisoSinPerfilColaborador mensaje={error} />
+              : <p role="alert">{error}</p>)}
           <div className="emp-assignments-metrics">
             <div className="emp-card">
               <p className="emp-card-label">Asignaciones activas</p>
@@ -206,16 +210,17 @@ export default function EmpleadoAsignaciones() {
                 onChange={evento => setBusqueda(evento.target.value)}
               />
             </label>
-            <select
+            <label className="estado-filtro-inline"><span>Estado</span>
+             <select
               value={estado}
               onChange={evento => setEstado(evento.target.value)}
               aria-label="Filtrar por estado"
             >
-              <option value="Todos">Estado: Todos</option>
+              <option value="Todos">Todas</option>
               <option value="Activa">Activa</option>
               <option value="Finalizada">Finalizada</option>
               <option value="Desvinculada">Desvinculada</option>
-            </select>
+            </select></label>
           </div>
 
           <div className="emp-assignments-table-panel">

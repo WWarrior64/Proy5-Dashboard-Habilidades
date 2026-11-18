@@ -10,7 +10,7 @@ const { randomUUID } = require('node:crypto');
 const cache = require('../services/cache.service.js');
 
 // TTL de los catálogos de habilidades en segundos. Sobrescribible por variable
-// de entorno (E02: catálogo de habilidades con caché temporal, expiración e invalidación).
+// de entorno (catálogo de habilidades con caché temporal, expiración e invalidación).
 const ttlCatalogoHabilidadesEnv = Number(process.env.CACHE_TTL_CATALOG_SECONDS);
 const TTL_HABILIDAD_SEGUNDOS =
   Number.isFinite(ttlCatalogoHabilidadesEnv) && ttlCatalogoHabilidadesEnv > 0
@@ -26,11 +26,13 @@ function claveListarHabilidades(filtros) {
   return cache.construirClave(
     'habilidades',
     'list',
-    filtros.categoria || '',
-    filtros.nombre || '',
-    filtros.estado || '',
-    String(filtros.limit || 25),
-    filtros.lastKey ? JSON.stringify(filtros.lastKey) : ''
+    JSON.stringify({
+      categoria: filtros.categoria || null,
+      nombre: filtros.nombre || null,
+      estado: filtros.estado || null,
+      limit: filtros.limit ?? 25,
+      lastKey: filtros.lastKey || null,
+    })
   );
 }
 
@@ -44,7 +46,7 @@ function claveHabilidadPorNombre(nombreNormalizado) {
 
 /**
  * Invalida las claves de caché de habilidades afectadas por una escritura.
- * Se ejecuta solo tras una escritura exitosa en DynamoDB (E06).
+ * Se ejecuta solo tras una escritura exitosa en DynamoDB.
  * @param {string} [habilidadId] - Identificador de la habilidad modificada, si aplica
  */
 function invalidarCachéHabilidades(habilidadId) {
@@ -209,7 +211,7 @@ async function obtenerPorNombreNormalizado(nombreNormalizado) {
   const result = await dynamoDb.send(new GetCommand({
     TableName: tableHabilidades, Key: { habilidadId: `UNIQUE#${normalizarNombre(nombreNormalizado)}` }, ConsistentRead: true,
   }));
-  const habilidad = result.Item ? obtenerPorId(result.Item.propietarioId) : null;
+  const habilidad = result.Item ? await obtenerPorId(result.Item.propietarioId) : null;
   cache.guardar(clave, habilidad, TTL_HABILIDAD_MS);
   return habilidad;
 }

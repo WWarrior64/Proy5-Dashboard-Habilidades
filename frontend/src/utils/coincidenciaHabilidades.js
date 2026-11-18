@@ -24,7 +24,7 @@ export function coincidenciaHabilidades(requisitos, habilidades = []) {
       if (requisito.esObligatoria === true) cumpleObligatorias = false
     }
   }
-  return { porcentaje: cumpleObligatorias && sumaPesos > 0 ? Math.round(pesosCumplidos / sumaPesos * 100) : 0,
+  return { porcentaje: sumaPesos > 0 ? Math.round(pesosCumplidos / sumaPesos * 100) : 0,
     cumpleObligatorias, faltantes }
 }
 

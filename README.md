@@ -8,13 +8,13 @@ Proyecto desarrollado para la cátedra de Cómputo en la Nube (Grupo B) de la Un
 
 La plataforma sigue una arquitectura desacoplada y orientada a eventos sobre AWS Serverless:
 
-* Frontend: Single Page Application (SPA) en React 18 + Vite, alojada en un bucket privado de Amazon S3 y distribuida globalmente con Amazon CloudFront mediante Origin Access Control (OAC).
+* Frontend: Single Page Application (SPA) en React 18 + Vite, con publicación prevista en un bucket privado de Amazon S3 y distribución mediante Amazon CloudFront con Origin Access Control (OAC). La presencia de estos recursos en SAM no acredita que el build actualizado ya esté publicado.
 * Backend: 11 funciones modulares en AWS Lambda ejecutadas sobre el runtime `nodejs24.x`, incluyendo Administración y consulta de Auditoría.
 * API Gateway: REST API modular con prefijo unificado /api/v1 y soporte CORS global habilitado.
 * Base de Datos NoSQL: 11 tablas en Amazon DynamoDB con facturación `PAY_PER_REQUEST`, incluyendo Administración y Auditoría, e índices secundarios globales (GSI).
 * Identidad y Seguridad: Autenticación y gestión de sesiones delegada en Amazon Cognito User Pools (validación mediante tokens JWT).
 * Infraestructura como Código (IaC): Orquestada mediante AWS SAM (infrastructure/template.yaml).
-* CI/CD: Pipeline automatizado en GitHub Actions (.github/workflows/deploy.yml) para validación de linter, suites de prueba y verificación de build SAM.
+* CI/CD: GitHub Actions (`.github/workflows/deploy.yml`) verifica lint, Jest, Vitest y AWS SAM en cada rama habilitada; tras aprobar las validaciones de un push a `main`, despliega la pila serverless y publica el frontend en S3/CloudFront mediante un rol temporal OIDC configurado externamente.
 
 ## 2. Estructura del Repositorio
 
@@ -27,7 +27,7 @@ La plataforma sigue una arquitectura desacoplada y orientada a eventos sobre AWS
 * backend/src/utils/ — Formateadores de respuesta y errores
 * backend/tests/ — Pruebas unitarias en Jest
 * docs/api/api-documentation.md — Contrato oficial de rutas y respuestas v1
-* docs/architecture/architecture.md — Diagramas y decisiones de diseño AWS
+* docs/architecture/architecture.md — Decisiones de diseño AWS
 * docs/database/database-design.md — Diseño lógico y físico de tablas DynamoDB
 * frontend/src/ — Código fuente SPA React + Vite
 * frontend/vite.config.js — Configuración de empaquetado
@@ -138,7 +138,7 @@ cd backend && npm test -- --runInBand
 cd frontend && npm run build
 ```
 
-* Pruebas de API con Postman: Importa los archivos ubicados en `postman/` siguiendo las instrucciones de `postman/README.md`. La colección existente debe revisarse frente a las rutas añadidas posteriormente.
+* Pruebas de API con Postman: la colección de `postman/` incorpora las rutas del contrato actual, incluida la eliminación definitiva protegida contra ejecuciones accidentales. El equipo deberá validar las solicitudes contra la versión efectivamente publicada antes de la entrega, siguiendo `postman/README.md`.
 
 * Pruebas del frontend (Vitest):
 
@@ -156,7 +156,15 @@ Un líder no puede postularse ni ser asignado como colaborador a un proyecto que
 
 Los cambios más recientes son modificaciones locales de código e infraestructura. Los diagnósticos de VS Code no sustituyen ejecutar Jest, Vitest, compilación de producción, `sam validate`, `sam build` y `sam deploy`, ni comprobar las rutas en AWS. Antes de desplegar, guardar los archivos modificados y revisar el estado de Git.
 
-## 6. Equipo de Desarrollo y Roles
+## 6. Despliegue desde GitHub Actions
+
+El workflow `.github/workflows/deploy.yml` ejecuta ESLint, Jest, Vitest, compilación de React y validación/compilación de AWS SAM en las ramas `main`, `develop`, `feature/**`, `fix/**` y en los pull requests configurados. **Solo un push a `main`** activa el trabajo de despliegue, y únicamente si las validaciones de backend y frontend finalizaron satisfactoriamente.
+
+El despliegue utiliza un rol IAM temporal mediante GitHub OIDC y actualiza la pila CloudFormation existente. Después obtiene la URL de API Gateway, el bucket S3, CloudFront y los identificadores de Cognito de esa misma pila. React se compila con esos valores, se publica en S3 y se invalida CloudFront. No se copian claves AWS al repositorio ni se publica el frontend desde los jobs de pruebas.
+
+El repositorio requiere dos variables de GitHub Actions: `AWS_STACK_NAME` (nombre de la pila existente) y `AWS_ROLE_TO_ASSUME` (ARN de un rol IAM con confianza OIDC restringida a este repositorio y a `main`). El rol debe contar con los permisos de CloudFormation/SAM, recursos de la pila, publicación S3 e invalidación CloudFront correspondientes. El workflow falla antes del despliegue si falta configuración. Las credenciales y la confianza del rol se configuran en AWS y GitHub; no se incluyen en el código.
+
+## 7. Equipo de Desarrollo y Roles
 
 * Desarrollador 1: Arquitectura Base y Contrato API (Handlers base y utilidades de respuesta).
 * Desarrollador 2: Servicios Core del Backend (Usuarios, Colaboradores, Cargos, Habilidades y Búsqueda).

@@ -50,7 +50,7 @@ describe('Middleware de validación Joi', () => {
     expect(siguiente).not.toHaveBeenCalled();
   });
 
-  test('W03 valida campos obligatorios y tipos de proyectos', () => {
+  test('valida campos obligatorios y tipos de proyectos', () => {
     const valido = { nombre: 'Proyecto', descripcion: 'Descripción', liderId: 'u1',
       horasRequeridas: 20, creadoPor: 'u1', estado: 'BORRADOR' };
     expect(crearProyectoSchema.validate(valido).error).toBeUndefined();

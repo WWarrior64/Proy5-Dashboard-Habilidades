@@ -218,7 +218,9 @@ describe('Repositorio: proyectos', () => {
       })
     );
     expect(resultado).toEqual(items);
-    expect(cache.guardar).toHaveBeenCalledWith('proyectos:list:ACTIVO', items, 60000);
+    expect(cache.guardar).toHaveBeenCalledWith(
+      'proyectos:list:{"estado":"ACTIVO","liderId":null,"fecha":null}', items, 60000,
+    );
   });
 
   test('lista proyectos por líder y filtra por estado y fecha usando GSI2', async () => {
@@ -314,7 +316,7 @@ describe('Repositorio: proyectos', () => {
     expect(commandMocks.DeleteCommand).not.toHaveBeenCalled();
   });
 
-  test('W01 impide activar proyectos cancelados y completar borradores directamente', async () => {
+  test('impide activar proyectos cancelados y completar borradores directamente', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
       proyectoId: 'p1', estado: 'CANCELADO', asignacionesActivas: 0,
     } });
@@ -326,7 +328,7 @@ describe('Repositorio: proyectos', () => {
     expect(commandMocks.UpdateCommand).not.toHaveBeenCalled();
   });
 
-  test('W01 exige habilidades al reactivar un proyecto pausado por ambas rutas', async () => {
+  test('exige habilidades al reactivar un proyecto pausado por ambas rutas', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
       proyectoId: 'p1', estado: 'PAUSADO', requisitosRevision: 2,
     } });
@@ -341,7 +343,7 @@ describe('Repositorio: proyectos', () => {
     expect(commandMocks.UpdateCommand).not.toHaveBeenCalled();
   });
 
-  test('W01 comprueba la revisión antes de reactivar un proyecto pausado', async () => {
+  test('comprueba la revisión antes de reactivar un proyecto pausado', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
       proyectoId: 'p1', estado: 'PAUSADO', requisitosRevision: 4,
     } });
@@ -356,14 +358,14 @@ describe('Repositorio: proyectos', () => {
     }));
   });
 
-  test('W01 rechaza actualizaciones sobre proyectos completados', async () => {
+  test('rechaza actualizaciones sobre proyectos completados', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
       proyectoId: 'p1', estado: 'COMPLETADO',
     } });
     await expect(repo.actualizarProyecto('p1', { horasRequeridas: 30 })).rejects.toMatchObject({ codigo: 409 });
   });
 
-  test('W03 rechaza textos vacíos y fechas incompatibles', async () => {
+  test('rechaza textos vacíos y fechas incompatibles', async () => {
     const base = { nombre: 'Proyecto', descripcion: 'Descripción', liderId: 'u-lider',
       horasRequeridas: 20, creadoPor: 'u-lider' };
     await expect(repo.crearProyecto({ ...base, nombre: '   ' })).rejects.toMatchObject({ codigo: 400 });
@@ -373,7 +375,7 @@ describe('Repositorio: proyectos', () => {
     expect(commandMocks.PutCommand).not.toHaveBeenCalled();
   });
 
-  test('W02 registra nuevas habilidades y actualiza la revisión del proyecto en una transacción', async () => {
+  test('registra nuevas habilidades y actualiza la revisión del proyecto en una transacción', async () => {
     commandMocks.GetCommand.mockImplementation(async input => {
       if (input.TableName === 'internal-marketplace-proyectos-dev') {
         return { Item: { proyectoId: 'p1', estado: 'ACTIVO', requisitosRevision: 2 } };
@@ -399,7 +401,7 @@ describe('Repositorio: proyectos', () => {
     expect(commandMocks.PutCommand).not.toHaveBeenCalled();
   });
 
-  test('W02 impide modificar requisitos si el proyecto se cerró concurrentemente', async () => {
+  test('impide modificar requisitos si el proyecto se cerró concurrentemente', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
       proyectoId: 'p1', estado: 'ACTIVO', requisitosRevision: 2,
     } });
@@ -411,7 +413,7 @@ describe('Repositorio: proyectos', () => {
     expect(commandMocks.UpdateCommand).not.toHaveBeenCalled();
   });
 
-  test('W02 rechaza retirar la última habilidad de un proyecto activo', async () => {
+  test('rechaza retirar la última habilidad de un proyecto activo', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
       proyectoId: 'p1', estado: 'ACTIVO', requisitosRevision: 0,
     } });
@@ -420,7 +422,7 @@ describe('Repositorio: proyectos', () => {
     expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
   });
 
-  test('W02 serializa eliminaciones concurrentes mediante la revisión del proyecto', async () => {
+  test('serializa eliminaciones concurrentes mediante la revisión del proyecto', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
       proyectoId: 'p1', estado: 'ACTIVO', requisitosRevision: 0,
     } });
@@ -452,7 +454,7 @@ describe('Repositorio: proyectos', () => {
     await expect(relaciones.eliminarRelacion('p1', 'h2')).rejects.toMatchObject({ codigo: 409 });
   });
 
-  test('W10 exige un contador de asignaciones activas igual a cero antes de cerrar', async () => {
+  test('exige un contador de asignaciones activas igual a cero antes de cerrar', async () => {
     commandMocks.UpdateCommand.mockResolvedValueOnce({ Attributes: { proyectoId: 'p1', estado: 'CANCELADO' } });
     await repo.cancelarProyecto('p1');
     expect(commandMocks.UpdateCommand).toHaveBeenCalledWith(expect.objectContaining({
@@ -461,7 +463,7 @@ describe('Repositorio: proyectos', () => {
     }));
   });
 
-  test('W01 impide confirmar una transición cuando cambió el estado concurrentemente', async () => {
+  test('impide confirmar una transición cuando cambió el estado concurrentemente', async () => {
     commandMocks.UpdateCommand.mockRejectedValueOnce(Object.assign(
       new Error('Estado cambiado'), { name: 'ConditionalCheckFailedException' },
     ));

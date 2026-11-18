@@ -34,6 +34,23 @@ input, select, textarea {
   font-family: inherit;
 }
 
+/* Etiqueta de estado al lado del desplegable, nunca dentro de sus opciones. */
+.estado-filtro-inline.estado-filtro-inline {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+  color: #16255a;
+  font-size: 12px;
+  font-weight: 500;
+}
+.estado-filtro-inline > select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 #root {
   min-height: 100vh;
   display: flex;

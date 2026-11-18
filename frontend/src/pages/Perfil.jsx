@@ -1,8 +1,11 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { CalendarDays, CheckCircle2, Mail, Pencil, Search, UserRound, X } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import { useAuth } from '../hooks/useAuth.js'
+import { useAutoDismiss } from '../hooks/useAutoDismiss.js'
+import AvisoSinPerfilColaborador, { esAvisoSinPerfilColaborador } from '../components/common/AvisoSinPerfilColaborador.jsx'
 import { usuariosService } from '../services/usuarios.service.js'
 import { colaboradoresService } from '../services/colaboradores.service.js'
 import { habilidadesService } from '../services/habilidades.service.js'
@@ -115,6 +118,8 @@ export default function Perfil() {
     catalogo: null, proyectosHabilidades: {},
   })
   const [avisoCarga, setAvisoCarga] = useState('')
+  const [perfilColaboradorAusente, setPerfilColaboradorAusente] = useState(false)
+  useAutoDismiss(avisoCarga, setAvisoCarga)
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [busquedaTabla, setBusquedaTabla] = useState('')
   const [editar, setEditar] = useState(false)
@@ -122,6 +127,7 @@ export default function Perfil() {
   const [guardando, setGuardando] = useState(false)
   const [errorEdicion, setErrorEdicion] = useState('')
   const [mensaje, setMensaje] = useState('')
+  useAutoDismiss(mensaje, setMensaje)
 
   useEffect(() => { setPerfil(user) }, [user])
 
@@ -132,6 +138,7 @@ export default function Perfil() {
     const cargar = async () => {
       setDatos(actual => ({ ...actual, cargando: true }))
       setAvisoCarga('')
+      setPerfilColaboradorAusente(false)
       const consultas = {
         cuenta: usuariosService.getMe(),
         colaboradores: rol === 'EMPLEADO'
@@ -153,6 +160,14 @@ export default function Perfil() {
         [nombres[indice], respuesta.status === 'fulfilled' ? respuesta.value : null]))
       const listaColaboradores = resultado.colaboradores ? extraer(resultado.colaboradores) : null
       const colaborador = listaColaboradores?.find(item => item.usuarioId === user.usuarioId) || null
+      const consultaPerfil = respuestas[nombres.indexOf('colaboradores')]
+      const mensajePerfil = consultaPerfil?.status === 'rejected'
+        ? getApiErrorMessage(consultaPerfil.reason) : ''
+      const faltaPerfilColaborador = rol === 'EMPLEADO' && !colaborador &&
+        (consultaPerfil?.status === 'fulfilled' ||
+          (consultaPerfil?.reason?.response?.status === 404 &&
+            esAvisoSinPerfilColaborador(mensajePerfil)))
+      setPerfilColaboradorAusente(faltaPerfilColaborador)
       const proyectos = resultado.proyectos ? extraer(resultado.proyectos)
         .filter(item => rol !== 'LIDER_PROYECTO' || item.liderId === user.usuarioId) : null
 
@@ -210,7 +225,8 @@ export default function Perfil() {
         nombre: nombresHabilidades.get(item.habilidadId) || item.nombre || 'Habilidad sin nombre',
       })) ?? null
 
-      const huboFallo = respuestas.some(item => item.status === 'rejected') ||
+      const huboFallo = respuestas.some((item, indice) => item.status === 'rejected' &&
+        !(faltaPerfilColaborador && nombres[indice] === 'colaboradores')) ||
         consultasSecundarias.some(item => item.status === 'rejected') ||
         ['postulacionesProyectos', 'asignacionesProyectos', 'requisitos']
           .some(key => extra[key]?.some(item => item.status === 'rejected'))
@@ -335,7 +351,7 @@ export default function Perfil() {
     <div className="emp-dashboard perfil-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label={'Menú de ' + rolMostrado}>
             {menu.map(([nombre, ruta]) => (
@@ -365,6 +381,7 @@ export default function Perfil() {
         </header>
 
         <section className="emp-content perfil-content" aria-label="Perfil de la cuenta actual">
+          {perfilColaboradorAusente && <AvisoSinPerfilColaborador mensaje="La cuenta no tiene un perfil de colaborador." />}
           {avisoCarga && <p className="perfil-aviso" role="status">{avisoCarga}</p>}
           {mensaje && <p className="perfil-exito" role="status">{mensaje}</p>}
 
@@ -415,7 +432,7 @@ export default function Perfil() {
                     )) : (
                       <span className="perfil-sin-datos">{datos.cargando
                         ? 'Cargando habilidades...'
-                        : !datos.colaborador ? 'No hay un perfil de colaborador asociado a esta cuenta.'
+                        : !datos.colaborador ? 'No hay información de habilidades disponible.'
                           : datos.habilidades === null ? 'No se pudieron consultar las habilidades.' : 'No hay habilidades registradas.'}</span>
                     )}
                   </div>

@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import Button from '../common/Button.jsx'
+import { ROLES } from '../../utils/constants.js'
 
 export default function ColaboradorForm({ colaborador, onSave, onCancel, loading = false, usuarios = [], cargos = [] }) {
   const [form, setForm] = useState({
-    colaboradorId: colaborador?.colaboradorId || '',
     usuarioId: colaborador?.usuarioId || '',
     cargoId: colaborador?.cargoId || '',
     rolProfesional: colaborador?.rolProfesional || '',
@@ -11,6 +11,8 @@ export default function ColaboradorForm({ colaborador, onSave, onCancel, loading
   })
   const [errors, setErrors] = useState({})
   const editing = Boolean(colaborador)
+  const usuariosSeleccionables = editing ? usuarios : usuarios.filter(u =>
+    ![ROLES.RRHH, ROLES.ADMINISTRADOR].includes(String(u.rol || '').trim().toUpperCase()))
 
   const validate = () => {
     const newErrors = {}
@@ -24,22 +26,12 @@ export default function ColaboradorForm({ colaborador, onSave, onCancel, loading
   const handleSave = (e) => {
     e.preventDefault()
     if (!validate()) return
-    onSave({ ...form, ...(!form.colaboradorId.trim() ? { colaboradorId: undefined } : {}) })
+    onSave(form)
   }
 
   return (
     <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div className="form-group">
-        <label className="label">ID de Colaborador (opcional)</label>
-        <input
-          type="text"
-          disabled={editing}
-          className={`input ${errors.colaboradorId ? 'input-error' : ''}`}
-          value={form.colaboradorId}
-          onChange={(e) => setForm({ ...form, colaboradorId: e.target.value })}
-        />
-        {errors.colaboradorId && <p className="error-text">{errors.colaboradorId}</p>}
-      </div>
+      {!editing && <p className="page-subtitle">El identificador se genera automáticamente. Cada cuenta puede tener un único perfil de colaborador, incluso si se encuentra inactivo.</p>}
       <div className="form-group">
         <label className="label">Usuario <span style={{ color: 'var(--color-danger)' }}>*</span></label>
         <select
@@ -49,7 +41,7 @@ export default function ColaboradorForm({ colaborador, onSave, onCancel, loading
           onChange={(e) => setForm({ ...form, usuarioId: e.target.value })}
         >
           <option value="">Seleccionar usuario</option>
-          {usuarios.map((u) => (
+          {usuariosSeleccionables.map((u) => (
             <option key={u.usuarioId || u.id} value={u.usuarioId || u.id}>
               {u.nombre || u.email || u.usuarioId || u.id}
             </option>

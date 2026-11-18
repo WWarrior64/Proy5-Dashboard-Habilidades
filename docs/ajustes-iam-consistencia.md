@@ -1,4 +1,4 @@
-# Permisos IAM para W04–W10 y controles de concurrencia
+# Permisos IAM y controles de concurrencia
 
 **Responsable de revisar y aplicar la infraestructura:** Diego Ernesto Portillo Alfaro.
 **Origen:** cambios del backend para integridad transaccional de usuarios, colaboradores, proyectos, asignaciones y postulaciones.

@@ -11,7 +11,10 @@ const { consultar, guardar, consultarAuditoria, validarConfiguracion, validarRol
 
 const usuario = { usuarioId: 'admin-1', rol: 'ADMINISTRADOR' };
 const parametros = [
+  { id: 'nombre-organizacion', nombre: 'Nombre de la organización', descripcion: 'Marca pública', valor: 'Internal Marketplace', tipo: 'texto' },
   { id: 'limite-dedicacion', nombre: 'Límite de dedicación', descripcion: 'Límite', valor: '100', tipo: 'porcentaje' },
+  { id: 'dias-actividad-dashboard', nombre: 'Días de actividad', descripcion: 'Ventana', valor: '30', tipo: 'numero' },
+  { id: 'registros-pagina-dashboard', nombre: 'Registros por página', descripcion: 'Página', valor: '5', tipo: 'numero' },
 ];
 const catalogos = [
   { id: 'niveles-habilidad', nombre: 'Niveles', descripcion: 'Niveles oficiales', valores: ['Junior', 'Mid', 'Senior'] },
@@ -49,27 +52,38 @@ describe('Configuración administrativa protegida', () => {
     expect(auditoria.listar).not.toHaveBeenCalled();
   });
 
-  test('consulta sin valores retorna null para usar referencias locales', async () => {
+  test('consulta sin valores devuelve la configuración oficial predeterminada', async () => {
     repositorio.obtener.mockResolvedValue(null);
     const respuesta = await consultar({}, 'configuracion');
     expect(respuesta.statusCode).toBe(200);
-    expect(JSON.parse(respuesta.body).datos).toBeNull();
+    const datos = JSON.parse(respuesta.body).datos;
+    expect(datos.parametros).toHaveLength(4);
+    expect(datos.catalogos).toHaveLength(2);
+    expect(datos.parametros.find(item => item.id === 'limite-dedicacion').valor).toBe('100');
   });
 
-  test('guarda parámetros adicionales sin alterar el límite real', async () => {
+  test('guarda un parámetro utilizado realmente por el dashboard', async () => {
     repositorio.guardar.mockImplementation(async (area, contenido) => contenido);
-    const datos = { parametros: [...parametros, {
-      id: 'param_extra', nombre: 'Parámetro extra', descripcion: 'Valor complementario', valor: 'valor', tipo: 'texto',
-    }], catalogos };
+    const datos = { parametros: parametros.map(item => item.id === 'dias-actividad-dashboard'
+      ? { ...item, valor: '45' } : item), catalogos };
     const respuesta = await guardar({ body: JSON.stringify(datos), usuarioAutenticado: usuario }, 'configuracion');
     expect(respuesta.statusCode).toBe(200);
     expect(repositorio.guardar).toHaveBeenCalledWith('configuracion', expect.objectContaining({
-      parametros: expect.arrayContaining([expect.objectContaining({ id: 'param_extra' })]),
+      parametros: expect.arrayContaining([expect.objectContaining({ id: 'dias-actividad-dashboard', valor: '45' })]),
     }), 'admin-1');
   });
 
+  test('rechaza parámetros y catálogos sin aplicación operativa', () => {
+    const extra = { id: 'extra', nombre: 'Extra', descripcion: 'Sin consumidor', valor: 'x', tipo: 'texto' };
+    expect(() => validarConfiguracion({ parametros: [...parametros, extra], catalogos }))
+      .toThrow('sin funcionalidad');
+    const catalogoExtra = { id: 'catalogo-extra', nombre: 'Extra', descripcion: 'Sin uso', valores: ['Uno'] };
+    expect(() => validarConfiguracion({ parametros, catalogos: [...catalogos, catalogoExtra] }))
+      .toThrow('sin funcionalidad');
+  });
+
   test('rechaza modificar o eliminar el límite del sistema', () => {
-    expect(() => validarConfiguracion({ parametros: [{ ...parametros[0], valor: '75' }], catalogos }))
+    expect(() => validarConfiguracion({ parametros: [{ ...parametros[1], valor: '75' }], catalogos }))
       .toThrow('100 %');
     expect(() => validarConfiguracion({ parametros: [], catalogos }))
       .toThrow('obligatorio');

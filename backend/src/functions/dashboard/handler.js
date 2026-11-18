@@ -3,7 +3,7 @@ const { ErrorApp, CODIGOS } = require('../../utils/errors.js');
 const dashboardRepo = require('../../repositories/dashboard.repository.js');
 const cache = require('../../services/cache.service.js');
 
-// TTL breve para métricas de dashboard (E02/E03). Los datos pueden
+// TTL breve para métricas de dashboard. Los datos pueden
 // actualizarse con demora; se comunica en los metadatos de la respuesta.
 const ttlDashboardEnv = Number(process.env.CACHE_TTL_DASHBOARD_SECONDS);
 const TTL_DASHBOARD_SEGUNDOS =
@@ -27,7 +27,7 @@ async function obtenerConCaché(clave, fn) {
 }
 
 /**
- * Metadatos de caché expuestos en la respuesta del endpoint (E03).
+ * Metadatos de caché expuestos en la respuesta del endpoint.
  * @param {boolean} desdeCache - Si la respuesta provino de caché
  * @param {'caché'|'dynamodb'|'parcial'} origen - Origen de los datos
  * @returns {Object}

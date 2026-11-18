@@ -1,12 +1,15 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Filter, Search, UserRound } from 'lucide-react'
+import { Search, UserRound } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
+import AvisoSinPerfilColaborador, { esAvisoSinPerfilColaborador } from '../components/common/AvisoSinPerfilColaborador.jsx'
 import api from '../services/api.js'
 import { colaboradoresService } from '../services/colaboradores.service.js'
 import { proyectosService } from '../services/proyectos.service.js'
 import { habilidadesService } from '../services/habilidades.service.js'
 import { postulacionesService } from '../services/postulaciones.service.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
 import { extractItems } from '../utils/apiResponses.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
 import { nombreLiderProyecto } from '../utils/formatters.js'
@@ -56,6 +59,8 @@ const menu = [
 const modoDemo = import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true'
 
 export default function EmpleadoProyectos() {
+  const { canOperate } = useOperationalPermissions()
+  const puedePostular = canOperate('gestionar_postulaciones')
   const [proyectos, setProyectos] = useState(modoDemo ? proyectosIniciales : [])
   const [colaboradorId, setColaboradorId] = useState(null)
   const [cargando, setCargando] = useState(!modoDemo)
@@ -134,7 +139,7 @@ export default function EmpleadoProyectos() {
   const coincidenciasAltas = proyectos.filter(proyecto => proyecto.altaCoincidencia).length
 
   const postularme = async id => {
-    if (postulandoId !== null || postulados.includes(id)) return
+    if (!puedePostular || postulandoId !== null || postulados.includes(id)) return
     setPostulandoId(id)
     setError('')
     try {
@@ -151,7 +156,7 @@ export default function EmpleadoProyectos() {
     <div className="emp-dashboard emp-projects-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de empleado">
             {menu.map(([nombre, ruta]) => (
@@ -196,7 +201,9 @@ export default function EmpleadoProyectos() {
           </div>
 
           {cargando && <p role="status">Consultando proyectos...</p>}
-          {error && <p role="alert">{error}</p>}
+          {error && (esAvisoSinPerfilColaborador(error)
+              ? <AvisoSinPerfilColaborador mensaje={error} />
+              : <p role="alert">{error}</p>)}
           <div className="emp-projects-metrics">
             <div className="emp-card">
               <p className="emp-card-label">Proyectos disponibles</p>
@@ -225,17 +232,14 @@ export default function EmpleadoProyectos() {
                   onChange={evento => setBusqueda(evento.target.value)}
                 />
               </label>
-              <button
-                type="button"
-                className={'emp-projects-filter-button' + (soloAltaCoincidencia ? ' is-active' : '')}
-                title={soloAltaCoincidencia ? 'Mostrar todos los proyectos' : 'Mostrar solo proyectos con alta coincidencia'}
-                aria-label={soloAltaCoincidencia ? 'Mostrar todos los proyectos' : 'Filtrar por alta coincidencia'}
-                aria-pressed={soloAltaCoincidencia}
-                onClick={() => setSoloAltaCoincidencia(actual => !actual)}
-              >
-                <Filter size={19} aria-hidden="true" />
-              </button>
-              {soloAltaCoincidencia && <span className="emp-projects-filter-note">Alta coincidencia</span>}
+              <label className="emp-projects-coincidencia-filtro"><span>Coincidencia</span>
+                <select aria-label="Filtrar proyectos por coincidencia"
+                  value={soloAltaCoincidencia ? 'ALTA' : 'TODAS'}
+                  onChange={evento => setSoloAltaCoincidencia(evento.target.value === 'ALTA')}>
+                  <option value="TODAS">Todas</option>
+                  <option value="ALTA">Alta coincidencia</option>
+                </select>
+              </label>
             </div>
           </div>
 
@@ -293,7 +297,7 @@ export default function EmpleadoProyectos() {
                           <button
                             type="button"
                             className={'emp-projects-apply' + (postulado ? ' is-applied' : '')}
-                            disabled={postulado || postulandoId !== null || cargando}
+                            disabled={!puedePostular || postulado || postulandoId !== null || cargando}
                             onClick={() => postularme(proyecto.id)}
                           >
                             {postulado ? 'Ya postulaste' : postulandoId === proyecto.id ? 'Enviando...' : 'Postularme'}

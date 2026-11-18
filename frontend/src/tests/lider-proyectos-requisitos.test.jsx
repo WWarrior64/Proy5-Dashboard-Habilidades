@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import LiderProyectosVista from '../pages/LiderProyectosVista.jsx'
 import { useAuth } from '../hooks/useAuth.js'
@@ -47,7 +47,7 @@ describe('Habilidades requeridas al publicar un proyecto', () => {
     fireEvent.change(screen.getByLabelText('Nombre del proyecto'), { target: { value: 'Nuevo portal' } })
     fireEvent.change(screen.getByLabelText('Descripción'), { target: { value: 'Integrar nuevas funciones' } })
     fireEvent.change(screen.getByLabelText('Horas requeridas'), { target: { value: '40' } })
-    fireEvent.change(screen.getByLabelText('Estado'), { target: { value: 'ACTIVO' } })
+    fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Estado'), { target: { value: 'ACTIVO' } })
 
     fireEvent.click(screen.getByRole('button', { name: 'Publicar proyecto' }))
     await waitFor(() => expect(screen.getByRole('alert').textContent)

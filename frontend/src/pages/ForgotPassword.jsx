@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useAutoDismiss } from '../hooks/useAutoDismiss.js'
+import logo from '../assets/internal-marketplace-mark.svg'
 import { useNavigate } from 'react-router-dom'
 import { solicitarRecuperacion, confirmarRecuperacion } from '../services/cognito.service.js'
 
@@ -6,6 +8,7 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  useAutoDismiss(message, setMessage)
   const [error, setError] = useState('')
   const [fase, setFase] = useState('solicitar')
   const [codigo, setCodigo] = useState('')
@@ -38,7 +41,7 @@ export default function ForgotPassword() {
     <div className="forgot-page">
       <div className="forgot-card">
         <div className="forgot-header">
-          <div className="forgot-logo" />
+          <img className="forgot-logo" src={logo} alt="Logotipo de Internal Marketplace" />
           <h1 className="forgot-title">Recuperar contraseña</h1>
           <p className="forgot-description">
             {fase === 'solicitar'

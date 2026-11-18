@@ -14,7 +14,7 @@ beforeEach(() => {
   commandMocks.ScanCommand.mockResolvedValue({ Items: [] });
 });
 
-describe('W08: unicidad contra asignaciones históricas y nuevas', () => {
+describe('unicidad contra asignaciones históricas y nuevas', () => {
   test('el UUID estable identifica una pareja de proyecto y colaborador', () => {
     expect(dedicacion.idAsignacionUnica('p1', 'c1'))
       .toBe(dedicacion.idAsignacionUnica('p1', 'c1'));

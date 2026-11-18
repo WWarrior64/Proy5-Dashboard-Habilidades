@@ -281,7 +281,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nombre\": \"Diego\",\n  \"apellido\": \"Portillo\",\n  \"rol\": \"EMPLEADO\",\n  \"email\": \"colaborador@empresa.com\"\n}"
+              "raw": "{\n  \"nombre\": \"Diego\",\n  \"rol\": \"EMPLEADO\",\n  \"email\": \"colaborador@empresa.com\"\n}"
             },
             "url": "{{baseUrl}}/usuarios"
           }
@@ -502,6 +502,7 @@
                 "value": "application/json"
               }
             ],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/usuarios/yo/acceso",
               "host": [
@@ -636,7 +637,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"cargoId\": \"{{cargoId}}\",\n  \"rolProfesional\": \"Desarrollador Backend\",\n  \"dedicacionDisponible\": 100\n}"
+              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"cargoId\": \"{{cargoId}}\",\n  \"rolProfesional\": \"Desarrollador Backend\"\n}"
             },
             "url": "{{baseUrl}}/colaboradores"
           }
@@ -759,7 +760,7 @@
           ]
         },
         {
-          "name": "Dar de baja colaborador",
+          "name": "Dar de baja colaborador (PATCH estado)",
           "request": {
             "method": "PATCH",
             "header": [
@@ -776,7 +777,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"estado\": \"INACTIVO\"\n}"
+              "raw": "{\n  \"activo\": false\n}"
             },
             "url": "{{baseUrl}}/colaboradores/{{colaboradorId}}/estado"
           },
@@ -1077,6 +1078,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/colaboradores/yo",
               "host": [
@@ -1090,7 +1092,7 @@
           }
         },
         {
-          "name": "Dar de baja colaborador",
+          "name": "Dar de baja colaborador (DELETE: baja lógica)",
           "event": [
             {
               "listen": "test",
@@ -1111,6 +1113,7 @@
           "request": {
             "method": "DELETE",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/colaboradores/{{colaboradorId}}",
               "host": [
@@ -1121,6 +1124,67 @@
                 "{{colaboradorId}}"
               ]
             }
+          }
+        },
+        {
+          "name": "Eliminar definitivamente colaborador inactivo (MANUAL)",
+          "description": "OPERACIÓN IRREVERSIBLE. Solo usar con colaborador de prueba en estado INACTIVO, sin asignaciones ni postulaciones históricas. Requiere definir colaboradorEliminarId y confirmarEliminacionDefinitiva=true en el entorno. La baja lógica y la reincorporación permanecen separadas.",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const permitido = pm.environment.get('confirmarEliminacionDefinitiva') === 'true';",
+                  "const identificador = pm.environment.get('colaboradorEliminarId');",
+                  "if (!permitido || !identificador || String(identificador).startsWith('{{')) {",
+                  "    console.warn('Eliminación definitiva omitida: configura colaboradorEliminarId y confirmarEliminacionDefinitiva=true para ejecutarla manualmente.');",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Eliminación definitiva - respuesta esperada (200 o conflicto 409)', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 409]);",
+                  "});",
+                  "pm.test('Eliminación definitiva - JSON con resultado verificable', function () {",
+                  "    pm.response.to.be.json;",
+                  "    const respuesta = pm.response.json();",
+                  "    pm.expect(respuesta).to.have.property('success');",
+                  "    if (pm.response.code === 200) {",
+                  "        pm.expect(respuesta.success).to.eql(true);",
+                  "        pm.expect(respuesta.datos).to.include({ eliminado: true, colaboradorId: pm.environment.get('colaboradorEliminarId') });",
+                  "    } else {",
+                  "        pm.expect(respuesta.success).to.eql(false);",
+                  "        pm.expect(JSON.stringify(respuesta)).to.match(/asignaciones|postulaciones|perfil|dedicación|historial|reconciliación|inactivo/i);",
+                  "    }",
+                  "});",
+                  "pm.test('Eliminación definitiva - nunca informa éxito en conflicto', function () {",
+                  "    if (pm.response.code === 409) pm.expect(pm.response.json().datos?.eliminado).to.not.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/colaboradores/{{colaboradorEliminarId}}/definitivo"
           }
         }
       ]
@@ -1380,7 +1444,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"estado\": \"INACTIVO\"\n}"
+              "raw": "{\n  \"activo\": false\n}"
             },
             "url": "{{baseUrl}}/cargos/{{cargoId}}/estado"
           },
@@ -1682,7 +1746,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"estado\": \"INACTIVO\"\n}"
+              "raw": "{\n  \"activo\": false\n}"
             },
             "url": "{{baseUrl}}/habilidades/{{habilidadId}}/estado"
           },
@@ -1898,7 +1962,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nombre\": \"Modernización de plataforma\",\n  \"descripcion\": \"Actualización de servicios internos\",\n  \"liderId\": \"{{usuarioId}}\",\n  \"horasRequeridas\": 160,\n  \"estado\": \"BORRADOR\"\n}"
+              "raw": "{\n  \"nombre\": \"Modernización de plataforma\",\n  \"descripcion\": \"Actualización de servicios internos\",\n  \"objetivo\": \"Optimizar la gestión de talento y proyectos internos\",\n  \"liderId\": \"{{usuarioId}}\",\n  \"horasRequeridas\": 160,\n  \"estado\": \"BORRADOR\"\n}"
             },
             "url": "{{baseUrl}}/proyectos"
           }
@@ -2339,6 +2403,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/proyectos/activos",
               "host": [
@@ -2373,6 +2438,7 @@
           "request": {
             "method": "DELETE",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/proyectos/{{proyectoId}}",
               "host": [
@@ -2768,6 +2834,7 @@
                 "value": "application/json"
               }
             ],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/proyectos/{{proyectoId}}/postulaciones/{{colaboradorId}}/retirar",
               "host": [
@@ -3165,6 +3232,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/asignaciones/mias",
               "host": [
@@ -3199,6 +3267,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/colaboradores/{{colaboradorId}}/asignaciones",
               "host": [
@@ -3234,6 +3303,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/proyectos/{{proyectoId}}/asignaciones",
               "host": [
@@ -3269,6 +3339,7 @@
           "request": {
             "method": "DELETE",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/asignaciones/{{asignacionId}}",
               "host": [
@@ -3308,6 +3379,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/busqueda/colaboradores?habilidades={{habilidadId}}&nivelMinimo=JUNIOR&tipoCoincidencia=todas",
               "host": [
@@ -3356,6 +3428,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/busqueda/colaboradores?habilidades={{habilidadId}}&nivelMinimo=MID&considerarDisponibilidad=true&limit=20",
               "host": [
@@ -3408,6 +3481,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/busqueda/colaboradores?proyectoId={{proyectoId}}&considerarDisponibilidad=true&limit=25",
               "host": [
@@ -3456,6 +3530,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/busqueda/proyectos?estado=ACTIVO",
               "host": [
@@ -3475,7 +3550,7 @@
           }
         },
         {
-          "name": "Buscar habilidades en catalogo (D02)",
+          "name": "Buscar habilidades en catálogo",
           "event": [
             {
               "listen": "test",
@@ -3496,8 +3571,9 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
-              "raw": "{{baseUrl}}/busqueda/habilidades?estado=ACTIVA",
+              "raw": "{{baseUrl}}/busqueda/habilidades?estado=ACTIVO",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3508,7 +3584,7 @@
               "query": [
                 {
                   "key": "estado",
-                  "value": "ACTIVA"
+                  "value": "ACTIVO"
                 }
               ]
             }
@@ -3865,6 +3941,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/dashboard/actividad",
               "host": [
@@ -3904,6 +3981,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/administracion/configuracion",
               "host": [
@@ -3943,6 +4021,7 @@
                 "value": "application/json"
               }
             ],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/administracion/configuracion",
               "host": [
@@ -3981,6 +4060,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/administracion/roles-permisos",
               "host": [
@@ -4020,6 +4100,7 @@
                 "value": "application/json"
               }
             ],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/administracion/roles-permisos",
               "host": [
@@ -4058,6 +4139,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/administracion/auditoria?limite=20",
               "host": [
@@ -4079,7 +4161,7 @@
       ]
     },
     {
-      "name": "11 - Validaciones y Casos Negativos (D04)",
+      "name": "11 - Validaciones y casos negativos",
       "item": [
         {
           "name": "Acceso denegado sin token (401)",
@@ -4138,6 +4220,7 @@
                 "value": "application/json"
               }
             ],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/usuarios/{{usuarioId}}",
               "host": [
@@ -4176,6 +4259,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/proyectos/proy_inexistente_99999",
               "host": [
@@ -4210,6 +4294,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
             "url": {
               "raw": "{{baseUrl}}/busqueda/colaboradores",
               "host": [
@@ -4221,6 +4306,164 @@
               ]
             }
           }
+        },
+        {
+          "name": "Empleado sin permiso para consultar auditoría (403)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/administracion/auditoria",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenEmpleado}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código HTTP esperado (403)\", function () {",
+                  "  pm.expect([403]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Error controlado y sin exposición de datos internos\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.equal(false);",
+                  "  pm.expect(json.error).to.have.property(\"mensaje\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "impedir asignación duplicada al mismo proyecto (409)",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/asignaciones",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proyectoId\": \"{{proyectoId}}\",\n  \"colaboradorId\": \"{{colaboradorId}}\",\n  \"porcentajeDedicacion\": 20,\n  \"horasAsignadas\": 10\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código HTTP esperado (409)\", function () {",
+                  "  pm.expect([409]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Error controlado y sin exposición de datos internos\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.equal(false);",
+                  "  pm.expect(json.error).to.have.property(\"mensaje\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "impedir reactivar un proyecto cancelado (409)",
+          "request": {
+            "method": "PATCH",
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/proyectos/{{proyectoCanceladoId}}/estado",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"ACTIVO\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código HTTP esperado (409)\", function () {",
+                  "  pm.expect([409]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Error controlado y sin exposición de datos internos\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.equal(false);",
+                  "  pm.expect(json.error).to.have.property(\"mensaje\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "impedir asignación sin habilidades obligatorias (400/409)",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/asignaciones",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proyectoId\": \"{{proyectoConHabilidadesId}}\",\n  \"colaboradorId\": \"{{colaboradorSinHabilidadesId}}\",\n  \"porcentajeDedicacion\": 20,\n  \"horasAsignadas\": 10\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código HTTP esperado (400 o 409)\", function () {",
+                  "  pm.expect([400,409]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Error controlado y sin exposición de datos internos\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.equal(false);",
+                  "  pm.expect(json.error).to.have.property(\"mensaje\");",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Asignacion con dedicacion superior al 100% (400/409)",
@@ -4249,6 +4492,10 @@
                 "value": "application/json"
               }
             ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+            },
             "url": {
               "raw": "{{baseUrl}}/asignaciones",
               "host": [
@@ -4260,7 +4507,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"proyectoId\": \"{{proyectoId}}\",\n  \"colaboradorId\": \"{{colaboradorId}}\",\n  \"porcentajeDedicacion\": 150,\n  \"rolEnProyecto\": \"Desarrollador\"\n}"
+              "raw": "{\n  \"proyectoId\": \"{{proyectoId}}\",\n  \"colaboradorId\": \"{{colaboradorId}}\",\n  \"porcentajeDedicacion\": 150,\n  \"horasAsignadas\": 20\n}"
             }
           }
         }

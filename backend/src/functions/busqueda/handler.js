@@ -106,11 +106,14 @@ async function buscarCandidatos(event, context) {
 
     // Paso 1: Obtener colaboradores asociados a al menos una habilidad requerida
     const colaboradoresVistos = new Map();
-    const habilidadesRequeridasIds = requisitos.map((r) => r.habilidadId);
+    const habilidadesRequeridasIds = [...new Set(requisitos.map((r) => r.habilidadId))];
 
-    for (const habilidadId of habilidadesRequeridasIds) {
-      const relaciones = await obtenerColaboradoresPorHabilidad(habilidadId);
-      for (const rel of relaciones) {
+    // Procesa grupos pequeños en paralelo para reducir latencia sin saturar DynamoDB.
+    for (let inicio = 0; inicio < habilidadesRequeridasIds.length; inicio += 4) {
+      const lote = habilidadesRequeridasIds.slice(inicio, inicio + 4);
+      const relacionesPorHabilidad = await Promise.all(lote.map(obtenerColaboradoresPorHabilidad));
+      for (const relaciones of relacionesPorHabilidad) {
+        for (const rel of relaciones) {
         if (!colaboradoresVistos.has(rel.colaboradorId)) {
           colaboradoresVistos.set(rel.colaboradorId, []);
         }
@@ -120,6 +123,7 @@ async function buscarCandidatos(event, context) {
           anosExperiencia: rel.anosExperiencia,
           observaciones: rel.observaciones,
         });
+        }
       }
     }
 

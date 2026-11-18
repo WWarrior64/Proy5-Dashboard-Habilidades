@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
 /**
- * medirRendimiento.js - Medición de la estrategia de caché (E01, E02, E07)
+ * medirRendimiento.js - Medición de la estrategia de caché
  * ========================================================================
  *
  * Compara, en condiciones equivalentes y SIN credenciales de AWS:
@@ -189,7 +189,7 @@ async function medirInvalidacion() {
     valor: antes && antes.version,
   };
 
-  // Escritura: invalida prefijos de caché (E06)
+  // Escritura: invalida prefijos de caché
   cache.eliminarPorPrefijo('cargos:list:');
   const despues = cache.obtener(CLAVE_CATALOGO);
   reporte.despuesDeEscribir = {
@@ -287,7 +287,7 @@ async function ejecutarTodo() {
 function imprimirReporte(reporte) {
   const linea = '============================================================';
   console.log(linea);
-  console.log('REPORTE DE RENDIMIENTO DE CACHÉ — Dashboard de Habilidades (E07)');
+  console.log('REPORTE DE RENDIMIENTO DE CACHÉ — Dashboard de Habilidades');
   console.log(`Fecha: ${reporte.fecha} | Entorno: ${reporte.entorno}`);
   console.log(linea);
 
@@ -350,10 +350,10 @@ function imprimirReporte(reporte) {
   console.log('  - No es una caché distribuida: otras instancias Lambda no comparten esta');
   console.log('    caché ni la invalidan al escribir. Se mitiga con TTL cortos (dashboard:');
   console.log('    30 segundos y catálogos: 60 segundos) e invalidación local tras cada');
-  console.log('    escritura (E06).');
+  console.log('    escritura.');
   console.log('  - Los datos críticos (permisos, dedicación reservada, estados de');
   console.log('    usuarios/colaboradores, validaciones de duplicidad transaccional) NO se');
-  console.log('    cachean en ningún caso (E02).');
+  console.log('    cachean en ningún caso.');
   console.log('  - La capacidad máxima con LRU evita desbordar la memoria de la instancia.');
   console.log(linea);
   console.log('Fin del reporte.');

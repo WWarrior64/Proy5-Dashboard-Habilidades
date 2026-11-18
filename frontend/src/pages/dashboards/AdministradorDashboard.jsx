@@ -1,9 +1,11 @@
+import BrandName from '../../components/common/BrandName.jsx'
 import { useState, useEffect, useCallback } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Clock3, ShieldCheck, UserCheck, UserRound, UsersRound } from 'lucide-react'
 import EmpleadoLogoutButton from '../../components/layout/EmpleadoLogoutButton.jsx'
 import './administrador-dashboard.css'
 import { usuariosService } from '../../services/usuarios.service.js'
+import { administracionService } from '../../services/administracion.service.js'
 import api from '../../services/api.js'
 import { proyectosService } from '../../services/proyectos.service.js'
 import Statistics from '../../components/dashboard/Statistics.jsx'
@@ -14,6 +16,8 @@ import Loading from '../../components/common/Loading.jsx'
 import EmptyState from '../../components/common/EmptyState.jsx'
 import { DEMO_USUARIOS, DEMO_ACTIVIDADES } from '../../data/demoData.js'
 import { getApiErrorMessage } from '../../utils/apiErrors.js'
+import { extractItems } from '../../utils/apiResponses.js'
+import { etiquetaRol } from '../../utils/formatters.js'
 
 const menu = [
   ['Dashboard', '/dashboards/administrador'],
@@ -32,6 +36,9 @@ export default function AdministradorDashboard() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
+  const [paginaActividad, setPaginaActividad] = useState(1)
+  const [paginaUsuarios, setPaginaUsuarios] = useState(1)
+  const [porPagina, setPorPagina] = useState(5)
   const demoMode = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')
 
   const loadDashboardData = useCallback(async () => {
@@ -39,10 +46,21 @@ export default function AdministradorDashboard() {
     setLoading(true)
     setError(null)
     try {
+      let diasActividad = 30
+      let tamanoPagina = 5
+      try {
+        const config = await administracionService.getConfiguracion()
+        const parametros = config.data?.datos?.parametros || []
+        const dias = Number(parametros.find(item => item.id === 'dias-actividad-dashboard')?.valor)
+        const pagina = Number(parametros.find(item => item.id === 'registros-pagina-dashboard')?.valor)
+        if (Number.isInteger(dias) && dias >= 1 && dias <= 90) diasActividad = dias
+        if (Number.isInteger(pagina) && pagina >= 3 && pagina <= 15) tamanoPagina = pagina
+      } catch { /* Sin configuración disponible se conservan valores seguros. */ }
+      setPorPagina(tamanoPagina)
       const [usuariosResp, proyectosResp, actividadResp] = await Promise.allSettled([
         usuariosService.listAll(),
         proyectosService.list({}),
-        api.get('/dashboard/actividad', { params: { dias: 30, limite: 30 } }),
+        api.get('/dashboard/actividad', { params: { dias: diasActividad, limite: 100 } }),
       ])
 
       setDatosCargados({
@@ -55,27 +73,21 @@ export default function AdministradorDashboard() {
       if (actividadResp.status === 'rejected') setError(getApiErrorMessage(actividadResp.reason))
       if (actividadResp.status === 'fulfilled') {
         const eventos = actividadResp.value.data?.datos?.eventos || []
+        const proyectosDisponibles = proyectosResp.status === 'fulfilled' ? extractItems(proyectosResp.value.data) : []
+        const nombresProyecto = new Map(proyectosDisponibles.map(item => [item.proyectoId, item.nombre]))
         setActividadReciente(eventos.map(item => ({
           ...item,
-          nombre: item.nombre || item.proyectoId || item.id || 'Evento sin nombre',
+          nombre: item.nombre || nombresProyecto.get(item.proyectoId) ||
+            (item.tipo === 'asignacion' ? 'Proyecto no disponible' : 'Proyecto sin nombre'),
         })))
       }
 
       if (usuariosResp.status === 'fulfilled') {
-        const data = usuariosResp.value.data
-        let items = []
-        if (data && data.datos && data.datos.items) items = data.datos.items
-        else if (Array.isArray(data)) items = data
-        else if (data && data.datos && Array.isArray(data.datos)) items = data.datos
-        setUsuarios(items)
+        setUsuarios(extractItems(usuariosResp.value.data))
       }
 
       if (proyectosResp.status === 'fulfilled') {
-        const data = proyectosResp.value.data
-        let items = []
-        if (Array.isArray(data)) items = data
-        else if (data && data.datos && Array.isArray(data.datos)) items = data.datos
-        setProyectos(items)
+        setProyectos(extractItems(proyectosResp.value.data))
       }
     } catch (err) {
       setError(err.message || 'Error al cargar el dashboard')
@@ -103,9 +115,14 @@ export default function AdministradorDashboard() {
   const termino = busquedaSuperior.trim().toLocaleLowerCase('es')
   const actividadesVisibles = actividades.filter(item =>
     [item.tipo, item.nombre, item.fecha, item.estado].join(' ').toLocaleLowerCase('es').includes(termino))
+    .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
   const usuariosVisibles = (demoMode ? DEMO_USUARIOS : usuarios).filter(item =>
     [item.nombre, item.email, item.rol, item.estado].join(' ').toLocaleLowerCase('es').includes(termino))
-    .sort((a, b) => (b.fechaCreacion || '').localeCompare(a.fechaCreacion || '')).slice(0, 3)
+    .sort((a, b) => String(b.fechaCreacion || '').localeCompare(String(a.fechaCreacion || '')))
+  const totalPaginasActividad = Math.max(1, Math.ceil(actividadesVisibles.length / porPagina))
+  const totalPaginasUsuarios = Math.max(1, Math.ceil(usuariosVisibles.length / porPagina))
+  const paginaActualActividad = Math.min(paginaActividad, totalPaginasActividad)
+  const paginaActualUsuarios = Math.min(paginaUsuarios, totalPaginasUsuarios)
 
   const quickActions = [
     { label: 'Gestionar usuarios', onClick: () => navigate('/usuarios') },
@@ -117,7 +134,7 @@ export default function AdministradorDashboard() {
     <div className="emp-dashboard admin-dashboard-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de administrador">
             {menu.map(([nombre, ruta]) => ruta ? (
@@ -143,7 +160,7 @@ export default function AdministradorDashboard() {
           <div className="emp-header-right">
             <input className="emp-search" type="search" placeholder="Buscar..."
               aria-label="Buscar usuarios y actividad desde el encabezado"
-              value={busquedaSuperior} onChange={evento => setBusquedaSuperior(evento.target.value)} />
+              value={busquedaSuperior} onChange={evento => { setBusquedaSuperior(evento.target.value); setPaginaActividad(1); setPaginaUsuarios(1) }} />
             <NavLink to="/perfil" className="emp-user-icon" aria-label="Abrir mi perfil" title="Mi perfil">
               <UserRound size={22} aria-hidden="true" />
             </NavLink>
@@ -167,24 +184,31 @@ export default function AdministradorDashboard() {
 
         <div className="admin-dashboard-columns">
           <div className="admin-dashboard-panel admin-dashboard-activity">
-            <ActivityList activities={actividadesVisibles} />
+            <ActivityList activities={actividadesVisibles.slice((paginaActualActividad - 1) * porPagina, paginaActualActividad * porPagina)} />
+            <div className="admin-dashboard-paginacion" aria-label="Paginación de actividad reciente">
+              <span>{actividadesVisibles.length} actividades · Página {paginaActualActividad} de {totalPaginasActividad}</span>
+              <button type="button" disabled={paginaActualActividad <= 1} onClick={() => setPaginaActividad(p => p - 1)}>Anterior</button>
+              <button type="button" disabled={paginaActualActividad >= totalPaginasActividad} onClick={() => setPaginaActividad(p => p + 1)}>Siguiente</button>
+            </div>
           </div>
 
           <div className="card-section">
             <div className="card-section-header">
               <h2 className="card-section-title">Usuarios recientes</h2>
+              <button type="button" className="admin-dashboard-actualizar" onClick={loadDashboardData} disabled={loading}>Actualizar</button>
             </div>
             <div className="card-section-body">
               {usuariosVisibles.length > 0 ? (
                 <>
-                  {usuariosVisibles.map((u) => (
+                  {usuariosVisibles.slice((paginaActualUsuarios - 1) * porPagina, paginaActualUsuarios * porPagina).map((u) => (
                     <div key={u.usuarioId} className="admin-dashboard-user-row">
                       <div>
                         <p className="admin-dashboard-user-name">{u.nombre}</p>
                         <p className="admin-dashboard-user-email">{u.email}</p>
+                        <p className="admin-dashboard-user-date">{u.fechaCreacion ? `Registrado el ${new Date(u.fechaCreacion).toLocaleDateString('es-SV')}` : 'Fecha de registro no disponible'}</p>
                       </div>
                       <div className="admin-dashboard-user-meta">
-                        <span className={'admin-dashboard-role' + (u.rol === 'ADMINISTRADOR' || u.rol === 'RRHH' ? ' manager' : '')}>{u.rol}</span>
+                        <span className={'admin-dashboard-role' + (u.rol === 'ADMINISTRADOR' || u.rol === 'RRHH' ? ' manager' : '')}>{etiquetaRol(u.rol)}</span>
                         <p className={'admin-dashboard-user-state' + (u.estado === 'ACTIVO' ? ' active' : '')}>{u.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'}</p>
                       </div>
                     </div>
@@ -193,6 +217,11 @@ export default function AdministradorDashboard() {
               ) : (
                 <EmptyState message="No hay usuarios recientes" icon="👥" />
               )}
+              <div className="admin-dashboard-paginacion" aria-label="Paginación de usuarios recientes">
+                <span>{usuariosVisibles.length} usuarios · Página {paginaActualUsuarios} de {totalPaginasUsuarios}</span>
+                <button type="button" disabled={paginaActualUsuarios <= 1} onClick={() => setPaginaUsuarios(p => p - 1)}>Anterior</button>
+                <button type="button" disabled={paginaActualUsuarios >= totalPaginasUsuarios} onClick={() => setPaginaUsuarios(p => p + 1)}>Siguiente</button>
+              </div>
             </div>
           </div>
         </div>

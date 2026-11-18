@@ -1,7 +1,9 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Pencil, Plus, Search, Unlink2, UserRound, X } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
 import { asignacionesService } from '../services/asignaciones.service.js'
 import { colaboradoresService } from '../services/colaboradores.service.js'
 import { proyectosService } from '../services/proyectos.service.js'
@@ -34,6 +36,8 @@ const formularioInicial = { colaboradorId: '', proyectoId: '', porcentajeDedicac
 
 export default function RrhhAsignacionesVista() {
   const { user } = useAuth()
+  const { canOperate } = useOperationalPermissions()
+  const puedeGestionar = canOperate('gestionar_asignaciones')
   const [asignaciones, setAsignaciones] = useState([])
   const [historialCompleto, setHistorialCompleto] = useState(false)
   const [colaboradores, setColaboradores] = useState([])
@@ -196,7 +200,7 @@ export default function RrhhAsignacionesVista() {
 
   const guardar = async evento => {
     evento.preventDefault()
-    if (!modal) return
+    if (!puedeGestionar || !modal) return
     if (modal.tipo === 'nuevo' && !historialCompleto) {
       setErrorFormulario('No se pudo verificar el historial completo de asignaciones. Recarga los datos antes de continuar.')
       return
@@ -269,7 +273,7 @@ export default function RrhhAsignacionesVista() {
   }
 
   const desvincular = async () => {
-    if (!porDesvincular) return
+    if (!puedeGestionar || !porDesvincular) return
     setOcupado(true)
     setError('')
     try {
@@ -293,7 +297,7 @@ export default function RrhhAsignacionesVista() {
     <div className="emp-dashboard rrhh-asignaciones-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de recursos humanos">
             {menu.map(([nombre, ruta]) => (
@@ -330,7 +334,7 @@ export default function RrhhAsignacionesVista() {
         <section className="emp-content rrhh-asignaciones-content" aria-labelledby="rrhh-asignaciones-title">
           <div className="rrhh-asignaciones-heading">
             <h2 id="rrhh-asignaciones-title" className="rrhh-asignaciones-title">Asignaciones</h2>
-            <button type="button" className="rrhh-asignaciones-add" onClick={abrirNuevo} disabled={cargando || ocupado}>
+            <button type="button" className="rrhh-asignaciones-add" onClick={abrirNuevo} disabled={!puedeGestionar || cargando || ocupado}>
               <Plus size={16} aria-hidden="true" /> Nueva asignación
             </button>
           </div>
@@ -363,17 +367,19 @@ export default function RrhhAsignacionesVista() {
                     onChange={evento => setBusqueda(evento.target.value)}
                   />
                 </label>
-                <select aria-label="Filtrar asignaciones por estado" value={filtroEstado}
+                <label className="estado-filtro-inline"><span>Estado</span>
+                 <select aria-label="Filtrar asignaciones por estado" value={filtroEstado}
                   onChange={evento => setFiltroEstado(evento.target.value)}>
-                  <option value="ACTIVA">Estado: Activas</option>
+                  <option value="ACTIVA">Activas</option>
                   <option value="FINALIZADA">Finalizadas</option>
                   <option value="DESVINCULADA">Desvinculadas</option>
-                  <option value="TODOS">Todo el historial</option>
-                </select>
-                <select aria-label="Filtrar por proyecto" value={filtroProyecto} onChange={evento => setFiltroProyecto(evento.target.value)}>
-                  <option value="">Proyecto: Todos</option>
+                  <option value="TODOS">Todas</option>
+                </select></label>
+                <label className="estado-filtro-inline"><span>Proyecto</span>
+                 <select aria-label="Filtrar por proyecto" value={filtroProyecto} onChange={evento => setFiltroProyecto(evento.target.value)}>
+                  <option value="">Todos</option>
                   {proyectosFiltro.map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}
-                </select>
+                </select></label>
               </div>
             </div>
 
@@ -421,7 +427,7 @@ export default function RrhhAsignacionesVista() {
                                 aria-label={'Editar asignación de ' + item.colaborador}
                                 title={'Editar asignación de ' + item.colaborador}
                                 onClick={() => abrirEdicion(item)}
-                                disabled={ocupado || item.estado !== 'ACTIVA'}
+                                disabled={!puedeGestionar || ocupado || item.estado !== 'ACTIVA'}
                               ><Pencil size={16} aria-hidden="true" /></button>
                               <button
                                 type="button"
@@ -429,7 +435,7 @@ export default function RrhhAsignacionesVista() {
                                 aria-label={'Desvincular a ' + item.colaborador + ' de ' + item.proyecto}
                                 title={'Desvincular a ' + item.colaborador + ' de ' + item.proyecto}
                                 onClick={() => setPorDesvincular(item)}
-                                disabled={ocupado || item.estado !== 'ACTIVA'}
+                                disabled={!puedeGestionar || ocupado || item.estado !== 'ACTIVA'}
                               ><Unlink2 size={17} aria-hidden="true" /></button>
                             </div>
                           </td>
@@ -496,7 +502,7 @@ export default function RrhhAsignacionesVista() {
             </label>
             <div className="rrhh-asignaciones-dialog-actions">
               <button type="button" className="rrhh-asignaciones-cancel" onClick={() => setModal(null)} disabled={ocupado}>Cancelar</button>
-              <button type="submit" className="rrhh-asignaciones-add" disabled={ocupado || !formulario.colaboradorId || !formulario.proyectoId}>
+              <button type="submit" className="rrhh-asignaciones-add" disabled={!puedeGestionar || ocupado || !formulario.colaboradorId || !formulario.proyectoId}>
                 {ocupado ? 'Guardando...' : 'Guardar asignación'}
               </button>
             </div>
@@ -517,7 +523,7 @@ export default function RrhhAsignacionesVista() {
             </p>
             <div className="rrhh-asignaciones-dialog-actions">
               <button type="button" className="rrhh-asignaciones-cancel" onClick={() => setPorDesvincular(null)} disabled={ocupado}>Cancelar</button>
-              <button type="button" className="rrhh-asignaciones-confirm-unlink" onClick={desvincular} disabled={ocupado}>
+              <button type="button" className="rrhh-asignaciones-confirm-unlink" onClick={desvincular} disabled={!puedeGestionar || ocupado}>
                 <Unlink2 size={16} aria-hidden="true" /> {ocupado ? 'Desvinculando...' : 'Desvincular'}
               </button>
             </div>

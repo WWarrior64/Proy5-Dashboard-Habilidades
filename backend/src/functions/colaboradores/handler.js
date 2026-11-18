@@ -31,14 +31,13 @@ function obtenerPathParam(event, nombre) {
 async function crearColaborador(event, context) {
   try {
     const body = validarDatos(crearColaboradorSchema, obtenerBody(event));
-    const { colaboradorId, usuarioId, cargoId, rolProfesional, nombre, estado, observaciones } = body;
+    const { usuarioId, cargoId, rolProfesional, nombre, estado, observaciones } = body;
 
     if (!usuarioId || !cargoId || !rolProfesional) {
       return error('usuarioId, cargoId y rolProfesional son requeridos', 400, CODIGOS.VALIDACION);
     }
 
     const colaborador = await colaboradoresRepository.crear({
-      colaboradorId,
       usuarioId,
       cargoId,
       rolProfesional,
@@ -173,6 +172,16 @@ async function actualizarColaborador(event, context) {
   }
 }
 
+async function eliminarDefinitivamenteColaborador(event) {
+  try {
+    const colaboradorId = obtenerPathParam(event, 'colaboradorId');
+    if (!colaboradorId) return error('colaboradorId es requerido', 400, CODIGOS.VALIDACION);
+    return exito(await colaboradoresRepository.eliminarDefinitivamente(colaboradorId));
+  } catch (err) {
+    return error(err.message, err.codigo || 500, err.codigoError);
+  }
+}
+
 async function darBajaColaborador(event, context) {
   try {
     const colaboradorId = obtenerPathParam(event, 'colaboradorId');
@@ -206,6 +215,7 @@ const handler = crearDespachador({
   'GET /api/v1/colaboradores/{colaboradorId}': obtenerColaborador,
   'PUT /api/v1/colaboradores/{colaboradorId}': actualizarColaborador,
   'DELETE /api/v1/colaboradores/{colaboradorId}': darBajaColaborador,
+  'DELETE /api/v1/colaboradores/{colaboradorId}/definitivo': eliminarDefinitivamenteColaborador,
 });
 
 module.exports = {
@@ -215,5 +225,6 @@ module.exports = {
   obtenerMiColaborador,
   actualizarColaborador,
   darBajaColaborador,
+  eliminarDefinitivamenteColaborador,
   handler,
 };

@@ -228,7 +228,7 @@ describe('Módulo de Búsqueda de Candidatos - Handler', () => {
       expect(body.datos.candidatos[0].colaboradorId).toBe('col_1');
     });
 
-    it('J03 evalúa candidatos sin coincidencias cuando todos los requisitos son opcionales', async () => {
+    it('evalúa candidatos sin coincidencias cuando todos los requisitos son opcionales', async () => {
       proyectoHabilidadRepository.consultarHabilidadesProyecto.mockResolvedValue([
         { habilidadId: 'h1', nivelMinimo: 'JUNIOR', esObligatoria: false, peso: 2 },
         { habilidadId: 'h2', nivelMinimo: 'MID', esObligatoria: false, peso: 1 },
@@ -248,7 +248,7 @@ describe('Módulo de Búsqueda de Candidatos - Handler', () => {
       expect(candidato.habilidadesFaltantes).toHaveLength(2);
     });
 
-    it('J05 excluye colaboradores cuya cuenta vinculada no puede verificarse', async () => {
+    it('excluye colaboradores cuya cuenta vinculada no puede verificarse', async () => {
       colaboradorHabilidadRepository.listarPorHabilidad.mockResolvedValue({
         items: [{ colaboradorId: 'c1', habilidadId: 'h1', nivel: 'SENIOR' }], lastKey: null,
       });
@@ -301,6 +301,25 @@ describe('Módulo de Búsqueda de Candidatos - Handler', () => {
       // hab_react cumplido (peso 5), hab_sql faltante opcional (peso 1): 5/6 = 83.33 -> 83
       expect(body.datos.candidatos[0].puntuacion).toBe(83);
       expect(body.datos.candidatos[0].elegible).toBe(true);
+    });
+
+    it('limita a cuatro las lecturas paralelas y evita repetir habilidades', async () => {
+      let enVuelo = 0;
+      let maximo = 0;
+      colaboradorHabilidadRepository.listarPorHabilidad.mockImplementation(async () => {
+        enVuelo += 1;
+        maximo = Math.max(maximo, enVuelo);
+        await Promise.resolve();
+        enVuelo -= 1;
+        return { items: [], lastKey: null };
+      });
+      const respuesta = await busquedaHandler.buscarCandidatos({
+        queryStringParameters: { habilidades: 'h1,h1,h2,h3,h4,h5' },
+      }, {});
+      expect(respuesta.statusCode).toBe(200);
+      expect(colaboradorHabilidadRepository.listarPorHabilidad).toHaveBeenCalledTimes(5);
+      expect(maximo).toBe(4);
+      expect(JSON.parse(respuesta.body).datos.candidatos).toEqual([]);
     });
   });
 });

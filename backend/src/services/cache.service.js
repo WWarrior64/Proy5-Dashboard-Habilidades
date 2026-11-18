@@ -5,8 +5,8 @@
 //     memoria. Los entornos de ejecución "cálidos" (warm starts) reutilizan esta
 //     caché y aceleran las solicitudes repetidas DENTRO de esa misma instancia.
 //   * NO es una caché distribuida: las escrituras realizadas por otra instancia
-//     Lambda NO invalidan esta caché. Por ese motivo se usan TTL cortos (E02) e
-//     se invalida localmente tras cada escritura de la misma instancia (E06).
+//     Lambda NO invalidan esta caché. Por ese motivo se usan TTL cortos e
+//     se invalida localmente tras cada escritura de la misma instancia.
 //   * Los "cold starts" comienzan con la caché vacía: nunca sirven datos
 //     obsoletos de invocaciones previas, ni comparten estado entre instancias.
 //   * Para proteger la memoria de Lambda existe una capacidad máxima de
@@ -130,6 +130,8 @@ function guardar(clave, valor, ttlMs) {
     }
   }
 
+  // Sobrescribir también actualiza su antigüedad para que LRU sea correcto.
+  if (entradas.has(clave)) {entradas.delete(clave);}
   entradas.set(clave, { valor, expiraEn, creadoEn: ahora() });
   contadores.escrituras += 1;
 }

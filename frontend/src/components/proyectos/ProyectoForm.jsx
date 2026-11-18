@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Button from '../common/Button.jsx'
+import './proyecto-form.css'
 import { proyectoEditable, estadosPermitidos, puedeQuitarRequisito } from '../../utils/proyectoEstados.js'
 
 export default function ProyectoForm({ proyecto, onSave, onCancel, loading = false,
@@ -114,13 +115,14 @@ export default function ProyectoForm({ proyecto, onSave, onCancel, loading = fal
           ))}
         </select>
       </div>
-      <div className="form-group">
+      <div className="form-group proyecto-requisitos">
         <label className="label">Habilidades requeridas</label>
         <p className="page-subtitle">Selecciona las habilidades y el nivel mínimo para este proyecto.</p>
         {form.requisitos.map((requisito, indice) => (
-          <div key={requisito.habilidadId} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+          <div key={requisito.habilidadId} className="proyecto-requisito">
+             <div className="proyecto-requisito-cabecera"><span>Habilidad</span><span>Nivel mínimo</span></div>
             <select className="input" aria-label={'Habilidad requerida ' + (indice + 1)}
-              style={{ flex: '2 1 160px', minWidth: 0 }} value={requisito.habilidadId} disabled={loading}
+              value={requisito.habilidadId} disabled={loading}
               onChange={e => setForm(actual => ({
                 ...actual, requisitos: actual.requisitos.map((item, posicion) =>
                   posicion === indice ? { ...item, habilidadId: e.target.value } : item),
@@ -131,7 +133,7 @@ export default function ProyectoForm({ proyecto, onSave, onCancel, loading = fal
                 .map(item => <option key={item.habilidadId} value={item.habilidadId}>{item.nombre}</option>)}
             </select>
             <select className="input" aria-label={'Nivel mínimo ' + (indice + 1)}
-              style={{ flex: '1 1 110px', minWidth: 0 }} value={requisito.nivelMinimo} disabled={loading}
+              value={requisito.nivelMinimo} disabled={loading}
               onChange={e => setForm(actual => ({
                 ...actual, requisitos: actual.requisitos.map((item, posicion) =>
                   posicion === indice ? { ...item, nivelMinimo: e.target.value } : item),

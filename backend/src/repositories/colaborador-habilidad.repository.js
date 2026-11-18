@@ -107,6 +107,7 @@ async function asociar(data) {
     nivel: data.nivel,
     anosExperiencia: obtenerAnosExperiencia(data) ?? 0,
     observaciones: data.observaciones || null,
+    fechaUltimoUso: data.fechaUltimoUso || null,
     fechaCreacion: new Date().toISOString(),
     fechaActualizacion: new Date().toISOString(),
     nivelColaboradorKey: `${data.nivel}#${data.colaboradorId}`,
@@ -176,6 +177,11 @@ async function actualizarNivel(colaboradorId, habilidadId, data) {
     updateParts.push('#observaciones = :observaciones');
     expressionAttributeNames['#observaciones'] = 'observaciones';
     expressionAttributeValues[':observaciones'] = data.observaciones;
+  }
+  if (data.fechaUltimoUso !== undefined) {
+    updateParts.push('#fechaUltimoUso = :fechaUltimoUso');
+    expressionAttributeNames['#fechaUltimoUso'] = 'fechaUltimoUso';
+    expressionAttributeValues[':fechaUltimoUso'] = data.fechaUltimoUso;
   }
 
   updateParts.push('#fechaActualizacion = :fechaActualizacion');

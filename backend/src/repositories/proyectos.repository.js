@@ -61,11 +61,11 @@ function claveProyecto(proyectoId) {
 }
 
 function claveListaProyectos(filtros = {}) {
-  return `proyectos:list:${cache.construirClave(
-    String(filtros.estado ?? ''),
-    String(filtros.liderId ?? ''),
-    String(filtros.fecha ?? '')
-  )}`;
+  return `proyectos:list:${JSON.stringify({
+    estado: filtros.estado ?? null,
+    liderId: filtros.liderId ?? null,
+    fecha: filtros.fecha ?? null,
+  })}`;
 }
 
 function claveProyectosActivos() {

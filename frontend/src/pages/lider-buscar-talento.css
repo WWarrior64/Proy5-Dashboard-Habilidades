@@ -24,9 +24,25 @@
 
 .lider-talento-campos {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 14px;
 }
+
+.lider-talento-campos .estado-filtro-inline {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: row;
+  gap: 8px;
+  padding-top: 18px;
+}
+.lider-talento-campos .estado-filtro-inline > span {
+  display: flex;
+  align-items: center;
+  height: 35px;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.lider-talento-campos .estado-filtro-inline > select { flex: 1; }
 
 .lider-talento-campos label,
 .lider-talento-proyecto-filtro label {
@@ -99,6 +115,18 @@
   font-size: 11px;
 }
 
+.lider-talento-ayuda {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: #475569;
+  background: #dbeafe;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.lider-talento-form-error ul { margin: 6px 0 0; padding-left: 19px; }
+
 .lider-talento-resultados {
   display: flex;
   align-items: center;
@@ -155,6 +183,12 @@
   background: #dbeafe;
   font-size: 12px;
   font-weight: 700;
+}
+
+.lider-talento-identity .lider-talento-cargo {
+  margin-top: 3px;
+  font-size: 10px;
+  color: #64748b;
 }
 
 .lider-talento-identity {
@@ -530,7 +564,10 @@
   .lider-talento-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-@media (max-width: 380px) {
+@media (max-width: 490px) {
   .lider-talento-campos { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 380px) {
   .lider-talento-grid { grid-template-columns: 1fr; }
 }

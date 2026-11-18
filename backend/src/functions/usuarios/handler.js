@@ -1,6 +1,8 @@
 const { exito, creado, error } = require('../../utils/responses');
 const { CODIGOS } = require('../../utils/errors');
 const usuariosRepository = require('../../repositories/usuarios.repository');
+const administracionRepository = require('../../repositories/administracion.repository');
+const { PERMISOS, permisoEfectivo } = require('../../config/permisos-operativos');
 const { resolverIdentidad } = require('../../services/cognito-admin.service');
 
 const ROLES_VALIDOS = ['EMPLEADO', 'RRHH', 'LIDER_PROYECTO', 'ADMINISTRADOR'];
@@ -269,6 +271,20 @@ async function cambiarEstado(event, context) {
   }
 }
 
+async function obtenerPermisosActuales(event) {
+  try {
+    const usuario = event.usuarioAutenticado;
+    if (!usuario) return error('Autenticación requerida', 401, CODIGOS.NO_AUTORIZADO);
+    const politica = process.env.ENFORCE_PERMISSION_POLICY === 'true'
+      ? await administracionRepository.obtener('roles-permisos') : null;
+    const operaciones = PERMISOS.filter(item => permisoEfectivo(politica, usuario.rol, item.id))
+      .map(item => item.id);
+    return exito({ operaciones });
+  } catch (err) {
+    return error(err.message, err.codigo || 500, err.codigoError);
+  }
+}
+
 const { crearDespachador } = require('../../utils/lambda-dispatcher');
 
 const handler = crearDespachador({
@@ -279,12 +295,14 @@ const handler = crearDespachador({
   'PATCH /api/v1/usuarios/{usuarioId}/rol': cambiarRol,
   'PATCH /api/v1/usuarios/{usuarioId}/estado': cambiarEstado,
   'GET /api/v1/usuarios/yo': obtenerPerfil,
+  'GET /api/v1/usuarios/yo/permisos': obtenerPermisosActuales,
   'POST /api/v1/usuarios/yo/acceso': registrarAcceso,
 });
 
 module.exports = {
   obtenerUsuario,
   obtenerPerfil,
+  obtenerPermisosActuales,
   registrarAcceso,
   listarUsuarios,
   crearUsuario,

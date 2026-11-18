@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
 import { colaboradoresService } from '../services/colaboradores.service.js'
 import { usuariosService } from '../services/usuarios.service.js'
 import { cargosService } from '../services/cargos.service.js'
@@ -19,6 +20,7 @@ import RrhhColaboradoresVista from './RrhhColaboradoresVista.jsx'
 
 export default function Colaboradores() {
   const { user } = useAuth()
+  const { canOperate } = useOperationalPermissions()
   const [colaboradores, setColaboradores] = useState([])
   const [usuarios, setUsuarios] = useState([])
   const [cargos, setCargos] = useState([])
@@ -30,6 +32,7 @@ export default function Colaboradores() {
   const [showDetails, setShowDetails] = useState(false)
   const [detailsColaborador, setDetailsColaborador] = useState(null)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [confirmando, setConfirmando] = useState(false)
   const [confirmTarget, setConfirmTarget] = useState(null)
   const [filterParams, setFilterParams] = useState({})
 
@@ -97,6 +100,7 @@ export default function Colaboradores() {
   }
 
   const handleSave = async (formData) => {
+    if (!canOperate('gestionar_colaboradores')) return
     setLoading(true)
     try {
       if (editMode && editingColaborador) {
@@ -134,19 +138,20 @@ export default function Colaboradores() {
   }
 
   const handleRemove = (colaborador) => {
-    if (colaborador.estado === 'INACTIVO') return
-    setConfirmTarget({ ...colaborador, accion: 'BAJA_PERFIL' })
+    setConfirmTarget({ ...colaborador, accion: colaborador.estado === 'INACTIVO' ? 'ELIMINAR_PERFIL' : 'BAJA_PERFIL' })
     setShowConfirm(true)
   }
 
   const handleConfirm = async () => {
-    if (!confirmTarget) return
+    if (!confirmTarget || confirmando) return
+    setConfirmando(true)
     try {
       if (confirmTarget.accion === 'REINCORPORAR') {
         await colaboradoresService.changeStatus(confirmTarget.colaboradorId, { activo: true })
+      } else if (confirmTarget.accion === 'ELIMINAR_PERFIL') {
+        await colaboradoresService.deletePermanently(confirmTarget.colaboradorId)
       } else if (confirmTarget.accion === 'BAJA_PERFIL') {
-        // El endpoint DELETE da de baja el perfil de colaborador, no su cuenta de usuario.
-        await colaboradoresService.remove(confirmTarget.colaboradorId)
+        await colaboradoresService.changeStatus(confirmTarget.colaboradorId, { activo: false })
       } else {
         await colaboradoresService.changeStatus(confirmTarget.colaboradorId, { activo: confirmTarget.estado === 'ACTIVO' })
       }
@@ -154,13 +159,15 @@ export default function Colaboradores() {
       setConfirmTarget(null)
       await loadColaboradores()
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Error al cambiar estado'))
+      setError(getApiErrorMessage(err, 'No se pudo completar la operación del colaborador'))
       setShowConfirm(false)
       setConfirmTarget(null)
+    } finally {
+      setConfirmando(false)
     }
   }
 
-  const canManage = user?.rol === 'ADMINISTRADOR' || user?.rol === 'RRHH'
+  const canManage = ['ADMINISTRADOR', 'RRHH'].includes(user?.rol) && canOperate('gestionar_colaboradores')
 
   const total = colaboradores.length
   const disponibles = colaboradores.filter((c) => disponibilidadCalculada(c) === 'DISPONIBLE').length
@@ -253,7 +260,9 @@ export default function Colaboradores() {
         onSave={handleSave}
         onCancel={() => setShowForm(false)}
         loading={loading}
-        usuarios={usuarios}
+        usuarios={editMode ? usuarios : usuarios.filter(usuario =>
+          usuario.estado === 'ACTIVO' &&
+          !colaboradores.some(perfil => perfil.usuarioId === usuario.usuarioId))}
         cargos={cargos}
       />
     </Modal>
@@ -264,18 +273,23 @@ export default function Colaboradores() {
 
     <ConfirmDialog
       isOpen={showConfirm}
+      loading={confirmando}
       onConfirm={handleConfirm}
       onCancel={() => setShowConfirm(false)}
       title={confirmTarget?.accion === 'REINCORPORAR' ? '¿Reincorporar colaborador?' :
-        confirmTarget?.accion === 'BAJA_PERFIL' ? '¿Dar de baja colaborador?' : '¿Cambiar estado de colaborador?'}
+        confirmTarget?.accion === 'BAJA_PERFIL' ? '¿Dar de baja colaborador?' :
+        confirmTarget?.accion === 'ELIMINAR_PERFIL' ? '¿Eliminar definitivamente el perfil?' : '¿Cambiar estado de colaborador?'}
       message={confirmTarget?.accion === 'REINCORPORAR'
         ? 'El colaborador volverá a estar activo con su mismo perfil e historial de habilidades y asignaciones. La cuenta de usuario debe estar activa.'
         : confirmTarget?.accion === 'BAJA_PERFIL'
         ? 'Se dará de baja el perfil de colaborador. La cuenta de usuario no se desactivará ni se eliminará.'
+        : confirmTarget?.accion === 'ELIMINAR_PERFIL'
+        ? 'Se eliminarán definitivamente el perfil inactivo y sus habilidades. No se eliminará la cuenta de usuario. Por seguridad, no se permitirá eliminarlo si conserva asignaciones o postulaciones históricas. Esta operación no se puede deshacer.'
         : `¿Está seguro de que desea ${confirmTarget?.estado === 'ACTIVO' ? 'activar' : 'dar de baja'} a este colaborador?`}
       confirmLabel={confirmTarget?.accion === 'REINCORPORAR' ? 'Reincorporar' :
-        confirmTarget?.accion === 'BAJA_PERFIL' ? 'Dar de baja' : confirmTarget?.estado === 'ACTIVO' ? 'Activar' : 'Dar de baja'}
-      danger={confirmTarget?.accion === 'BAJA_PERFIL'}
+        confirmTarget?.accion === 'BAJA_PERFIL' ? 'Dar de baja' :
+        confirmTarget?.accion === 'ELIMINAR_PERFIL' ? 'Eliminar definitivamente' : confirmTarget?.estado === 'ACTIVO' ? 'Activar' : 'Dar de baja'}
+      danger={['BAJA_PERFIL', 'ELIMINAR_PERFIL'].includes(confirmTarget?.accion)}
       cancelLabel="Volver"
     />
     </>

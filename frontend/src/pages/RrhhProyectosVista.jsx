@@ -1,3 +1,4 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Eye, Pencil, Plus, Search, UserRound } from 'lucide-react'
@@ -162,7 +163,7 @@ export default function RrhhProyectosVista({
     <div className="emp-dashboard rrhh-proyectos-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label={esAdministrador ? 'Menú de administrador' : 'Menú de recursos humanos'}>
             {(esAdministrador ? menuAdministrador : menu).map(([texto, ruta]) => (
@@ -239,19 +240,22 @@ export default function RrhhProyectosVista({
                     onChange={evento => setBusqueda(evento.target.value)}
                   />
                 </label>
-                <select aria-label="Filtrar por estado" value={estado} onChange={evento => setEstado(evento.target.value)}>
-                  <option value="VIGENTES">Estado: Vigentes</option>
-                   <option value="TODOS">Todos los estados</option>
+                <label className="estado-filtro-inline"><span>Estado</span>
+                 <select aria-label="Filtrar por estado" value={estado} onChange={evento => setEstado(evento.target.value)}>
+                  <option value="VIGENTES">Vigentes</option>
+                   <option value="TODOS">Todos</option>
                   {estados.map(([clave, etiqueta]) => <option value={clave} key={clave}>{etiqueta}</option>)}
-                </select>
-                <select aria-label="Filtrar por líder" value={lider} onChange={evento => setLider(evento.target.value)}>
-                  <option value="">Líder: Todos</option>
+                </select></label>
+                <label className="estado-filtro-inline"><span>Líder</span>
+                 <select aria-label="Filtrar por líder" value={lider} onChange={evento => setLider(evento.target.value)}>
+                  <option value="">Todos</option>
                   {lideresFiltro.map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}
-                </select>
-                <select aria-label="Filtrar por habilidad" value={habilidad} onChange={evento => setHabilidad(evento.target.value)}>
-                  <option value="">Habilidad: Todas</option>
+                </select></label>
+                <label className="estado-filtro-inline"><span>Habilidad</span>
+                 <select aria-label="Filtrar por habilidad" value={habilidad} onChange={evento => setHabilidad(evento.target.value)}>
+                  <option value="">Todas</option>
                   {habilidadesFiltro.map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}
-                </select>
+                </select></label>
               </div>
             </div>
 

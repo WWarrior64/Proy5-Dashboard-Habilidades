@@ -1,7 +1,10 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { CheckCircle2, MoreHorizontal, Pencil, Plus, Search, Unlink2, UserRound, X } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
+import { useAutoDismiss } from '../hooks/useAutoDismiss.js'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import { proyectosService } from '../services/proyectos.service.js'
 import { colaboradoresService } from '../services/colaboradores.service.js'
@@ -61,6 +64,8 @@ const nombreEstado = valor => ({ ACTIVA: 'Activa', FINALIZADA: 'Finalizada', DES
 
 export default function LiderAsignacionesVista() {
   const { user } = useAuth()
+  const { canOperate } = useOperationalPermissions()
+  const puedeGestionar = canOperate('gestionar_asignaciones')
   const [proyectos, setProyectos] = useState([])
   const [asignaciones, setAsignaciones] = useState([])
   const [historialCompleto, setHistorialCompleto] = useState(false)
@@ -71,6 +76,7 @@ export default function LiderAsignacionesVista() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
+  useAutoDismiss(aviso, setAviso)
   const [busqueda, setBusqueda] = useState('')
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [estado, setEstado] = useState('ACTIVA')
@@ -215,7 +221,7 @@ export default function LiderAsignacionesVista() {
 
   const guardar = async evento => {
     evento.preventDefault()
-    if (!modal || guardando) return
+    if (!puedeGestionar || !modal || guardando) return
     if (modal.tipo === 'crear' && !historialCompleto) {
       setErrorFormulario('No se pudo verificar el historial completo de asignaciones. Recarga los datos antes de continuar.')
       return
@@ -293,7 +299,7 @@ export default function LiderAsignacionesVista() {
   }
 
   const finalizar = async item => {
-    if (guardando || item.estado !== 'ACTIVA' ||
+    if (!puedeGestionar || guardando || item.estado !== 'ACTIVA' ||
       !window.confirm('¿Finalizar esta asignación y liberar su dedicación?')) return
     setGuardando(true)
     setMenuAbierto(null)
@@ -316,7 +322,7 @@ export default function LiderAsignacionesVista() {
   }
 
   const desvincular = async () => {
-    if (!porDesvincular || guardando) return
+    if (!puedeGestionar || !porDesvincular || guardando) return
     setGuardando(true)
     setError('')
     try {
@@ -356,7 +362,7 @@ export default function LiderAsignacionesVista() {
     <div className="emp-dashboard lider-asignaciones-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de líder de proyecto">
             {menu.map(([nombre, ruta]) => (
@@ -389,7 +395,7 @@ export default function LiderAsignacionesVista() {
           <div className="lider-asignaciones-heading">
             <h2 id="lider-asignaciones-titulo">Asignaciones de mis proyectos</h2>
             <button type="button" className="lider-asignaciones-primary" onClick={() => abrirCrear('')}
-              disabled={cargando || guardando || !historialCompleto || !opcionesProyectos.some(hayCandidatosPara)}>
+              disabled={!puedeGestionar || cargando || guardando || !historialCompleto || !opcionesProyectos.some(hayCandidatosPara)}>
               <Plus size={16} aria-hidden="true" /> Nueva asignación
             </button>
           </div>
@@ -410,11 +416,11 @@ export default function LiderAsignacionesVista() {
                   onChange={evento => setBusqueda(evento.target.value)} />
               </span>
             </label>
-            <label className="lider-asignaciones-filter-field">
+            <label className="lider-asignaciones-filter-field estado-filtro-inline">
               <span>Estado</span>
               <select value={estado} onChange={evento => setEstado(evento.target.value)}>
-                <option value="ACTIVA">Estado: Activas</option>
-                 <option value="TODOS">Todos los estados</option>
+                <option value="ACTIVA">Activas</option>
+                 <option value="TODOS">Todas</option>
                 
                 <option value="FINALIZADA">Finalizada</option>
                 <option value="DESVINCULADA">Desvinculada</option>
@@ -483,16 +489,16 @@ export default function LiderAsignacionesVista() {
                               <button type="button" className="lider-asignaciones-more"
                                 aria-label={'Opciones de ' + item.colaborador}
                                 aria-expanded={menuAbierto === item.asignacionId}
-                                onClick={() => setMenuAbierto(actual => actual === item.asignacionId ? null : item.asignacionId)}>
+                                onClick={() => setMenuAbierto(actual => actual === item.asignacionId ? null : item.asignacionId)} disabled={!puedeGestionar}>
                                 <MoreHorizontal size={18} aria-hidden="true" />
                               </button>
                               {menuAbierto === item.asignacionId && (
                                 <div className="lider-asignaciones-menu">
                                   {item.estado === 'ACTIVA' ? <>
-                                    <button type="button" onClick={() => abrirEditar(item)}>
+                                    <button type="button" onClick={() => abrirEditar(item)} disabled={!puedeGestionar}>
                                       <Pencil size={14} aria-hidden="true" /> Editar horas y dedicación
                                     </button>
-                                    <button type="button" onClick={() => finalizar(item)} disabled={guardando}>
+                                    <button type="button" onClick={() => finalizar(item)} disabled={!puedeGestionar || guardando}>
                                        <CheckCircle2 size={14} aria-hidden="true" /> Finalizar
                                      </button>
                                      <button type="button" className="lider-asignaciones-unlink" onClick={() => {
@@ -507,7 +513,7 @@ export default function LiderAsignacionesVista() {
                             </div>
                           </div>
                           {item.estado === 'ACTIVA' && (
-                            <button type="button" className="lider-asignaciones-edit-link" onClick={() => abrirEditar(item)}>
+                            <button type="button" className="lider-asignaciones-edit-link" onClick={() => abrirEditar(item)} disabled={!puedeGestionar}>
                               <Pencil size={13} aria-hidden="true" /> Editar horas
                             </button>
                           )}
@@ -516,7 +522,7 @@ export default function LiderAsignacionesVista() {
                     </div> : <div className="lider-asignaciones-no-members">
                       <p>Aún no hay colaboradores asignados</p>
                       <button type="button" className="lider-asignaciones-secondary"
-                        disabled={proyecto.estado !== 'ACTIVO' || !hayCandidatosPara(proyecto)}
+                        disabled={!puedeGestionar || proyecto.estado !== 'ACTIVO' || !hayCandidatosPara(proyecto)}
                         onClick={() => abrirCrear(proyecto.proyectoId)}>Asignar colaborador</button>
                     </div>}
                   </article>
@@ -583,7 +589,7 @@ export default function LiderAsignacionesVista() {
           <div className="lider-asignaciones-dialog-actions">
             <button type="button" className="lider-asignaciones-secondary" onClick={() => setModal(null)} disabled={guardando}>Cancelar</button>
             <button type="submit" className="lider-asignaciones-primary"
-              disabled={guardando || !formulario.proyectoId || !formulario.colaboradorId}>
+              disabled={!puedeGestionar || guardando || !formulario.proyectoId || !formulario.colaboradorId}>
               {guardando ? 'Guardando...' : 'Guardar asignación'}
             </button>
           </div>
@@ -603,7 +609,7 @@ export default function LiderAsignacionesVista() {
           </p>
           <div className="lider-asignaciones-dialog-actions">
             <button type="button" className="lider-asignaciones-secondary" disabled={guardando} onClick={() => setPorDesvincular(null)}>Volver</button>
-            <button type="button" className="lider-asignaciones-danger" onClick={desvincular} disabled={guardando}>
+            <button type="button" className="lider-asignaciones-danger" onClick={desvincular} disabled={!puedeGestionar || guardando}>
               <Unlink2 size={16} aria-hidden="true" /> {guardando ? 'Desvinculando...' : 'Desvincular'}
             </button>
           </div>

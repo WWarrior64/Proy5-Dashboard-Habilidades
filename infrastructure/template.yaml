@@ -33,6 +33,7 @@ Globals:
         TABLE_ADMINISTRACION: !Ref AdministracionTable
         TABLE_AUDITORIA: !Ref AuditoriaTable
         AUDIT_ENABLED: 'true'
+        ENFORCE_PERMISSION_POLICY: 'true'
 
 Resources:
   # ============================================================================
@@ -53,6 +54,28 @@ Resources:
         AllowMethods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
+
+  # Los errores generados por API Gateway (rutas no publicadas, 403, etc.)
+  # también deben incluir CORS para que el navegador informe el estado real.
+  ApiGatewayDefault4xx:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref InternalMarketplaceApi
+      ResponseType: DEFAULT_4XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+
+  ApiGatewayDefault5xx:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref InternalMarketplaceApi
+      ResponseType: DEFAULT_5XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
 
   HealthFunction:
     Type: AWS::Serverless::Function
@@ -80,6 +103,8 @@ Resources:
       Handler: src/functions/usuarios/handler.handler
       Description: Gestion de usuarios y perfiles
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref AdministracionTable
         - Statement:
             - Effect: Allow
               Action: dynamodb:PutItem
@@ -158,6 +183,12 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/usuarios/yo/acceso
             Method: POST
+        Route9:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/usuarios/yo/permisos
+            Method: GET
 
 
   ColaboradoresFunction:
@@ -168,6 +199,8 @@ Resources:
       Handler: src/functions/colaboradores/handler.handler
       Description: Gestion de colaboradores de la empresa
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref AdministracionTable
         - Statement:
             - Effect: Allow
               Action: dynamodb:PutItem
@@ -184,6 +217,8 @@ Resources:
             TableName: !Ref HabilidadesTable
         - DynamoDBReadPolicy:
             TableName: !Ref AsignacionesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref PostulacionesTable
         - Statement:
             - Effect: Allow
               Action:
@@ -260,6 +295,12 @@ Resources:
             RestApiId: !Ref InternalMarketplaceApi
             Path: /api/v1/colaboradores/yo
             Method: GET
+        Route12:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/colaboradores/{colaboradorId}/definitivo
+            Method: DELETE
 
 
   CargosFunction:
@@ -270,6 +311,8 @@ Resources:
       Handler: src/functions/cargos/handler.handler
       Description: Catalogo de cargos
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref AdministracionTable
         - Statement:
             - Effect: Allow
               Action: dynamodb:PutItem
@@ -321,6 +364,8 @@ Resources:
       Handler: src/functions/habilidades/handler.handler
       Description: Catalogo central de habilidades
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref AdministracionTable
         - Statement:
             - Effect: Allow
               Action: dynamodb:PutItem
@@ -423,6 +468,8 @@ Resources:
       Handler: src/functions/proyectos/handler.handler
       Description: Gestion de proyectos internos
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref AdministracionTable
         - Statement:
             - Effect: Allow
               Action: dynamodb:PutItem
@@ -515,6 +562,8 @@ Resources:
       Handler: src/functions/postulaciones/handler.handler
       Description: Gestion de postulaciones de colaboradores
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref AdministracionTable
         - Statement:
             - Effect: Allow
               Action: dynamodb:PutItem
@@ -597,6 +646,8 @@ Resources:
       Handler: src/functions/asignaciones/handler.handler
       Description: Gestion de asignaciones y dedicacion de colaboradores
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref AdministracionTable
         - Statement:
             - Effect: Allow
               Action: dynamodb:PutItem
@@ -767,7 +818,7 @@ Resources:
       FunctionName: !Sub internal-marketplace-administracion-${StageName}
       CodeUri: ../backend/
       Handler: src/functions/administracion/handler.handler
-      Description: Configuracion administrativa descriptiva, sin modificar reglas de autorizacion
+      Description: Gestion de configuracion y restricciones de permisos operativos de los roles
       Policies:
         - Statement:
             - Effect: Allow
@@ -782,6 +833,14 @@ Resources:
               Action: dynamodb:Query
               Resource: !Sub '${AuditoriaTable.Arn}/index/GSI1'
       Events:
+        BrandingPublico:
+          Type: Api
+          Properties:
+            RestApiId: !Ref InternalMarketplaceApi
+            Path: /api/v1/branding
+            Method: GET
+            Auth:
+              Authorizer: NONE
         ConfigConsultar:
           Type: Api
           Properties:

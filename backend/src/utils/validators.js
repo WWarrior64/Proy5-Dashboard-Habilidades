@@ -33,7 +33,6 @@ const cambiarEstadoSchema = Joi.object({
 });
 
 const crearColaboradorSchema = Joi.object({
-  colaboradorId: Joi.string().min(1).max(50),
   usuarioId: Joi.string().min(1).max(50).required(),
   cargoId: Joi.string().min(1).max(50).required(),
   rolProfesional: Joi.string().min(1).max(100).required(),
@@ -84,12 +83,14 @@ const asociarHabilidadSchema = Joi.object({
   nivel: Joi.string().valid(...NIVELES_VALIDOS).required(),
   anosExperiencia: Joi.number().integer().min(0).default(0),
   observaciones: Joi.string().max(500).allow('', null),
+  fechaUltimoUso: Joi.string().isoDate().allow(null),
 });
 
 const actualizarNivelHabilidadSchema = Joi.object({
   nivel: Joi.string().valid(...NIVELES_VALIDOS),
   anosExperiencia: Joi.number().integer().min(0),
   observaciones: Joi.string().max(500).allow('', null),
+  fechaUltimoUso: Joi.string().isoDate().allow(null),
 });
 
 const ESTADOS_PROYECTO = ['BORRADOR', 'ACTIVO', 'PAUSADO', 'COMPLETADO', 'CANCELADO'];

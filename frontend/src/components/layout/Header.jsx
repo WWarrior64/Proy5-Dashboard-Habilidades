@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import BrandName from '../common/BrandName.jsx'
+import logo from '../../assets/internal-marketplace-mark.svg'
 import { Bell, Sun, Moon, Menu as MenuIcon } from 'lucide-react'
 
 export default function Header({ user }) {
@@ -9,8 +11,8 @@ export default function Header({ user }) {
           <MenuIcon size={22} strokeWidth={2} />
         </button>
         <Link to="/" className="flex items-center gap-2 font-bold text-[#172554]">
-          <div className="w-6 h-6 rounded bg-[#2563eb] flex items-center justify-center text-xs text-white">IM</div>
-          <span className="hidden sm:inline">Internal Marketplace</span>
+          <img src={logo} alt="" aria-hidden="true" style={{ width: 32, height: 32 }} />
+          <span className="hidden sm:inline"><BrandName /></span>
         </Link>
       </div>
       <div className="flex items-center gap-3">

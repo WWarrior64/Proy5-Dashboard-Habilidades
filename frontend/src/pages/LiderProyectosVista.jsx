@@ -1,7 +1,9 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Pencil, Plus, Search, Trash2, UserRound, X } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
 import { proyectosService, proyectoEditable, estadosPermitidos, puedeQuitarRequisito } from '../services/proyectos.service.js'
 import { habilidadesService } from '../services/habilidades.service.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
@@ -71,6 +73,8 @@ function prepararRequisitos(seleccionados, catalogo) {
 
 export default function LiderProyectosVista() {
   const { user } = useAuth()
+  const { canOperate } = useOperationalPermissions()
+  const puedeGestionar = canOperate('gestionar_proyectos')
   const [proyectos, setProyectos] = useState([])
   const [ejemplos, setEjemplos] = useState(ejemplosIniciales)
   const [habilidadesPorProyecto, setHabilidadesPorProyecto] = useState({})
@@ -221,6 +225,7 @@ export default function LiderProyectosVista() {
 
   const guardarProyecto = async evento => {
     evento.preventDefault()
+    if (!puedeGestionar) return
     const nombre = formulario.nombre.trim()
     const descripcion = formulario.descripcion.trim()
     const horas = Number(formulario.horasRequeridas)
@@ -271,7 +276,7 @@ export default function LiderProyectosVista() {
   }
 
   const cancelarProyecto = async () => {
-    if (!porCancelar) return
+    if (!puedeGestionar || !porCancelar) return
     setGuardando(true)
     setError('')
     try {
@@ -297,7 +302,7 @@ export default function LiderProyectosVista() {
     <div className="emp-dashboard rrhh-proyectos-page lider-proyectos-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de líder de proyecto">
             {menu.map(([titulo, ruta]) => (
@@ -329,7 +334,7 @@ export default function LiderProyectosVista() {
         <section className="emp-content rrhh-proyectos-content lider-proyectos-content" aria-labelledby="lider-proyectos-titulo">
           <div className="rrhh-proyectos-heading">
             <h2 id="lider-proyectos-titulo">Proyectos</h2>
-            <button className="rrhh-proyectos-add" type="button" onClick={() => abrirFormulario(null)} disabled={cargando || guardando}>
+            <button className="rrhh-proyectos-add" type="button" onClick={() => abrirFormulario(null)} disabled={!puedeGestionar || cargando || guardando}>
               <Plus size={16} aria-hidden="true" /> Nuevo proyecto
             </button>
           </div>
@@ -358,11 +363,12 @@ export default function LiderProyectosVista() {
                   <input type="search" placeholder="Buscar proyecto..." aria-label="Buscar proyectos por nombre o habilidad"
                     value={busqueda} onChange={evento => setBusqueda(evento.target.value)} />
                 </label>
-                <select aria-label="Filtrar por estado" value={estadoFiltro} onChange={evento => setEstadoFiltro(evento.target.value)}>
-                  <option value="VIGENTES">Estado: Vigentes</option>
-                   <option value="TODOS">Todos los estados</option>
+                <label className="estado-filtro-inline"><span>Estado</span>
+                 <select aria-label="Filtrar por estado" value={estadoFiltro} onChange={evento => setEstadoFiltro(evento.target.value)}>
+                  <option value="VIGENTES">Vigentes</option>
+                   <option value="TODOS">Todos</option>
                   {estados.map(item => <option key={item.valor} value={item.valor}>{item.nombre}</option>)}
-                </select>
+                </select></label>
               </div>
             </div>
 
@@ -407,14 +413,14 @@ export default function LiderProyectosVista() {
                           <td>
                             <div className="rrhh-proyectos-actions lider-proyectos-actions">
                               <button type="button" aria-label={'Editar ' + item.nombre} title={'Editar ' + item.nombre}
-                                onClick={() => abrirFormulario(item)} disabled={guardando || !proyectoEditable(item)}>
+                                onClick={() => abrirFormulario(item)} disabled={!puedeGestionar || guardando || !proyectoEditable(item)}>
                                 <Pencil size={16} aria-hidden="true" />
                               </button>
                               <button type="button" className="lider-proyectos-cancelar"
                                 aria-label={'Cancelar ' + item.nombre}
                                 title={item.estado === 'CANCELADO' ? 'Proyecto ya cancelado' : 'Cancelar ' + item.nombre}
                                 onClick={() => setPorCancelar(item)}
-                                disabled={guardando || !proyectoEditable(item)}>
+                                disabled={!puedeGestionar || guardando || !proyectoEditable(item)}>
                                 <Trash2 size={16} aria-hidden="true" />
                               </button>
                             </div>
@@ -548,7 +554,7 @@ export default function LiderProyectosVista() {
             </p>
             <div className="lider-proyectos-dialog-actions">
               <button type="button" className="lider-proyectos-cancelar-modal" onClick={() => setPorCancelar(null)} disabled={guardando}>Volver</button>
-              <button type="button" className="lider-proyectos-confirmar" onClick={cancelarProyecto} disabled={guardando}>
+              <button type="button" className="lider-proyectos-confirmar" onClick={cancelarProyecto} disabled={!puedeGestionar || guardando}>
                 <Trash2 size={16} aria-hidden="true" /> {guardando ? 'Cancelando...' : 'Cancelar proyecto'}
               </button>
             </div>

@@ -27,17 +27,26 @@ describe('Módulo de Colaboradores - Handler', () => {
 
     test('debe crear un colaborador válido', async () => {
       const colaboradorMock = {
-        colaboradorId: 'col_1',
         usuarioId: 'usr_1',
         cargoId: 'cargo_1',
         rolProfesional: 'Desarrollador',
         estado: 'ACTIVO',
       };
-      colaboradoresRepository.crear.mockResolvedValue(colaboradorMock);
+      colaboradoresRepository.crear.mockResolvedValue({ ...colaboradorMock, colaboradorId: 'id-generado-en-servidor' });
       const event = { body: JSON.stringify(colaboradorMock) };
       const result = await colaboradoresHandler.crearColaborador(event, {});
       expect(result.statusCode).toBe(201);
-      expect(colaboradoresRepository.crear).toHaveBeenCalledWith(colaboradorMock);
+      expect(colaboradoresRepository.crear).toHaveBeenCalledWith(expect.objectContaining(colaboradorMock));
+      expect(colaboradoresRepository.crear.mock.calls[0][0]).not.toHaveProperty('colaboradorId');
+      expect(JSON.parse(result.body).datos.colaboradorId).toBe('id-generado-en-servidor');
+    });
+
+    test('rechaza un ID de colaborador enviado por el cliente', async () => {
+      const result = await colaboradoresHandler.crearColaborador({ body: JSON.stringify({
+        colaboradorId: 'id-manual', usuarioId: 'usr_1', cargoId: 'cargo_1', rolProfesional: 'Dev',
+      }) }, {});
+      expect(result.statusCode).toBe(400);
+      expect(colaboradoresRepository.crear).not.toHaveBeenCalled();
     });
 
     test('rechaza una matriz JSON aunque su sintaxis sea válida', async () => {
@@ -47,7 +56,7 @@ describe('Módulo de Colaboradores - Handler', () => {
     });
 
     test('debe retornar 400 cuando faltan campos requeridos', async () => {
-      const event = { body: JSON.stringify({ colaboradorId: 'col_1' }) };
+      const event = { body: JSON.stringify({}) };
       const result = await colaboradoresHandler.crearColaborador(event, {});
       expect(result.statusCode).toBe(400);
     });
@@ -59,7 +68,7 @@ describe('Módulo de Colaboradores - Handler', () => {
       colaboradoresRepository.crear.mockRejectedValue(error);
       const event = {
         body: JSON.stringify({
-          colaboradorId: 'col_2', usuarioId: 'usr_1', cargoId: 'cargo_1', rolProfesional: 'Dev',
+          usuarioId: 'usr_1', cargoId: 'cargo_1', rolProfesional: 'Dev',
         }),
       };
       const result = await colaboradoresHandler.crearColaborador(event, {});
@@ -73,7 +82,7 @@ describe('Módulo de Colaboradores - Handler', () => {
       colaboradoresRepository.crear.mockRejectedValue(error);
       const event = {
         body: JSON.stringify({
-          colaboradorId: 'col_1', usuarioId: 'usr_1', cargoId: 'cargo_inactivo', rolProfesional: 'Dev',
+          usuarioId: 'usr_1', cargoId: 'cargo_inactivo', rolProfesional: 'Dev',
         }),
       };
       const result = await colaboradoresHandler.crearColaborador(event, {});
@@ -220,6 +229,29 @@ describe('Módulo de Colaboradores - Handler', () => {
       expect(respuesta.statusCode).toBe(200);
       expect(colaboradoresRepository.actualizar).toHaveBeenCalledWith('col_1', { estado: 'ACTIVO' });
       expect(colaboradoresRepository.crear).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('eliminarDefinitivamenteColaborador', () => {
+    test('elimina exclusivamente el perfil inactivo autorizado por el repositorio', async () => {
+      colaboradoresRepository.eliminarDefinitivamente.mockResolvedValue({ colaboradorId: 'col_1', eliminado: true });
+      const respuesta = await colaboradoresHandler.eliminarDefinitivamenteColaborador({
+        pathParameters: { colaboradorId: 'col_1' },
+      });
+      expect(respuesta.statusCode).toBe(200);
+      expect(JSON.parse(respuesta.body).datos).toEqual({ colaboradorId: 'col_1', eliminado: true });
+      expect(colaboradoresRepository.eliminarDefinitivamente).toHaveBeenCalledWith('col_1');
+      expect(colaboradoresRepository.darBaja).not.toHaveBeenCalled();
+    });
+    test('propaga el conflicto 409 cuando existen dependencias históricas', async () => {
+      const conflicto = Object.assign(new Error('Tiene asignaciones históricas'), {
+        codigo: 409, codigoError: 'CONFLICT',
+      });
+      colaboradoresRepository.eliminarDefinitivamente.mockRejectedValue(conflicto);
+      const respuesta = await colaboradoresHandler.eliminarDefinitivamenteColaborador({
+        pathParameters: { colaboradorId: 'col_1' },
+      });
+      expect(respuesta.statusCode).toBe(409);
     });
   });
 

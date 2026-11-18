@@ -108,7 +108,7 @@ describe('Repositorio: postulaciones', () => {
     expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
   });
 
-  test('W07 no permite una postulación nueva si ya existe asignación histórica', async () => {
+  test('no permite una postulación nueva si ya existe asignación histórica', async () => {
     jest.spyOn(dedicacion, 'verificarAsignacionUnica').mockRejectedValueOnce(
       new ErrorApp('Este colaborador ya tiene una asignación en este proyecto', 409, CODIGOS.CONFLICTO));
     await expect(repo.crearPostulacion({
@@ -117,7 +117,7 @@ describe('Repositorio: postulaciones', () => {
     expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
   });
 
-  test('W06 no acepta postulaciones si faltan habilidades obligatorias', async () => {
+  test('no acepta postulaciones si faltan habilidades obligatorias', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: POSTULACION });
     dedicacion.verificarHabilidadesObligatorias.mockRejectedValueOnce(
       new ErrorApp('Falta habilidad obligatoria', 409, CODIGOS.CONFLICTO));

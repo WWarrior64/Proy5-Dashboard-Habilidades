@@ -165,12 +165,13 @@ export default function Usuarios() {
           <option key={rol} value={rol}>{rol}</option>
         ))}
       </select>
-      <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)} className="input" style={{ minWidth: '140px' }}>
-        <option value="">Todos los estados</option>
+      <label className="estado-filtro-inline"><span>Estado</span>
+       <select aria-label="Filtrar usuarios por estado" value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)} className="input" style={{ minWidth: '140px' }}>
+        <option value="">Todos</option>
         {ESTADOS.map((est) => (
           <option key={est} value={est}>{est}</option>
         ))}
-      </select>
+      </select></label>
     </div>
 
     {loading ? (

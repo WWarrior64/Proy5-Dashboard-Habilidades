@@ -20,6 +20,19 @@ const eventoActividad = {
   path: '/api/v1/dashboard/actividad',
 };
 
+async function capturarErrorEsperado(operacion) {
+  const registro = jest.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    const respuesta = await operacion();
+    expect(registro).toHaveBeenCalledWith(
+      'Error interno de API', expect.objectContaining({ codigoError: 'INTERNAL_SERVER_ERROR' }),
+    );
+    return respuesta;
+  } finally {
+    registro.mockRestore();
+  }
+}
+
 describe('Módulo de Dashboard - Handler', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -90,14 +103,14 @@ describe('Módulo de Dashboard - Handler', () => {
       expect(dashboardRepo.obtenerActividadReciente).toHaveBeenCalledTimes(1);
     });
 
-    it('caso T26: tras una escritura e invalidación, la siguiente lectura obtiene el valor actualizado', async () => {
+    it('tras una escritura e invalidación, la siguiente lectura obtiene el valor actualizado', async () => {
       // Lectura 1 con caché activa: versión 10
       dashboardRepo.contarColaboradoresActivos.mockResolvedValueOnce(10);
       const r1 = await dashboardHandler.obtenerColaboradoresActivos(eventoColaboradores, {});
       expect(JSON.parse(r1.body).datos.total).toBe(10);
       expect(JSON.parse(r1.body).datos.metadatos.cache.desdeCache).toBe(false);
 
-      // Escritura en el repositorio: invalida la clave afectada (E06).
+      // Escritura en el repositorio: invalida la clave afectada.
       cache.eliminarPorPrefijo('dashboard:colaboradores:');
 
       // Lectura 2: miss, el repositorio devuelve la versión actualizada (11).
@@ -111,7 +124,9 @@ describe('Módulo de Dashboard - Handler', () => {
     it('debe capturar errores de base de datos y retornar 500', async () => {
       dashboardRepo.contarColaboradoresActivos.mockRejectedValue(new Error('DynamoDB timeout'));
 
-      const result = await dashboardHandler.obtenerResumenDashboard(eventoResumen, {});
+      const result = await capturarErrorEsperado(
+        () => dashboardHandler.obtenerResumenDashboard(eventoResumen, {}),
+      );
       expect(result.statusCode).toBe(500);
 
       const body = JSON.parse(result.body);
@@ -144,7 +159,9 @@ describe('Módulo de Dashboard - Handler', () => {
     it('debe capturar errores de base de datos y retornar 500', async () => {
       dashboardRepo.contarColaboradoresActivos.mockRejectedValue(new Error('DynamoDB timeout'));
 
-      const result = await dashboardHandler.obtenerColaboradoresActivos(eventoColaboradores, {});
+      const result = await capturarErrorEsperado(
+        () => dashboardHandler.obtenerColaboradoresActivos(eventoColaboradores, {}),
+      );
       expect(result.statusCode).toBe(500);
       const body = JSON.parse(result.body);
       expect(body.error.mensaje).toBe('Error interno del servidor');

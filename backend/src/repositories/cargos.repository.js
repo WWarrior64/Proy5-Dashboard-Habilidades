@@ -12,7 +12,7 @@ const { randomUUID } = require('node:crypto');
 const cache = require('../services/cache.service.js');
 
 // TTL de los catálogos de cargos en segundos. Sobrescribible por variable de
-// entorno (E02: catálogo de cargos con caché temporal, expiración e invalidación).
+// entorno (catálogo de cargos con caché temporal, expiración e invalidación).
 const ttlCatalogoCargosEnv = Number(process.env.CACHE_TTL_CATALOG_SECONDS);
 const TTL_CARGO_SEGUNDOS =
   Number.isFinite(ttlCatalogoCargosEnv) && ttlCatalogoCargosEnv > 0
@@ -24,9 +24,11 @@ function claveListarCargos(filtros) {
   return cache.construirClave(
     'cargos',
     'list',
-    filtros.estado || '',
-    String(filtros.limit || 25),
-    filtros.lastKey ? JSON.stringify(filtros.lastKey) : ''
+    JSON.stringify({
+      estado: filtros.estado || null,
+      limit: filtros.limit ?? 25,
+      lastKey: filtros.lastKey || null,
+    })
   );
 }
 
@@ -36,7 +38,7 @@ function claveObtenerCargo(cargoId) {
 
 /**
  * Invalida las claves de caché de cargos afectadas por una escritura.
- * Se ejecuta solo tras una escritura exitosa en DynamoDB (E06).
+ * Se ejecuta solo tras una escritura exitosa en DynamoDB.
  * @param {string} [cargoId] - Identificador del cargo modificado, si aplica
  */
 function invalidarCachéCargos(cargoId) {

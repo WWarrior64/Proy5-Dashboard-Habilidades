@@ -1,3 +1,4 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { ArrowUpRight, CirclePlus, LogIn, RefreshCw, Search, UserRound, X } from 'lucide-react'
@@ -171,7 +172,7 @@ export default function AdministradorAuditoriaVista() {
     <div className="emp-dashboard admin-auditoria-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de administrador">
             {menu.map(([nombre, ruta]) => (

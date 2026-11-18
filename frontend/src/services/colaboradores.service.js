@@ -12,6 +12,7 @@ export const colaboradoresService = {
   removeSkill: (id, skillId) => api.delete(`/colaboradores/${encodeURIComponent(id)}/habilidades/${encodeURIComponent(skillId)}`),
   create: (data) => api.post('/colaboradores', data),
   update: (id, data) => api.put(`/colaboradores/${id}`, data),
-  remove: (id) => api.delete(`/colaboradores/${id}`),
+  remove: (id) => api.delete(`/colaboradores/${encodeURIComponent(id)}`),
+  deletePermanently: (id) => api.delete(`/colaboradores/${encodeURIComponent(id)}/definitivo`),
   changeStatus: (id, data) => api.patch(`/colaboradores/${id}/estado`, data),
 }

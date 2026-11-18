@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
 import { proyectosService, proyectoEditable } from '../services/proyectos.service.js'
 import { usuariosService } from '../services/usuarios.service.js'
 import { habilidadesService } from '../services/habilidades.service.js'
@@ -18,6 +19,7 @@ import RrhhProyectosVista from './RrhhProyectosVista.jsx'
 
 export default function Proyectos() {
   const { user } = useAuth()
+  const { canOperate } = useOperationalPermissions()
   const [proyectos, setProyectos] = useState([])
   const [lideres, setLideres] = useState([])
   const [habilidadesCatalogo, setHabilidadesCatalogo] = useState([])
@@ -113,6 +115,7 @@ export default function Proyectos() {
   }, [])
 
   const handleSave = async (formData) => {
+    if (!canOperate('gestionar_proyectos')) return
     setLoading(true)
     try {
       const payload = {
@@ -154,7 +157,7 @@ export default function Proyectos() {
   }
 
   const handleConfirm = async () => {
-    if (!confirmTarget || !proyectoEditable(confirmTarget)) return
+    if (!canOperate('gestionar_proyectos') || !confirmTarget || !proyectoEditable(confirmTarget)) return
     try {
       await proyectosService.changeStatus(confirmTarget.proyectoId, { estado: 'CANCELADO' })
       setShowConfirm(false)
@@ -167,7 +170,7 @@ export default function Proyectos() {
     }
   }
 
-  const canManage = user?.rol === 'ADMINISTRADOR' || user?.rol === 'RRHH' || user?.rol === 'LIDER_PROYECTO'
+  const canManage = ['ADMINISTRADOR', 'RRHH', 'LIDER_PROYECTO'].includes(user?.rol) && canOperate('gestionar_proyectos')
 
   const activos = proyectos.filter((p) => p.estado === 'ACTIVO').length
   const horasRequeridas = proyectos.reduce((acc, p) => acc + (p.horasRequeridas || 0), 0)
