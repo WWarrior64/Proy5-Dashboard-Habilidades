@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth.js'
-import { proyectosService } from '../services/proyectos.service.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
+import { proyectosService, proyectoEditable } from '../services/proyectos.service.js'
 import { usuariosService } from '../services/usuarios.service.js'
 import { habilidadesService } from '../services/habilidades.service.js'
 import { extractItems } from '../utils/apiResponses.js'
-import api from '../services/api.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
 import Modal from '../components/common/Modal.jsx'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
@@ -19,10 +19,12 @@ import RrhhProyectosVista from './RrhhProyectosVista.jsx'
 
 export default function Proyectos() {
   const { user } = useAuth()
+  const { canOperate } = useOperationalPermissions()
   const [proyectos, setProyectos] = useState([])
   const [lideres, setLideres] = useState([])
   const [habilidadesCatalogo, setHabilidadesCatalogo] = useState([])
   const [requisitosEnEdicion, setRequisitosEnEdicion] = useState([])
+  const [borradorPendienteId, setBorradorPendienteId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showForm, setShowForm] = useState(false)
@@ -78,14 +80,16 @@ export default function Proyectos() {
 
   const handleCreate = () => {
     setRequisitosEnEdicion([])
+    setBorradorPendienteId(null)
     setEditMode(false)
     setEditingProyecto(null)
     setShowForm(true)
   }
 
   const handleEdit = async proyecto => {
+    if (!proyectoEditable(proyecto)) return
     try {
-      const respuesta = await api.get(`/proyectos/${encodeURIComponent(proyecto.proyectoId)}/habilidades`)
+      const respuesta = await proyectosService.listRequirements(proyecto.proyectoId)
       setRequisitosEnEdicion(extractItems(respuesta.data))
       setEditMode(true)
       setEditingProyecto(proyecto)
@@ -110,27 +114,8 @@ export default function Proyectos() {
     return () => { activo = false }
   }, [])
 
-  const sincronizarRequisitos = async (proyectoId, requisitos) => {
-    const base = `/proyectos/${encodeURIComponent(proyectoId)}/habilidades`
-    const actuales = extractItems((await api.get(base)).data)
-    const seleccionados = new Set(requisitos.map(item => item.habilidadId))
-    for (const requisito of requisitos) {
-      const anterior = actuales.find(item => item.habilidadId === requisito.habilidadId)
-      if (!anterior) await api.post(base, { ...requisito, esObligatoria: true })
-      else if (anterior.nivelMinimo !== requisito.nivelMinimo) {
-        await api.put(`${base}/${encodeURIComponent(requisito.habilidadId)}`, {
-          nivelMinimo: requisito.nivelMinimo,
-        })
-      }
-    }
-    for (const anterior of actuales) {
-      if (!seleccionados.has(anterior.habilidadId)) {
-        await api.delete(`${base}/${encodeURIComponent(anterior.habilidadId)}`)
-      }
-    }
-  }
-
   const handleSave = async (formData) => {
+    if (!canOperate('gestionar_proyectos')) return
     setLoading(true)
     try {
       const payload = {
@@ -148,20 +133,14 @@ export default function Proyectos() {
         habilidad.habilidadId === item.habilidadId && habilidad.estado === 'ACTIVO'))) {
         throw new Error('Solo se pueden seleccionar habilidades activas del catálogo.')
       }
-      if (editMode && editingProyecto) {
-        if (!['CANCELADO', 'COMPLETADO'].includes(editingProyecto.estado)) {
-          await sincronizarRequisitos(editingProyecto.proyectoId, requisitos)
-        }
-        await proyectosService.update(editingProyecto.proyectoId, payload)
-      } else {
-        const creado = await proyectosService.create({
-          ...payload, estado: 'BORRADOR', creadoPor: user?.usuarioId,
-        })
-        const proyectoId = creado.data?.datos?.proyectoId
-        if (!proyectoId) throw new Error('Se creó el proyecto sin un identificador para sus habilidades.')
-        await sincronizarRequisitos(proyectoId, requisitos)
-        if (payload.estado !== 'BORRADOR') await proyectosService.update(proyectoId, { estado: payload.estado })
-      }
+      await proyectosService.saveWorkflow({
+        proyectoId: editMode ? editingProyecto?.proyectoId : null,
+        borradorId: editMode ? null : borradorPendienteId,
+        datos: { ...payload, creadoPor: user?.usuarioId },
+        requisitos,
+        onDraftReserved: setBorradorPendienteId,
+      })
+      setBorradorPendienteId(null)
       setShowForm(false)
       setEditingProyecto(null)
       await loadProyectos()
@@ -178,7 +157,7 @@ export default function Proyectos() {
   }
 
   const handleConfirm = async () => {
-    if (!confirmTarget) return
+    if (!canOperate('gestionar_proyectos') || !confirmTarget || !proyectoEditable(confirmTarget)) return
     try {
       await proyectosService.changeStatus(confirmTarget.proyectoId, { estado: 'CANCELADO' })
       setShowConfirm(false)
@@ -191,7 +170,7 @@ export default function Proyectos() {
     }
   }
 
-  const canManage = user?.rol === 'ADMINISTRADOR' || user?.rol === 'RRHH' || user?.rol === 'LIDER_PROYECTO'
+  const canManage = ['ADMINISTRADOR', 'RRHH', 'LIDER_PROYECTO'].includes(user?.rol) && canOperate('gestionar_proyectos')
 
   const activos = proyectos.filter((p) => p.estado === 'ACTIVO').length
   const horasRequeridas = proyectos.reduce((acc, p) => acc + (p.horasRequeridas || 0), 0)
@@ -272,7 +251,9 @@ export default function Proyectos() {
     )}
 
     <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Editar proyecto' : 'Nuevo proyecto'}>
+      {error && <p role="alert" className="error-text">{error}</p>}
       <ProyectoForm
+        key={editingProyecto?.proyectoId || 'nuevo'}
         proyecto={editingProyecto}
         onSave={handleSave}
         onCancel={() => setShowForm(false)}
@@ -292,7 +273,7 @@ export default function Proyectos() {
       onConfirm={handleConfirm}
       onCancel={() => setShowConfirm(false)}
       title="¿Cancelar proyecto?"
-      message="Se aplicará el cambio al elemento seleccionado. Podrá actualizarlo de nuevo cuando lo necesite."
+      message="El proyecto quedará cancelado y no ofrecerá reactivación desde esta interfaz."
       confirmLabel="Confirmar"
       cancelLabel="Volver"
       danger

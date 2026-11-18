@@ -1,5 +1,6 @@
 /* Administrador / Roles y permisos: misma paleta y composición que el resto del sistema. */
 .admin-rp-page { width: 100%; }
+.admin-rp-item [hidden] { display: none !important; }
 
 .admin-rp-page .emp-content.admin-rp-content {
   padding: 16px 24px 24px;

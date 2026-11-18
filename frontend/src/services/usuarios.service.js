@@ -10,4 +10,5 @@ export const usuariosService = {
   changeRole: (id, data) => api.patch(`/usuarios/${id}/rol`, data),
   changeStatus: (id, data) => api.patch(`/usuarios/${id}/estado`, data),
   getMe: () => api.get('/usuarios/yo'),
+  getMyPermissions: () => api.get('/usuarios/yo/permisos'),
 }

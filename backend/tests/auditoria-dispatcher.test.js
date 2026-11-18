@@ -60,3 +60,20 @@ test('el registro de auditoría solo puede ser leído por administradores', asyn
   expect((await dispatcher(evento('GET', '/api/v1/administracion/auditoria'))).statusCode).toBe(403);
   expect((await dispatcher(evento('GET', '/api/v1/administracion/auditoria'))).statusCode).toBe(200);
 });
+
+test('una falla de auditoría no repite ni revierte una mutación confirmada', async () => {
+  const registro = jest.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    auditoria.registrarDesdeSolicitud.mockRejectedValueOnce(new Error('DynamoDB no disponible'));
+    const respuesta = await dispatcher(evento('POST', '/api/v1/cargos'));
+    expect(respuesta.statusCode).toBe(201);
+    expect(mutacion).toHaveBeenCalledTimes(1);
+    expect(auditoria.registrarDesdeSolicitud).toHaveBeenCalledTimes(1);
+    expect(registro).toHaveBeenCalledWith(
+      'No se pudo persistir el evento de auditoría',
+      expect.objectContaining({ tipo: 'Error', ruta: 'POST /api/v1/cargos' }),
+    );
+  } finally {
+    registro.mockRestore();
+  }
+});

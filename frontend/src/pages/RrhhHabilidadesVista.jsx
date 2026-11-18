@@ -1,12 +1,16 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Pencil, Plus, Search, UserRound, X } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import { habilidadesService } from '../services/habilidades.service.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
+import { useAutoDismiss } from '../hooks/useAutoDismiss.js'
 import { colaboradoresService } from '../services/colaboradores.service.js'
 import api from '../services/api.js'
 import { extractItems } from '../utils/apiResponses.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
+import { etiquetaCodigo } from '../utils/formatters.js'
 import './rrhh-habilidades.css'
 
 const menu = [
@@ -35,19 +39,24 @@ const ejemploCatalogo = [
 
 const formularioVacio = { nombre: '', categoria: 'FRONTEND', descripcion: '', estado: 'ACTIVO' }
 const estaActiva = habilidad => !['INACTIVO', 'INACTIVA'].includes(habilidad.estado?.toUpperCase())
-const etiquetaCategoria = valor => categoriasBase.find(categoria => categoria.value === valor)?.label || String(valor || 'General').replaceAll('_', ' ')
+const etiquetaCategoria = valor => categoriasBase.find(categoria => categoria.value === valor)?.label || etiquetaCodigo(valor || 'General')
 const totalRelacionado = valor => Number.isFinite(valor) ? valor : '—'
 
 export default function RrhhHabilidadesVista() {
+  const { canOperate } = useOperationalPermissions()
+  const puedeGestionar = canOperate('gestionar_habilidades')
   const [habilidades, setHabilidades] = useState([])
   const [estadosEjemplo, setEstadosEjemplo] = useState({})
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const [avisoMetricas, setAvisoMetricas] = useState('')
+  useAutoDismiss(avisoMetricas, setAvisoMetricas)
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [categoria, setCategoria] = useState('')
   const [estado, setEstado] = useState('ACTIVO')
+  const [pagina, setPagina] = useState(1)
+  const porPagina = 10
   const [modal, setModal] = useState(null)
   const [errorFormulario, setErrorFormulario] = useState('')
   const [formulario, setFormulario] = useState(formularioVacio)
@@ -107,7 +116,7 @@ export default function RrhhHabilidadesVista() {
   useEffect(() => { cargarCatalogo() }, [cargarCatalogo])
 
   // Los datos ficticios son solo una referencia visual en desarrollo.
-  const mostrandoEjemplo = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error && habilidades.length === 0
+  const mostrandoEjemplo = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && !cargando && !error && habilidades.length === 0
   const catalogo = mostrandoEjemplo
     ? ejemploCatalogo.map(item => ({ ...item, estado: estadosEjemplo[item.habilidadId] || item.estado }))
     : habilidades
@@ -127,6 +136,12 @@ export default function RrhhHabilidadesVista() {
     })
   }, [catalogo, busqueda, busquedaSuperior, categoria, estado])
 
+  useEffect(() => { setPagina(1) }, [busqueda, busquedaSuperior, categoria, estado])
+  const totalPaginas = Math.max(1, Math.ceil(visibles.length / porPagina))
+  const paginaActual = Math.min(pagina, totalPaginas)
+  const inicio = (paginaActual - 1) * porPagina
+  const habilidadesPagina = visibles.slice(inicio, inicio + porPagina)
+
   const abrirFormulario = habilidad => {
     setErrorFormulario('')
     setFormulario(habilidad ? {
@@ -140,7 +155,7 @@ export default function RrhhHabilidadesVista() {
 
   const guardarHabilidad = async evento => {
     evento.preventDefault()
-    if (!formulario.nombre.trim()) return
+    if (!puedeGestionar || !formulario.nombre.trim()) return
     setGuardando(true)
     setErrorFormulario('')
     try {
@@ -160,6 +175,7 @@ export default function RrhhHabilidadesVista() {
   }
 
   const alternarEstado = async habilidad => {
+    if (!puedeGestionar) return
     if (mostrandoEjemplo) {
       setEstadosEjemplo(previos => ({
         ...previos,
@@ -183,7 +199,7 @@ export default function RrhhHabilidadesVista() {
     <div className="emp-dashboard rrhh-habilidades-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de recursos humanos">
             {menu.map(([texto, ruta]) => (
@@ -220,7 +236,7 @@ export default function RrhhHabilidadesVista() {
         <section className="emp-content rrhh-habilidades-content" aria-labelledby="rrhh-habilidades-title">
           <div className="rrhh-habilidades-heading">
             <h2 id="rrhh-habilidades-title">Habilidades</h2>
-            <button className="rrhh-habilidades-add" type="button" onClick={() => abrirFormulario(null)} disabled={cargando || guardando}>
+            <button className="rrhh-habilidades-add" type="button" onClick={() => abrirFormulario(null)} disabled={!puedeGestionar || cargando || guardando}>
               <Plus size={16} aria-hidden="true" /> Nueva habilidad
             </button>
           </div>
@@ -254,16 +270,18 @@ export default function RrhhHabilidadesVista() {
                     onChange={evento => setBusqueda(evento.target.value)}
                   />
                 </label>
-                <select aria-label="Filtrar por categoría" value={categoria} onChange={evento => setCategoria(evento.target.value)}>
-                  <option value="">Categoría: Todas</option>
+                <label className="rrhh-habilidades-categoria-filtro"><span>Categoría</span>
+                 <select aria-label="Filtrar por categoría" value={categoria} onChange={evento => setCategoria(evento.target.value)}>
+                  <option value="">Todas</option>
                   {categorias.map(valor => <option key={valor} value={valor}>{etiquetaCategoria(valor)}</option>)}
-                </select>
-                <select aria-label="Filtrar por estado" value={estado} onChange={evento => setEstado(evento.target.value)}>
-                  <option value="ACTIVO">Estado: Activas</option>
-                   <option value="TODOS">Todos los estados</option>
+                </select></label>
+                <label className="estado-filtro-inline"><span>Estado</span>
+                 <select aria-label="Filtrar por estado" value={estado} onChange={evento => setEstado(evento.target.value)}>
+                  <option value="ACTIVO">Activas</option>
+                   <option value="TODOS">Todos</option>
                   
                   <option value="INACTIVO">Inactivas</option>
-                </select>
+                </select></label>
               </div>
             </div>
 
@@ -300,7 +318,7 @@ export default function RrhhHabilidadesVista() {
                       </tr>
                     </thead>
                     <tbody>
-                      {visibles.map(habilidad => (
+                      {habilidadesPagina.map(habilidad => (
                         <tr key={habilidad.habilidadId}>
                           <td className="rrhh-habilidades-nombre">{habilidad.nombre}</td>
                           <td>{etiquetaCategoria(habilidad.categoria)}</td>
@@ -319,7 +337,7 @@ export default function RrhhHabilidadesVista() {
                                 aria-label={'Editar ' + habilidad.nombre}
                                 title={mostrandoEjemplo ? 'Vista previa: no se puede editar' : 'Editar ' + habilidad.nombre}
                                 onClick={() => abrirFormulario(habilidad)}
-                                disabled={mostrandoEjemplo || cambiandoEstado !== null}
+                                disabled={!puedeGestionar || mostrandoEjemplo || cambiandoEstado !== null}
                               ><Pencil size={16} aria-hidden="true" /></button>
                               <button
                                 type="button"
@@ -329,7 +347,7 @@ export default function RrhhHabilidadesVista() {
                                 aria-label={(estaActiva(habilidad) ? 'Desactivar ' : 'Activar ') + habilidad.nombre}
                                 title={(estaActiva(habilidad) ? 'Desactivar ' : 'Activar ') + habilidad.nombre + (mostrandoEjemplo ? ' (vista previa)' : '')}
                                 onClick={() => alternarEstado(habilidad)}
-                                disabled={cambiandoEstado !== null}
+                                disabled={!puedeGestionar || cambiandoEstado !== null}
                               ><span className="rrhh-habilidades-switch-thumb" aria-hidden="true" /></button>
                             </div>
                           </td>
@@ -341,9 +359,19 @@ export default function RrhhHabilidadesVista() {
                     <p className="rrhh-habilidades-feedback">No hay habilidades que coincidan con los filtros.</p>
                   )}
                 </div>
-                <p className="rrhh-habilidades-count">
-                  Mostrando {visibles.length} de {catalogo.length} habilidades{mostrandoEjemplo ? ' · datos de ejemplo' : ''}
-                </p>
+                <div className="rrhh-habilidades-paginacion">
+                  <p className="rrhh-habilidades-count">
+                    Mostrando {visibles.length ? inicio + 1 : 0}–{Math.min(inicio + porPagina, visibles.length)}
+                    {' '}de {visibles.length} habilidades{mostrandoEjemplo ? ' · datos de ejemplo' : ''}
+                  </p>
+                  {totalPaginas > 1 && (
+                    <nav aria-label="Paginación de habilidades" className="rrhh-habilidades-paginacion-controles">
+                      <button type="button" disabled={paginaActual === 1} onClick={() => setPagina(valor => Math.max(1, valor - 1))}>Anterior</button>
+                      <span>Página {paginaActual} de {totalPaginas}</span>
+                      <button type="button" disabled={paginaActual === totalPaginas} onClick={() => setPagina(valor => Math.min(totalPaginas, valor + 1))}>Siguiente</button>
+                    </nav>
+                  )}
+                </div>
               </>
             )}
           </section>
@@ -377,7 +405,7 @@ export default function RrhhHabilidadesVista() {
             </label>
             <div className="rrhh-habilidades-modal-actions">
               <button type="button" className="rrhh-habilidades-cancel" disabled={guardando} onClick={() => setModal(null)}>Cancelar</button>
-              <button type="submit" className="rrhh-habilidades-add" disabled={guardando}>{guardando ? 'Guardando...' : 'Guardar habilidad'}</button>
+              <button type="submit" className="rrhh-habilidades-add" disabled={!puedeGestionar || guardando}>{guardando ? 'Guardando...' : 'Guardar habilidad'}</button>
             </div>
           </form>
         </div>

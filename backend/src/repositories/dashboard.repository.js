@@ -11,6 +11,21 @@ const {
 const ESTADOS_PROYECTO = ['BORRADOR', 'ACTIVO', 'PAUSADO', 'COMPLETADO', 'CANCELADO'];
 const ESTADOS_POSTULACION = ['PENDIENTE', 'ACEPTADA', 'RECHAZADA', 'RETIRADA'];
 
+/*
+ * Índices aprovechados por las consultas de dashboard:
+ *   - Colaboradores:     GSI2 (estado)            → contarColaboradoresActivos (Query)
+ *   - Proyectos:         GSI1 (estado)            → contarProyectosPorEstado / actividad (Query por estado)
+ *   - Asignaciones:      GSI3 (estado)            → contarAsignacionesActivas / actividad (Query por estado)
+ *   - Proyecto-Habilidad:GSI1 (habilidadId)       → obtenerDistribucionHabilidades (Query por habilidad)
+ * Lecturas que aún usan Scan y se mantienen por diseño actual del modelo:
+ *   - Habilidades (catálogo de dimensión): Scan sobre tableHabilidades para el catálogo.
+ *   - Postulaciones: no existe GSI sobre `estado`, por lo que
+ *     obtenerPostulacionesPorEstado hace un Scan filtrado sobre tablePostulaciones.
+ * Si se confirma que estos Scan son un cuello de botella en prod, los GSIs
+ * necesarios (p. ej. GSI sobre estado en Postulaciones) se acuerdan con Walter
+ * y Diego y se agregan en infrastructure/template.yaml (este archivo no se modifica aquí).
+ */
+
 // DynamoDB devuelve resultados paginados incluso cuando se utiliza Select: COUNT.
 // Recorremos todas las páginas para no mostrar métricas incompletas.
 async function consultarPaginas(Comando, parametros) {

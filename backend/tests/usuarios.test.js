@@ -261,6 +261,28 @@ describe('actualizarUsuario', () => {
       expect(parsed.error.mensaje).toContain('Cognito');
     });
 
+    it('administrador compara el correo contra el usuario editado, no contra su propio correo', async () => {
+      usuariosRepository.obtenerPorCognitoSub.mockResolvedValue({
+        usuarioId: 'admin-1', email: 'admin@example.com', rol: 'ADMINISTRADOR', estado: 'ACTIVO',
+      });
+      usuariosRepository.obtenerPorId.mockResolvedValue({
+        usuarioId: 'empleado-1', email: 'destino@example.com', estado: 'ACTIVO',
+      });
+      usuariosRepository.actualizar.mockResolvedValue({ usuarioId: 'empleado-1', nombre: 'Actualizado' });
+      const evento = {
+        pathParameters: { usuarioId: 'empleado-1' },
+        requestContext: { authorizer: { claims: { sub: 'sub-admin' } } },
+        body: JSON.stringify({ nombre: 'Actualizado', email: ' DESTINO@EXAMPLE.COM ' }),
+      };
+      expect((await usuariosHandler.actualizarUsuario(evento, {})).statusCode).toBe(200);
+      expect(usuariosRepository.obtenerPorId).toHaveBeenCalledWith('empleado-1');
+      expect(usuariosRepository.actualizar).toHaveBeenCalledWith('empleado-1', { nombre: 'Actualizado' });
+
+      evento.body = JSON.stringify({ nombre: 'Actualizado', email: 'otro@example.com' });
+      expect((await usuariosHandler.actualizarUsuario(evento, {})).statusCode).toBe(400);
+      expect(usuariosRepository.actualizar).toHaveBeenCalledTimes(1);
+    });
+
     it('debe retornar 403 si un usuario intenta modificar a otro sin ser admin', async () => {
       usuariosRepository.obtenerPorCognitoSub.mockResolvedValue({
         usuarioId: 'usr_1',

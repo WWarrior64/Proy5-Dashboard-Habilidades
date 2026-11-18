@@ -1,6 +1,7 @@
 const Joi = require('joi');
 const { validar, validarDatos } = require('../src/middleware/validation');
-const { crearUsuarioSchema, actualizarUsuarioSchema, crearColaboradorSchema } = require('../src/utils/validators');
+const { crearUsuarioSchema, actualizarUsuarioSchema, crearColaboradorSchema,
+  crearProyectoSchema, actualizarProyectoSchema } = require('../src/utils/validators');
 
 const esquema = Joi.object({
   nombre: Joi.string().trim().min(1).required(),
@@ -47,6 +48,18 @@ describe('Middleware de validación Joi', () => {
     const respuesta = await validar(esquema)({ body: '{invalido' }, siguiente);
     expect(respuesta.statusCode).toBe(400);
     expect(siguiente).not.toHaveBeenCalled();
+  });
+
+  test('valida campos obligatorios y tipos de proyectos', () => {
+    const valido = { nombre: 'Proyecto', descripcion: 'Descripción', liderId: 'u1',
+      horasRequeridas: 20, creadoPor: 'u1', estado: 'BORRADOR' };
+    expect(crearProyectoSchema.validate(valido).error).toBeUndefined();
+    expect(crearProyectoSchema.validate({ ...valido, nombre: '   ' }).error).toBeDefined();
+    expect(crearProyectoSchema.validate({ ...valido, horasRequeridas: '20' }).error).toBeDefined();
+    expect(crearProyectoSchema.validate({ ...valido, objetivo: 27 }).error).toBeDefined();
+    expect(crearProyectoSchema.validate({ ...valido, estado: 'COMPLETADO' }).error).toBeDefined();
+    expect(actualizarProyectoSchema.validate({ horasRequeridas: -4 }).error).toBeDefined();
+    expect(actualizarProyectoSchema.validate({ fechaInicio: 'fecha-inválida' }).error).toBeDefined();
   });
 
   test('devuelve 400 si el esquema no se cumple', async () => {

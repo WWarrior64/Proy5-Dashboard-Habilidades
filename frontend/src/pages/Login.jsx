@@ -1,6 +1,8 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.js'
+import logo from '../assets/internal-marketplace-mark.svg'
 
 const ROUTE_BY_ROLE = {
   ADMINISTRADOR: '/dashboards/administrador',
@@ -25,7 +27,7 @@ export default function Login() {
     setLoading(true)
     setError('')
     try {
-      if (import.meta.env.VITE_DEMO_MODE === 'true') {
+      if ((import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')) {
         const demoUser = {
           usuarioId: 'demo_user',
           nombre: 'Usuario Demo',
@@ -87,7 +89,7 @@ export default function Login() {
       <main className="login-page">
         <section className="login-card password-change-card" aria-labelledby="password-change-title">
           <div className="login-header password-change-header">
-            <div className="login-logo" aria-hidden="true" />
+            <img className="login-logo" src={logo} alt="" aria-hidden="true" />
             <h1 className="login-title" id="password-change-title">Establecer nueva contraseña</h1>
             <p className="password-change-description">
               Reemplaza la contraseña temporal que recibiste por correo electrónico.
@@ -151,8 +153,8 @@ export default function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <div className="login-logo" />
-          <h1 className="login-title">Internal Marketplace</h1>
+          <img className="login-logo" src={logo} alt="Logotipo de Internal Marketplace" />
+          <h1 className="login-title"><BrandName /></h1>
         </div>
 
         {error && (
@@ -196,7 +198,7 @@ export default function Login() {
             </button>
         </form>
 
-        {import.meta.env.VITE_DEMO_MODE === 'true' && (
+        {(import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && (
           <div className="demo-mode">
             <p className="demo-label">Modo demostración</p>
             <p className="demo-text">Cualquier credencial funciona en modo demo.</p>

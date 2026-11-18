@@ -16,6 +16,7 @@ Gestión de talento humano. Almacena los perfiles profesionales de los empleados
 | rolProfesional | Sí | String | Especialidad profesional del colaborador. |
 | rolProfesional#nombre | Sí | String | Clave compuesta utilizada por el índice de estado y rol. |
 | dedicacionReservada | Sí | Number | Porcentaje reservado mediante transacciones de Asignaciones; inicia en 0. |
+| habilidadesRevision | Sí en altas nuevas | Number | Revisión de habilidades, incrementada transaccionalmente al añadir, editar o retirar una habilidad; los históricos pueden carecer de ella hasta el primer cambio. |
 | disponibilidad | Sí | String | Indicador inicial `DISPONIBLE`; la búsqueda calcula disponibilidad real como `100 - dedicacionReservada`. |
 | estado | Sí | String | ACTIVO o INACTIVO. |
 | observaciones | No | String | Notas adicionales opcionales. Si el formulario queda vacío, el frontend omite el atributo en lugar de enviar `null`. |
@@ -45,4 +46,5 @@ Gestión de talento humano. Almacena los perfiles profesionales de los empleados
 - El `cargoId` debe corresponder a un cargo existente y activo en la tabla Cargos.
 - `rolProfesional` describe la especialidad y no sustituye al rol de acceso de Usuarios.
 - Los porcentajes de disponibilidad son derivados de `dedicacionReservada`, no de un selector de estado manual; las asignaciones activas reservan capacidad y su finalización/desvinculación la libera.
+- Las modificaciones de ColaboradorHabilidad incrementan `habilidadesRevision` en la misma transacción. Crear una asignación o aceptar una postulación confirma la revisión antes de reservar dedicación, evitando asignar con habilidades modificadas simultáneamente.
 - Un perfil ligado a un usuario `LIDER_PROYECTO` es elegible para proyectos ajenos, pero no para los proyectos donde ese mismo `usuarioId` coincide con `liderId`. El filtro administrativo oculta los perfiles dados de baja por defecto y permite consultarlos expresamente.

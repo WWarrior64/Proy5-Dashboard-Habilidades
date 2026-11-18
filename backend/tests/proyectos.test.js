@@ -15,12 +15,14 @@ jest.mock('../src/config/environment.js', () => ({
   tableUsuarios: 'internal-marketplace-usuarios-dev',
   tableAsignaciones: 'internal-marketplace-asignaciones-dev',
   tableProyectoHabilidad: 'internal-marketplace-proyecto-habilidad-dev',
+  tableHabilidades: 'internal-marketplace-habilidades-dev',
 }));
 
 const { dynamoDb, commandMocks } = require('../src/config/dynamodb.js');
 const cache = require('../src/services/cache.service.js');
 const { ErrorApp, CODIGOS } = require('../src/utils/errors.js');
 const repo = require('../src/repositories/proyectos.repository.js');
+const relaciones = require('../src/repositories/proyecto-habilidad.repository.js');
 const handler = require('../src/functions/proyectos/handler.js');
 
 const LIDER = { usuarioId: 'u-lider', rol: 'LIDER_PROYECTO', estado: 'ACTIVO' };
@@ -39,6 +41,15 @@ beforeEach(() => {
   cache.eliminar.mockReset();
   cache.eliminarPorPrefijo.mockReset();
   cache.obtener.mockReturnValue(undefined);
+  commandMocks.GetCommand.mockImplementation(async entrada => {
+    if (entrada.TableName === 'internal-marketplace-usuarios-dev') return { Item: LIDER };
+    if (entrada.TableName === 'internal-marketplace-proyectos-dev') {
+      return { Item: { proyectoId: entrada.Key.proyectoId, estado: 'BORRADOR',
+        asignacionesActivas: 0, requisitosRevision: 0 } };
+    }
+    return {};
+  });
+  commandMocks.QueryCommand.mockResolvedValue({ Items: [] });
 });
 
 describe('Repositorio: proyectos', () => {
@@ -207,7 +218,9 @@ describe('Repositorio: proyectos', () => {
       })
     );
     expect(resultado).toEqual(items);
-    expect(cache.guardar).toHaveBeenCalledWith('proyectos:list:ACTIVO', items, 60000);
+    expect(cache.guardar).toHaveBeenCalledWith(
+      'proyectos:list:{"estado":"ACTIVO","liderId":null,"fecha":null}', items, 60000,
+    );
   });
 
   test('lista proyectos por líder y filtra por estado y fecha usando GSI2', async () => {
@@ -245,14 +258,13 @@ describe('Repositorio: proyectos', () => {
   });
 
   test('actualizarProyecto modifica campos y valida horas', async () => {
-    commandMocks.GetCommand.mockResolvedValueOnce({ Item: LIDER });
     commandMocks.UpdateCommand.mockResolvedValueOnce({ Attributes: { proyectoId: 'p1', nombre: 'Nuevo', estado: 'ACTIVO' } });
     const resultado = await repo.actualizarProyecto('p1', { nombre: 'Nuevo', horasRequeridas: 200 });
     expect(commandMocks.UpdateCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         TableName: 'internal-marketplace-proyectos-dev',
         Key: { proyectoId: 'p1' },
-        ConditionExpression: 'attribute_exists(proyectoId)',
+        ConditionExpression: expect.stringContaining('#actual = :estadoAnterior'),
         UpdateExpression: expect.stringContaining('SET'),
       })
     );
@@ -266,7 +278,7 @@ describe('Repositorio: proyectos', () => {
   });
 
   test('actualizarProyecto lanza 404 cuando el proyecto no existe', async () => {
-    commandMocks.UpdateCommand.mockRejectedValueOnce(Object.assign(new Error('Condicional'), { name: 'ConditionalCheckFailedException' }));
+    commandMocks.GetCommand.mockResolvedValueOnce({});
     await expect(repo.actualizarProyecto('p-noexiste', { nombre: 'Nuevo' })).rejects.toMatchObject({ codigo: 404 });
   });
 
@@ -302,6 +314,160 @@ describe('Repositorio: proyectos', () => {
     expect(commandMocks.UpdateCommand).toHaveBeenCalled();
     expect(resultado.estado).toBe('CANCELADO');
     expect(commandMocks.DeleteCommand).not.toHaveBeenCalled();
+  });
+
+  test('impide activar proyectos cancelados y completar borradores directamente', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
+      proyectoId: 'p1', estado: 'CANCELADO', asignacionesActivas: 0,
+    } });
+    await expect(repo.cambiarEstado('p1', 'ACTIVO')).rejects.toMatchObject({ codigo: 409 });
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
+      proyectoId: 'p1', estado: 'BORRADOR', asignacionesActivas: 0,
+    } });
+    await expect(repo.cambiarEstado('p1', 'COMPLETADO')).rejects.toMatchObject({ codigo: 409 });
+    expect(commandMocks.UpdateCommand).not.toHaveBeenCalled();
+  });
+
+  test('exige habilidades al reactivar un proyecto pausado por ambas rutas', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
+      proyectoId: 'p1', estado: 'PAUSADO', requisitosRevision: 2,
+    } });
+    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [] });
+    await expect(repo.cambiarEstado('p1', 'ACTIVO')).rejects.toMatchObject({ codigo: 400 });
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
+      proyectoId: 'p1', estado: 'PAUSADO', requisitosRevision: 2,
+    } });
+    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [] });
+    await expect(repo.actualizarProyecto('p1', { estado: 'ACTIVO' }))
+      .rejects.toMatchObject({ codigo: 400 });
+    expect(commandMocks.UpdateCommand).not.toHaveBeenCalled();
+  });
+
+  test('comprueba la revisión antes de reactivar un proyecto pausado', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
+      proyectoId: 'p1', estado: 'PAUSADO', requisitosRevision: 4,
+    } });
+    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [{ habilidadId: 'h1' }] });
+    commandMocks.UpdateCommand.mockResolvedValueOnce({ Attributes: {
+      proyectoId: 'p1', estado: 'ACTIVO', requisitosRevision: 4,
+    } });
+    await repo.cambiarEstado('p1', 'ACTIVO');
+    expect(commandMocks.UpdateCommand).toHaveBeenCalledWith(expect.objectContaining({
+      ConditionExpression: expect.stringContaining('#revision = :revisionAnterior'),
+      ExpressionAttributeValues: expect.objectContaining({ ':revisionAnterior': 4 }),
+    }));
+  });
+
+  test('rechaza actualizaciones sobre proyectos completados', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
+      proyectoId: 'p1', estado: 'COMPLETADO',
+    } });
+    await expect(repo.actualizarProyecto('p1', { horasRequeridas: 30 })).rejects.toMatchObject({ codigo: 409 });
+  });
+
+  test('rechaza textos vacíos y fechas incompatibles', async () => {
+    const base = { nombre: 'Proyecto', descripcion: 'Descripción', liderId: 'u-lider',
+      horasRequeridas: 20, creadoPor: 'u-lider' };
+    await expect(repo.crearProyecto({ ...base, nombre: '   ' })).rejects.toMatchObject({ codigo: 400 });
+    await expect(repo.crearProyecto({ ...base, objetivo: 123 })).rejects.toMatchObject({ codigo: 400 });
+    await expect(repo.crearProyecto({ ...base,
+      fechaInicio: '2026-11-20', fechaFin: '2026-11-19' })).rejects.toMatchObject({ codigo: 400 });
+    expect(commandMocks.PutCommand).not.toHaveBeenCalled();
+  });
+
+  test('registra nuevas habilidades y actualiza la revisión del proyecto en una transacción', async () => {
+    commandMocks.GetCommand.mockImplementation(async input => {
+      if (input.TableName === 'internal-marketplace-proyectos-dev') {
+        return { Item: { proyectoId: 'p1', estado: 'ACTIVO', requisitosRevision: 2 } };
+      }
+      return { Item: { habilidadId: 'h1', estado: 'ACTIVO' } };
+    });
+    await relaciones.asociarHabilidad({
+      proyectoId: 'p1', habilidadId: 'h1', nivelMinimo: 'MID', esObligatoria: true,
+    });
+    expect(commandMocks.TransactWriteCommand).toHaveBeenCalledWith({
+      TransactItems: expect.arrayContaining([
+        { Update: expect.objectContaining({
+          TableName: 'internal-marketplace-proyectos-dev',
+          ConditionExpression: expect.stringContaining('#revision = :revisionAnterior'),
+          ExpressionAttributeValues: expect.objectContaining({ ':revisionAnterior': 2 }),
+        }) },
+        { Put: expect.objectContaining({
+          TableName: 'internal-marketplace-proyecto-habilidad-dev',
+          ConditionExpression: 'attribute_not_exists(habilidadId)',
+        }) },
+      ]),
+    });
+    expect(commandMocks.PutCommand).not.toHaveBeenCalled();
+  });
+
+  test('impide modificar requisitos si el proyecto se cerró concurrentemente', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
+      proyectoId: 'p1', estado: 'ACTIVO', requisitosRevision: 2,
+    } });
+    commandMocks.TransactWriteCommand.mockRejectedValueOnce(Object.assign(
+      new Error('Proyecto completado'), { name: 'TransactionCanceledException' },
+    ));
+    await expect(relaciones.actualizarRelacion('p1', 'h1', { nivelMinimo: 'SENIOR' }))
+      .rejects.toMatchObject({ codigo: 409 });
+    expect(commandMocks.UpdateCommand).not.toHaveBeenCalled();
+  });
+
+  test('rechaza retirar la última habilidad de un proyecto activo', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
+      proyectoId: 'p1', estado: 'ACTIVO', requisitosRevision: 0,
+    } });
+    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [{ habilidadId: 'h1' }] });
+    await expect(relaciones.eliminarRelacion('p1', 'h1')).rejects.toMatchObject({ codigo: 409 });
+    expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
+  });
+
+  test('serializa eliminaciones concurrentes mediante la revisión del proyecto', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
+      proyectoId: 'p1', estado: 'ACTIVO', requisitosRevision: 0,
+    } });
+    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [
+      { habilidadId: 'h1' }, { habilidadId: 'h2' },
+    ] });
+    await relaciones.eliminarRelacion('p1', 'h1');
+    expect(commandMocks.TransactWriteCommand).toHaveBeenCalledWith(expect.objectContaining({
+      TransactItems: expect.arrayContaining([
+        { Update: expect.objectContaining({
+          TableName: 'internal-marketplace-proyectos-dev',
+          ConditionExpression: expect.stringContaining('#rev = :revision'),
+        }) },
+        { Delete: expect.objectContaining({
+          TableName: 'internal-marketplace-proyecto-habilidad-dev',
+          Key: { proyectoId: 'p1', habilidadId: 'h1' },
+        }) },
+      ]),
+    }));
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: {
+      proyectoId: 'p1', estado: 'ACTIVO', requisitosRevision: 0,
+    } });
+    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [
+      { habilidadId: 'h1' }, { habilidadId: 'h2' },
+    ] });
+    commandMocks.TransactWriteCommand.mockRejectedValueOnce(Object.assign(
+      new Error('Revisión cambiada'), { name: 'TransactionCanceledException' },
+    ));
+    await expect(relaciones.eliminarRelacion('p1', 'h2')).rejects.toMatchObject({ codigo: 409 });
+  });
+
+  test('exige un contador de asignaciones activas igual a cero antes de cerrar', async () => {
+    commandMocks.UpdateCommand.mockResolvedValueOnce({ Attributes: { proyectoId: 'p1', estado: 'CANCELADO' } });
+    await repo.cancelarProyecto('p1');
+    expect(commandMocks.UpdateCommand).toHaveBeenCalledWith(expect.objectContaining({
+      ConditionExpression: expect.stringContaining('#activas = :cero'),
+      ExpressionAttributeValues: expect.objectContaining({ ':cero': 0 }),
+    }));
+  });
+
+  test('impide confirmar una transición cuando cambió el estado concurrentemente', async () => {
+    commandMocks.UpdateCommand.mockRejectedValueOnce(Object.assign(
+      new Error('Estado cambiado'), { name: 'ConditionalCheckFailedException' },
+    ));
+    await expect(repo.cambiarEstado('p1', 'CANCELADO')).rejects.toMatchObject({ codigo: 409 });
   });
 
   test('listarProyectosActivos consulta proyectos ACTIVO por GSI1', async () => {

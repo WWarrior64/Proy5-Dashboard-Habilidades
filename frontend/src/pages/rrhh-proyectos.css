@@ -128,7 +128,18 @@
   font-size: 12px;
 }
 
-.rrhh-proyectos-filters select:last-child { width: 155px; }
+.rrhh-proyectos-filters .estado-filtro-inline {
+  display: inline-flex;
+  align-items: center;
+  flex-direction: row;
+  gap: 8px;
+  color: #16255a;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rrhh-proyectos-filters .estado-filtro-inline select { width: 145px; }
+.rrhh-proyectos-filters .estado-filtro-inline:last-child select { width: 155px; }
 .rrhh-proyectos-filters select:focus { outline-color: #2563eb; }
 
 .rrhh-proyectos-table-scroll {

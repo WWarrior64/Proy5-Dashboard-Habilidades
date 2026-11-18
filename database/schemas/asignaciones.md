@@ -9,7 +9,7 @@ Vinculación de colaboradores con proyectos. Almacena las asignaciones confirmad
 
 | Campo | Obligatorio | Tipo | Descripción |
 |-------|-------------|------|-------------|
-| asignacionId | Sí | String (UUID) | Identificador UUID de la asignación. |
+| asignacionId | Sí | String (UUID) | UUID determinista (v5) para nuevas asignaciones de una misma pareja proyecto–colaborador; las anteriores pueden usar otros UUID. |
 | colaboradorId | Sí | String (UUID) | Identificador del colaborador asignado. |
 | proyectoId | Sí | String (UUID) | Identificador del proyecto correspondiente. |
 | postulacionId | No | String (UUID) | Identificador de la postulación que originó la asignación. |
@@ -52,5 +52,5 @@ Vinculación de colaboradores con proyectos. Almacena las asignaciones confirmad
 - `horasCompletadas` no puede ser negativo ni superar las horas asignadas.
 - Al finalizar la participación, se establece `FINALIZADA`; al desvincular, `DESVINCULADA`. Ambos casos conservan el registro y liberan la dedicación reservada.
 - **Control atómico de dedicación:** Al crear o actualizar una asignación, los repositorios usan operaciones condicionales sobre `Colaboradores.dedicacionReservada` para impedir superar el 100 % incluso ante concurrencia.
-- **Unicidad y permisos:** un mismo colaborador no se puede vincular dos veces al mismo proyecto, incluso después de una desvinculación histórica. Si `Colaboradores.usuarioId = Proyectos.liderId`, se rechaza la autoasignación. Un líder sí puede participar en proyectos ajenos, pero solo administra asignaciones de los que dirige; la consulta de sus propias participaciones es de solo lectura.
+- **Unicidad y permisos:** un mismo colaborador no se puede vincular dos veces al mismo proyecto, incluso después de una desvinculación histórica. Antes de crear una asignación o postulación se comprueba la clave determinista con lectura fuerte y se buscan registros anteriores con un Scan consistente de todas las páginas, sin depender de GSI2. El alta transaccional usa `attribute_not_exists(asignacionId)` para evitar duplicados concurrentes del nuevo formato. Si `Colaboradores.usuarioId = Proyectos.liderId`, se rechaza la autoasignación. Un líder sí puede participar en proyectos ajenos, pero solo administra asignaciones de los que dirige; la consulta de sus propias participaciones es de solo lectura.
 - **Filtros:** las vistas muestran asignaciones activas por defecto; las finalizadas, desvinculadas y el historial completo se consultan mediante selección explícita del estado.

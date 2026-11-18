@@ -1,9 +1,12 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Eye, Search, Trash2, UserRound, X } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
+import AvisoSinPerfilColaborador, { esAvisoSinPerfilColaborador } from '../components/common/AvisoSinPerfilColaborador.jsx'
 import { colaboradoresService } from '../services/colaboradores.service.js'
 import { postulacionesService } from '../services/postulaciones.service.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
 import { proyectosService } from '../services/proyectos.service.js'
 import { extractItems } from '../utils/apiResponses.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
@@ -49,11 +52,13 @@ function claseEstado(estado) {
   return estados.find(item => item.nombre === estado)?.estilo || 'retirada'
 }
 
-const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
+const modoDemo = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')
 const nombreEstado = { PENDIENTE: 'En revisión', ACEPTADA: 'Aceptada', RECHAZADA: 'Rechazada', RETIRADA: 'Retirada' }
 const fechaVisible = valor => valor ? new Date(valor).toLocaleDateString('es-SV', { timeZone: 'UTC' }) : '—'
 
 export default function EmpleadoPostulaciones() {
+  const { canOperate } = useOperationalPermissions()
+  const puedeRetirar = canOperate('gestionar_postulaciones')
   const [postulaciones, setPostulaciones] = useState(modoDemo ? postulacionesIniciales : [])
   const [colaboradorId, setColaboradorId] = useState(null)
   const [cargando, setCargando] = useState(!modoDemo)
@@ -127,7 +132,12 @@ export default function EmpleadoPostulaciones() {
     setGuardando(true)
     setError('')
     try {
-      if (!modoDemo) await postulacionesService.withdraw(postulacion.proyectoId, colaboradorId)
+      if (!modoDemo) {
+        const respuesta = await postulacionesService.withdraw(postulacion.proyectoId, colaboradorId)
+        if (respuesta.data?.datos?.estado !== 'RETIRADA') {
+          throw new Error('La API no confirmó el retiro. Actualiza las postulaciones antes de repetirlo.')
+        }
+      }
       setPostulaciones(actuales => actuales.map(item => item.id === porRetirar
         ? { ...item, estado: 'Retirada', fechaRevision: fechaVisible(new Date().toISOString()) }
         : item))
@@ -143,7 +153,7 @@ export default function EmpleadoPostulaciones() {
     <div className="emp-dashboard emp-applications-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de empleado">
             {menu.map(([nombre, ruta]) => (
@@ -180,7 +190,9 @@ export default function EmpleadoPostulaciones() {
           </div>
 
           {cargando && <p role="status">Consultando postulaciones...</p>}
-          {error && <p role="alert">{error}</p>}
+          {error && (esAvisoSinPerfilColaborador(error)
+              ? <AvisoSinPerfilColaborador mensaje={error} />
+              : <p role="alert">{error}</p>)}
           <div className="emp-applications-metrics">
             <div className="emp-card">
               <p className="emp-card-label">Total</p>
@@ -211,16 +223,17 @@ export default function EmpleadoPostulaciones() {
                 onChange={evento => setBusqueda(evento.target.value)}
               />
             </label>
-            <select
+            <label className="estado-filtro-inline"><span>Estado</span>
+             <select
               aria-label="Filtrar por estado"
               value={filtroEstado}
               onChange={evento => setFiltroEstado(evento.target.value)}
             >
-              <option value="Todos">Estado: Todos</option>
+              <option value="Todos">Todas</option>
               {estados.map(estado => (
                 <option key={estado.nombre} value={estado.nombre}>{estado.etiqueta || estado.nombre}</option>
               ))}
-            </select>
+            </select></label>
           </div>
 
           <div className="emp-applications-table-panel">
@@ -259,7 +272,7 @@ export default function EmpleadoPostulaciones() {
                           >
                             <Eye size={16} aria-hidden="true" />
                           </button>
-                          {item.estado === 'En revisión' && <button
+                          {puedeRetirar && item.estado === 'En revisión' && <button
                             type="button"
                             className="emp-applications-withdraw"
                             onClick={() => setPorRetirar(item.id)}
@@ -316,7 +329,7 @@ export default function EmpleadoPostulaciones() {
             <p id="application-withdraw-description">¿Deseas retirar esta postulación? Su historial se conservará con estado Retirada.</p>
             <div className="emp-applications-modal-buttons">
               <button type="button" className="emp-applications-cancel" onClick={() => setPorRetirar(null)}>Cancelar</button>
-              <button type="button" className="emp-applications-close" onClick={eliminarPostulacion} disabled={guardando}>{guardando ? 'Retirando...' : 'Retirar'}</button>
+              <button type="button" className="emp-applications-close" onClick={eliminarPostulacion} disabled={!puedeRetirar || guardando}>{guardando ? 'Retirando...' : 'Retirar'}</button>
             </div>
           </section>
         </div>

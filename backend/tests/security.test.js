@@ -124,3 +124,21 @@ test('JSON inválido retorna 400, no ejecuta handler', async () => {
   expect((await handler(input)).statusCode).toBe(400);
   expect(fn).not.toHaveBeenCalled();
 });
+
+test('una excepción de DynamoDB devuelve 500 genérico y conserva el diagnóstico interno', async () => {
+  const registro = jest.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    fn.mockRejectedValueOnce(new Error('DynamoDB AccessDeniedException: detalle confidencial'));
+    const respuesta = await handler(event('GET', '/api/v1/usuarios/yo'));
+    expect(respuesta.statusCode).toBe(500);
+    const cuerpo = JSON.parse(respuesta.body);
+    expect(cuerpo.error.mensaje).toBe('Error interno del servidor');
+    expect(JSON.stringify(cuerpo)).not.toContain('AccessDeniedException');
+    expect(registro).toHaveBeenCalledWith(
+      'Error interno de API',
+      expect.objectContaining({ mensaje: expect.stringContaining('AccessDeniedException') }),
+    );
+  } finally {
+    registro.mockRestore();
+  }
+});

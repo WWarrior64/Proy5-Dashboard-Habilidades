@@ -10,12 +10,15 @@ jest.mock('../src/services/cache.service.js', () => ({
 jest.mock('../src/config/environment.js', () => ({
   tablePostulaciones: 'internal-marketplace-postulaciones-dev', tableProyectos: 'internal-marketplace-proyectos-dev',
   tableColaboradores: 'internal-marketplace-colaboradores-dev', tableAsignaciones: 'internal-marketplace-asignaciones-dev',
+  tableUsuarios: 'internal-marketplace-usuarios-dev', tableProyectoHabilidad: 'internal-marketplace-proyecto-habilidad-dev',
+  tableColaboradorHabilidad: 'internal-marketplace-colaborador-habilidad-dev',
 }));
 
 const { dynamoDb, commandMocks } = require('../src/config/dynamodb.js');
 const cache = require('../src/services/cache.service.js');
 const { ErrorApp, CODIGOS } = require('../src/utils/errors.js');
 const repo = require('../src/repositories/postulaciones.repository.js');
+const dedicacion = require('../src/services/dedicacion.service.js');
 const handler = require('../src/functions/postulaciones/handler.js');
 
 const COLABORADOR = { colaboradorId: 'c1', usuarioId: 'u-colaborador', estado: 'ACTIVO', disponibilidad: 'DISPONIBLE', dedicacionReservada: 0 };
@@ -35,13 +38,18 @@ beforeEach(() => {
   commandMocks.GetCommand.mockImplementation(async (params) => {
     if (params.TableName === 'internal-marketplace-proyectos-dev') return { Item: PROYECTO };
     if (params.TableName === 'internal-marketplace-colaboradores-dev') return { Item: COLABORADOR };
+    if (params.TableName === 'internal-marketplace-usuarios-dev') return { Item: { usuarioId: 'u-colaborador', estado: 'ACTIVO' } };
     return {};
   });
   commandMocks.PutCommand.mockResolvedValue({});
   commandMocks.UpdateCommand.mockResolvedValue({ Attributes: {} });
   commandMocks.QueryCommand.mockResolvedValue({ Items: [] });
+  commandMocks.ScanCommand.mockResolvedValue({ Items: [] });
   commandMocks.TransactWriteCommand.mockResolvedValue({});
+  jest.spyOn(dedicacion, 'verificarHabilidadesObligatorias').mockResolvedValue({ elegible: true });
 });
+
+afterEach(() => jest.restoreAllMocks());
 
 describe('Repositorio: postulaciones', () => {
   test('impide que un líder se postule a su propio proyecto', async () => {
@@ -100,8 +108,27 @@ describe('Repositorio: postulaciones', () => {
     expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
   });
 
+  test('no permite una postulación nueva si ya existe asignación histórica', async () => {
+    jest.spyOn(dedicacion, 'verificarAsignacionUnica').mockRejectedValueOnce(
+      new ErrorApp('Este colaborador ya tiene una asignación en este proyecto', 409, CODIGOS.CONFLICTO));
+    await expect(repo.crearPostulacion({
+      proyectoId: 'p1', colaboradorId: 'c1',
+    })).rejects.toMatchObject({ codigo: 409 });
+    expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
+  });
+
+  test('no acepta postulaciones si faltan habilidades obligatorias', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: POSTULACION });
+    dedicacion.verificarHabilidadesObligatorias.mockRejectedValueOnce(
+      new ErrorApp('Falta habilidad obligatoria', 409, CODIGOS.CONFLICTO));
+    await expect(repo.aceptarPostulacion('p1', 'c1', {
+      revisadoPor: 'u-lider', porcentajeDedicacion: 25, horasAsignadas: 20,
+    })).rejects.toMatchObject({ codigo: 409 });
+    expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
+  });
+
   test('convierte una postulación duplicada en conflicto', async () => {
-    commandMocks.PutCommand.mockRejectedValueOnce(Object.assign(new Error('Duplicado'), {
+    commandMocks.TransactWriteCommand.mockRejectedValueOnce(Object.assign(new Error('Duplicado'), {
       name: 'ConditionalCheckFailedException',
     }));
     await expect(repo.crearPostulacion({ proyectoId: 'p1', colaboradorId: 'c1' }))
@@ -111,11 +138,29 @@ describe('Repositorio: postulaciones', () => {
     const item = await repo.crearPostulacion({ proyectoId: 'p1', colaboradorId: 'c1', comentario: 'Interesado' });
     expect(commandMocks.GetCommand).toHaveBeenNthCalledWith(1, { TableName: 'internal-marketplace-colaboradores-dev', Key: { colaboradorId: 'c1' } });
     expect(commandMocks.GetCommand).toHaveBeenNthCalledWith(2, { TableName: 'internal-marketplace-proyectos-dev', Key: { proyectoId: 'p1' } });
-    expect(commandMocks.PutCommand).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'internal-marketplace-postulaciones-dev',
-      Item: expect.objectContaining({ estado: 'PENDIENTE', proyectoId: 'p1', colaboradorId: 'c1', postulacionKey: 'POSTULACION#c1' }),
-      ConditionExpression: 'attribute_not_exists(postulacionKey)',
-    }));
+    expect(commandMocks.TransactWriteCommand).toHaveBeenCalledWith({
+      TransactItems: expect.arrayContaining([
+        { ConditionCheck: expect.objectContaining({
+          TableName: 'internal-marketplace-asignaciones-dev',
+          ConditionExpression: 'attribute_not_exists(asignacionId)',
+        }) },
+        { ConditionCheck: expect.objectContaining({
+          TableName: 'internal-marketplace-proyectos-dev',
+          ConditionExpression: expect.stringContaining('#estado = :activo'),
+        }) },
+        { ConditionCheck: expect.objectContaining({
+          TableName: 'internal-marketplace-usuarios-dev',
+          ConditionExpression: '#estado = :activo',
+        }) },
+        { Put: expect.objectContaining({
+          TableName: 'internal-marketplace-postulaciones-dev',
+          Item: expect.objectContaining({
+            estado: 'PENDIENTE', proyectoId: 'p1', colaboradorId: 'c1', postulacionKey: 'POSTULACION#c1',
+          }),
+          ConditionExpression: 'attribute_not_exists(postulacionKey)',
+        }) },
+      ]),
+    });
     expect(item.estado).toBe('PENDIENTE');
     expect(item.postulacionId).toBeDefined();
   });
@@ -170,7 +215,7 @@ describe('Repositorio: postulaciones', () => {
     expect(commandMocks.TransactWriteCommand).toHaveBeenCalledWith(expect.objectContaining({
       TransactItems: expect.arrayContaining([
         expect.objectContaining({ Update: expect.any(Object) }),
-        { ConditionCheck: expect.objectContaining({
+        { Update: expect.objectContaining({
           TableName: 'internal-marketplace-proyectos-dev',
           ConditionExpression: expect.stringContaining('#lider <> :usuario'),
           ExpressionAttributeValues: expect.objectContaining({ ':usuario': 'u-colaborador' }),
@@ -187,12 +232,17 @@ describe('Repositorio: postulaciones', () => {
 
   test('rechaza aceptar una postulación si el colaborador ya estuvo asignado a ese proyecto', async () => {
     commandMocks.GetCommand.mockResolvedValueOnce({ Item: POSTULACION });
-    commandMocks.QueryCommand.mockResolvedValueOnce({ Items: [{
+    commandMocks.ScanCommand.mockResolvedValueOnce({ Items: [{
       asignacionId: 'anterior', colaboradorId: 'c1', proyectoId: 'p1', estado: 'FINALIZADA',
     }] });
     await expect(repo.aceptarPostulacion('p1', 'c1', {
       revisadoPor: 'lider-1', porcentajeDedicacion: 25, horasAsignadas: 20,
     })).rejects.toMatchObject({ codigo: 409 });
+    expect(commandMocks.ScanCommand).toHaveBeenCalledWith(expect.objectContaining({
+      TableName: 'internal-marketplace-asignaciones-dev',
+      ConsistentRead: true,
+      FilterExpression: '#p = :proyecto AND #c = :colaborador',
+    }));
     expect(commandMocks.TransactWriteCommand).not.toHaveBeenCalled();
   });
 

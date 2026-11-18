@@ -36,6 +36,20 @@ export function formatPercent(value) {
   return `${Number(value)}%`
 }
 
+/** Convierte códigos técnicos en etiquetas legibles sin alterar los valores de la API. */
+export function etiquetaCodigo(valor) {
+  const texto = String(valor ?? '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!texto) return ''
+  if (/^[A-ZÁÉÍÓÚ]{2,4}$/.test(texto)) return texto
+  const minusculas = texto.toLocaleLowerCase('es')
+  return minusculas.charAt(0).toLocaleUpperCase('es') + minusculas.slice(1)
+}
+
+export function etiquetaRol(valor) {
+  const roles = { EMPLEADO: 'Empleado', RRHH: 'RRHH', LIDER_PROYECTO: 'Líder de proyecto', ADMINISTRADOR: 'Administrador' }
+  return roles[String(valor || '').toUpperCase()] || etiquetaCodigo(valor)
+}
+
 export function capitalize(str) {
   if (!str) return ''
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()

@@ -1,7 +1,10 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { CircleCheck, CircleMinus, Clock3, Ellipsis, Plus, Search, ShieldCheck, UserRound, UsersRound } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
+import { useAutoDismiss } from '../hooks/useAutoDismiss.js'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import Modal from '../components/common/Modal.jsx'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
@@ -49,11 +52,13 @@ function ultimoAcceso(usuario) {
 
 export default function AdministradorUsuariosVista() {
   const { user } = useAuth()
+  const { canOperate } = useOperationalPermissions()
   const [usuarios, setUsuarios] = useState([])
   const [usuariosCargando, setUsuariosCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
+  useAutoDismiss(aviso, setAviso)
   const [perfiles, setPerfiles] = useState(null)
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [busqueda, setBusqueda] = useState('')
@@ -65,7 +70,7 @@ export default function AdministradorUsuariosVista() {
   const [menuAbierto, setMenuAbierto] = useState(null)
   const [confirmacion, setConfirmacion] = useState(null)
 
-  const puedeGestionar = user?.rol === 'ADMINISTRADOR'
+  const puedeGestionar = user?.rol === 'ADMINISTRADOR' && canOperate('gestionar_usuarios')
 
   const cargarUsuarios = useCallback(async () => {
     setUsuariosCargando(true)
@@ -133,7 +138,7 @@ export default function AdministradorUsuariosVista() {
   }
 
   const guardar = async datos => {
-    if (guardando) return
+    if (guardando || !puedeGestionar) return
     setGuardando(true)
     setError('')
     setAviso('')
@@ -160,7 +165,7 @@ export default function AdministradorUsuariosVista() {
   }
 
   const cambiarEstado = async () => {
-    if (!confirmacion || guardando) return
+    if (!confirmacion || guardando || !puedeGestionar) return
     const nuevoEstado = confirmacion.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO'
     setGuardando(true)
     setError('')
@@ -182,7 +187,7 @@ export default function AdministradorUsuariosVista() {
     <div className="emp-dashboard admin-usuarios-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de administrador">
             {menu.map(([nombre, ruta]) => ruta ? (
@@ -270,13 +275,14 @@ export default function AdministradorUsuariosVista() {
                   aria-label="Buscar usuarios por nombre o correo" value={busqueda}
                   onChange={evento => filtrar(setBusqueda, evento.target.value)} />
               </label>
-              <select aria-label="Filtrar usuarios por estado" value={estadoFiltro}
+              <label className="estado-filtro-inline"><span>Estado</span>
+               <select aria-label="Filtrar usuarios por estado" value={estadoFiltro}
                 onChange={evento => filtrar(setEstadoFiltro, evento.target.value)}>
-                <option value="ACTIVO">Estado: Activos</option>
-                 <option value="TODOS">Todos los estados</option>
+                <option value="ACTIVO">Activos</option>
+                 <option value="TODOS">Todos</option>
                 
                 <option value="INACTIVO">Inactivos</option>
-              </select>
+              </select></label>
             </div>
           </div>
 

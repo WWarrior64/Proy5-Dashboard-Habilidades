@@ -1,8 +1,11 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Eye, Pencil, Plus, UserRound, X } from 'lucide-react'
+import { Eye, Pencil, UserRound, X } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import { administracionService } from '../services/administracion.service.js'
+import { invalidarNombreOrganizacion } from '../services/branding.service.js'
+import { useAutoDismiss } from '../hooks/useAutoDismiss.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
 import './administrador-configuracion.css'
 
@@ -14,16 +17,16 @@ const menu = [
   ['Auditoría', '/auditoria'],
 ]
 
-// Los valores de dedicación, niveles y estados reflejan las validaciones actuales
-// del backend. El proyecto aún no tiene endpoints de configuración o catálogos.
+// Referencias locales mientras se consulta la configuración oficial del backend.
+// No se crean catálogos o parámetros arbitrarios: no tendrían consumidores reales.
 const parametrosIniciales = [
   {
     id: 'nombre-organizacion',
     nombre: 'Nombre de la organización',
-    descripcion: 'Se muestra en la barra lateral y en el inicio de sesión',
+    descripcion: 'Se muestra en el inicio de sesión y en las barras laterales de todos los roles',
     valor: 'Internal Marketplace',
     tipo: 'texto',
-    esReferencia: true,
+    esReferencia: false,
   },
   {
     id: 'limite-dedicacion',
@@ -32,6 +35,18 @@ const parametrosIniciales = [
     valor: '100',
     tipo: 'porcentaje',
     esReferencia: true,
+  },
+  {
+    id: 'dias-actividad-dashboard',
+    nombre: 'Días de actividad del dashboard',
+    descripcion: 'Período consultado para la actividad reciente del Administrador (1 a 90 días)',
+    valor: '30', tipo: 'numero', esReferencia: false,
+  },
+  {
+    id: 'registros-pagina-dashboard',
+    nombre: 'Registros por página del dashboard',
+    descripcion: 'Número de usuarios y actividades mostrados por página (3 a 15)',
+    valor: '5', tipo: 'numero', esReferencia: false,
   },
 ]
 
@@ -64,6 +79,7 @@ export default function AdministradorConfiguracionVista() {
   const [error, setError] = useState('')
   const [detalle, setDetalle] = useState(null)
   const [aviso, setAviso] = useState('')
+  useAutoDismiss(aviso, setAviso)
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [apiDisponible, setApiDisponible] = useState(false)
@@ -76,8 +92,11 @@ export default function AdministradorConfiguracionVista() {
         setApiDisponible(true)
         const datos = respuesta.data?.datos
         if (Array.isArray(datos?.parametros) && Array.isArray(datos?.catalogos)) {
-          setParametros(datos.parametros)
-          setCatalogos(datos.catalogos)
+          setParametros(parametrosIniciales.map(base => {
+            const guardado = datos.parametros.find(item => item.id === base.id)
+            return base.esReferencia ? base : { ...base, valor: guardado?.valor ?? base.valor }
+          }))
+          setCatalogos(catalogosIniciales)
         }
       })
       .catch(error_ => {
@@ -124,6 +143,11 @@ export default function AdministradorConfiguracionVista() {
   const guardar = async evento => {
     evento.preventDefault()
     if (!modal || guardando || !apiDisponible) return
+    if (modal.tipo !== 'parametro' ||
+      !['nombre-organizacion', 'dias-actividad-dashboard', 'registros-pagina-dashboard'].includes(modal.id)) {
+      setError('Solo se pueden modificar los tres parámetros que utiliza actualmente la plataforma.')
+      return
+    }
     const siguiente = { parametros, catalogos }
     if (modal.id && (parametros.find(item => item.id === modal.id)?.esReferencia ||
       catalogos.find(item => item.id === modal.id)?.esReferencia)) {
@@ -141,7 +165,11 @@ export default function AdministradorConfiguracionVista() {
     if (modal.tipo === 'parametro') {
       const valor = limpiar(formulario.valor)
       if (!valor || (formulario.tipo === 'porcentaje' &&
-        (!Number.isFinite(Number(valor)) || Number(valor) < 1 || Number(valor) > 100))) {
+        (!Number.isFinite(Number(valor)) || Number(valor) < 1 || Number(valor) > 100)) ||
+        (modal.id === 'nombre-organizacion' && (formulario.tipo !== 'texto' || valor.length > 70)) ||
+        (formulario.tipo === 'numero' && (!Number.isInteger(Number(valor)) ||
+          (modal.id === 'dias-actividad-dashboard' && (Number(valor) < 1 || Number(valor) > 90)) ||
+          (modal.id === 'registros-pagina-dashboard' && (Number(valor) < 3 || Number(valor) > 15))))) {
         setError('Introduce un valor válido; para porcentajes utiliza un número entre 1 y 100.')
         return
       }
@@ -192,11 +220,12 @@ export default function AdministradorConfiguracionVista() {
     setGuardando(true)
     setError('')
     try {
-      await administracionService.saveConfiguracion(siguiente)
-      setParametros(siguiente.parametros)
-      setCatalogos(siguiente.catalogos)
+      const respuesta = await administracionService.saveConfiguracion(siguiente)
+      setParametros(respuesta.data?.datos?.parametros || siguiente.parametros)
+      setCatalogos(respuesta.data?.datos?.catalogos || siguiente.catalogos)
+      if (modal.id === 'nombre-organizacion') invalidarNombreOrganizacion()
       setModal(null)
-      setAviso('Configuración descriptiva guardada en el backend. No cambia las reglas técnicas de la plataforma.')
+      setAviso('Configuración guardada. Los ajustes operativos se aplicarán al consultar nuevamente sus pantallas.')
     } catch (error_) {
       setError(getApiErrorMessage(error_, 'No se pudo guardar la configuración.'))
     } finally {
@@ -208,7 +237,7 @@ export default function AdministradorConfiguracionVista() {
     <div className="emp-dashboard admin-config-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de administrador">
             {menu.map(([nombre, ruta]) => ruta ? (
@@ -243,8 +272,9 @@ export default function AdministradorConfiguracionVista() {
 
         <section className="emp-content admin-config-content" aria-label="Configuración de la plataforma">
           <p className="admin-config-nota" role="status">
-            Los parámetros y catálogos adicionales se guardan en el backend. Los límites,
-            niveles y estados oficiales permanecen fijos y no cambian por estas opciones.
+            El nombre de la organización se utiliza en el inicio de sesión y las barras laterales.
+            Los días de actividad y los registros por página se aplican al dashboard del Administrador.
+            Dedicación, niveles y estados son reglas fijas; los catálogos de habilidades y cargos se gestionan en RRHH.
           </p>
           {cargando && <p className="admin-config-aviso" role="status">Cargando configuración...</p>}
           {aviso && <p className="admin-config-aviso" role="status">{aviso}</p>}
@@ -252,9 +282,7 @@ export default function AdministradorConfiguracionVista() {
           <section className="admin-config-seccion" aria-labelledby="admin-config-parametros">
             <div className="admin-config-heading">
               <h2 id="admin-config-parametros">Parámetros generales</h2>
-              <button type="button" className="admin-config-primary" onClick={() => abrirParametro(null)} disabled={guardando || cargando || !apiDisponible}>
-                <Plus size={15} aria-hidden="true" /> Nuevo parámetro
-              </button>
+              <span className="admin-config-nota">Edita los ajustes operativos y consulta las reglas fijas.</span>
             </div>
             <div className="admin-config-lista">
               {parametrosVisibles.map(item => (
@@ -265,12 +293,19 @@ export default function AdministradorConfiguracionVista() {
                     <span className="admin-config-chip">{item.valor}{item.tipo === 'porcentaje' ? ' %' : ''}</span>
                   </div>
                   <div className="admin-config-acciones">
-                    <button type="button" className="admin-config-icono"
-                      onClick={() => abrirParametro(item)} disabled={item.esReferencia || guardando || cargando || !apiDisponible}
-                      aria-label={'Editar ' + item.nombre}
-                      title={'Editar ' + item.nombre}>
-                      <Pencil size={16} aria-hidden="true" />
-                    </button>
+                    {item.esReferencia || !apiDisponible ? (
+                      <button type="button" className="admin-config-icono detalle"
+                        onClick={() => setDetalle(item)}
+                        aria-label={'Consultar ' + item.nombre} title={'Consultar ' + item.nombre}>
+                        <Eye size={16} aria-hidden="true" />
+                      </button>
+                    ) : (
+                      <button type="button" className="admin-config-icono"
+                        onClick={() => abrirParametro(item)} disabled={guardando || cargando}
+                        aria-label={'Editar ' + item.nombre} title={'Editar ' + item.nombre}>
+                        <Pencil size={16} aria-hidden="true" />
+                      </button>
+                    )}
                   </div>
                 </article>
               ))}
@@ -281,9 +316,7 @@ export default function AdministradorConfiguracionVista() {
           <section className="admin-config-seccion" aria-labelledby="admin-config-catalogos">
             <div className="admin-config-heading">
               <h2 id="admin-config-catalogos">Catálogos del sistema</h2>
-              <button type="button" className="admin-config-primary" onClick={() => abrirCatalogo(null)} disabled={guardando || cargando || !apiDisponible}>
-                <Plus size={15} aria-hidden="true" /> Nuevo catálogo
-              </button>
+              <span className="admin-config-nota">Catálogos de referencia; los operativos se administran en RRHH.</span>
             </div>
             <div className="admin-config-lista">
               {catalogosVisibles.map(item => (
@@ -306,12 +339,7 @@ export default function AdministradorConfiguracionVista() {
                       title={'Ver catálogo ' + item.nombre}>
                       <Eye size={16} aria-hidden="true" />
                     </button>
-                    <button type="button" className="admin-config-icono"
-                      onClick={() => abrirCatalogo(item)} disabled={item.esReferencia || guardando || cargando || !apiDisponible}
-                      aria-label={'Editar catálogo ' + item.nombre}
-                      title={'Editar catálogo ' + item.nombre}>
-                      <Pencil size={16} aria-hidden="true" />
-                    </button>
+
                   </div>
                 </article>
               ))}
@@ -335,30 +363,32 @@ export default function AdministradorConfiguracionVista() {
                 <X size={18} aria-hidden="true" />
               </button>
             </div>
-            <p className="admin-config-dialog-nota">Los parámetros adicionales se guardan en DynamoDB; las reglas fundamentales no cambian.</p>
+            <p className="admin-config-dialog-nota">Los parámetros del dashboard afectan el período de actividad y el tamaño de las páginas. Las reglas de dedicación, niveles y estados permanecen protegidas.</p>
             {error && <p className="admin-config-form-error" role="alert">{error}</p>}
             <label>Nombre
-              <input required maxLength={110} value={formulario.nombre}
+              <input required maxLength={110} readOnly value={formulario.nombre}
                 onChange={evento => setFormulario(actual => ({ ...actual, nombre: evento.target.value }))} />
             </label>
             <label>Descripción
-              <textarea required rows={3} maxLength={350} value={formulario.descripcion}
+              <textarea required rows={3} maxLength={350} readOnly value={formulario.descripcion}
                 onChange={evento => setFormulario(actual => ({ ...actual, descripcion: evento.target.value }))} />
             </label>
             {modal.tipo === 'parametro' ? (
               <>
                 <label>Tipo de valor
-                  <select value={formulario.tipo}
+                  <select value={formulario.tipo} disabled
                     onChange={evento => setFormulario(actual => ({ ...actual, tipo: evento.target.value }))}>
                     <option value="texto">Texto</option>
                     <option value="porcentaje">Porcentaje (%)</option>
+                     <option value="numero">Número entero</option>
                   </select>
                 </label>
                 <label>Valor
-                  <input required type={formulario.tipo === 'porcentaje' ? 'number' : 'text'}
-                    min={formulario.tipo === 'porcentaje' ? 1 : undefined}
-                    max={formulario.tipo === 'porcentaje' ? 100 : undefined}
-                    maxLength={formulario.tipo === 'porcentaje' ? undefined : 180}
+                  <input required type={formulario.tipo === 'texto' ? 'text' : 'number'}
+                    min={modal.id === 'registros-pagina-dashboard' ? 3 : formulario.tipo !== 'texto' ? 1 : undefined}
+                    max={modal.id === 'registros-pagina-dashboard' ? 15 : modal.id === 'dias-actividad-dashboard' ? 90 : formulario.tipo === 'porcentaje' ? 100 : undefined}
+                    step={formulario.tipo === 'numero' ? 1 : undefined}
+                     maxLength={formulario.tipo === 'texto' ? 180 : undefined}
                     value={formulario.valor}
                     onChange={evento => setFormulario(actual => ({ ...actual, valor: evento.target.value }))} />
                 </label>
@@ -391,16 +421,21 @@ export default function AdministradorConfiguracionVista() {
               </button>
             </div>
             <p>{detalle.descripcion}</p>
-            <p className="admin-config-dialog-nota">{detalle.valores.length} valores · Vista de referencia</p>
-            <ul className="admin-config-detail-list">
-              {detalle.valores.map((valor, indice) => <li key={valor + indice}>{valor}</li>)}
-            </ul>
+            <p className="admin-config-dialog-nota">{detalle.esReferencia
+              ? 'Regla fija del sistema · Solo consulta'
+              : 'Parámetro operativo · Consulta disponible mientras no se puede editar'}</p>
+            {Array.isArray(detalle.valores) ? (
+              <ul className="admin-config-detail-list">
+                {detalle.valores.map((valor, indice) => <li key={valor + indice}>{valor}</li>)}
+              </ul>
+            ) : (
+              <p><strong>{detalle.valor}{detalle.tipo === 'porcentaje' ? ' %' : ''}</strong></p>
+            )}
             <div className="admin-config-dialog-actions">
               <button type="button" className="admin-config-secondary" onClick={() => setDetalle(null)}>Cerrar</button>
-              <button type="button" className="admin-config-primary" onClick={() => {
-                setDetalle(null)
-                abrirCatalogo(detalle)
-              }}>Editar catálogo</button>
+              <p className="admin-config-dialog-nota">{detalle.esReferencia
+                ? 'Este valor solo cambia mediante las reglas y validaciones del código.'
+                : 'La edición estará disponible cuando responda el servicio de Configuración.'}</p>
             </div>
           </section>
         </div>

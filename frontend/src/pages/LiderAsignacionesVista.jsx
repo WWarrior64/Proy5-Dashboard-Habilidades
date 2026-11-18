@@ -1,7 +1,10 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { CheckCircle2, MoreHorizontal, Pencil, Plus, Search, Unlink2, UserRound, X } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
+import { useAutoDismiss } from '../hooks/useAutoDismiss.js'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import { proyectosService } from '../services/proyectos.service.js'
 import { colaboradoresService } from '../services/colaboradores.service.js'
@@ -9,7 +12,7 @@ import { asignacionesService } from '../services/asignaciones.service.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
 import { nombreColaborador } from '../utils/formatters.js'
 import { rangoFechasProyecto } from '../utils/proyectoFechas.js'
-import { esCandidatoAsignable } from '../utils/asignacionElegibilidad.js'
+import { esCandidatoAsignable, evaluarAsignacion } from '../utils/asignacionElegibilidad.js'
 import MisParticipaciones from '../components/asignaciones/MisParticipaciones.jsx'
 import api from '../services/api.js'
 import './lider-asignaciones.css'
@@ -61,14 +64,19 @@ const nombreEstado = valor => ({ ACTIVA: 'Activa', FINALIZADA: 'Finalizada', DES
 
 export default function LiderAsignacionesVista() {
   const { user } = useAuth()
+  const { canOperate } = useOperationalPermissions()
+  const puedeGestionar = canOperate('gestionar_asignaciones')
   const [proyectos, setProyectos] = useState([])
   const [asignaciones, setAsignaciones] = useState([])
   const [historialCompleto, setHistorialCompleto] = useState(false)
   const [colaboradores, setColaboradores] = useState([])
+  const [requisitosPorProyecto, setRequisitosPorProyecto] = useState({})
+  const [habilidadesPorPersona, setHabilidadesPorPersona] = useState({})
   const [ejemplos, setEjemplos] = useState(demoAsignacionesIniciales)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
+  useAutoDismiss(aviso, setAviso)
   const [busqueda, setBusqueda] = useState('')
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [estado, setEstado] = useState('ACTIVA')
@@ -119,6 +127,21 @@ export default function LiderAsignacionesVista() {
     setProyectos(listaProyectos)
     setColaboradores(personas)
     setAsignaciones(filas)
+    const verificaciones = await Promise.allSettled([
+      ...listaProyectos.map(item => proyectosService.listRequirements(item.proyectoId)),
+      ...personas.map(item => colaboradoresService.listSkills(item.colaboradorId)),
+    ])
+    const requisitos = {}
+    const habilidades = {}
+    listaProyectos.forEach((item, indice) => {
+      if (verificaciones[indice]?.status === 'fulfilled') requisitos[item.proyectoId] = extraer(verificaciones[indice].value)
+    })
+    personas.forEach((item, indice) => {
+      const resultado = verificaciones[listaProyectos.length + indice]
+      if (resultado?.status === 'fulfilled') habilidades[item.colaboradorId] = extraer(resultado.value)
+    })
+    setRequisitosPorProyecto(requisitos)
+    setHabilidadesPorPersona(habilidades)
     setHistorialCompleto(proyectosResp.status === 'fulfilled' &&
       respuestas.every(item => item.status === 'fulfilled'))
     if (proyectosResp.status === 'rejected') {
@@ -133,7 +156,7 @@ export default function LiderAsignacionesVista() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  const mostrarEjemplos = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error
+  const mostrarEjemplos = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && !cargando && !error
   const listaProyectos = mostrarEjemplos ? [...proyectos, ...demoProyectos] : proyectos
   const listaAsignaciones = mostrarEjemplos ? [...asignaciones, ...ejemplos] : asignaciones
   const listaPersonas = mostrarEjemplos ? [...colaboradores, ...demoPersonas] : colaboradores
@@ -173,10 +196,8 @@ export default function LiderAsignacionesVista() {
     const disponibles = listaProyectos.filter(item => item.estado === 'ACTIVO')
     const proyectoSeleccionado = proyectoId || disponibles.find(hayCandidatosPara)?.proyectoId || disponibles[0]?.proyectoId || ''
     const proyecto = listaProyectos.find(item => item.proyectoId === proyectoSeleccionado)
-    const candidatos = listaPersonas.filter(item => item.estado !== 'INACTIVO' &&
-      esCandidatoAsignable(item, proyecto) &&
-      !listaAsignaciones.some(asignacion => asignacion.proyectoId === proyectoSeleccionado &&
-        asignacion.colaboradorId === item.colaboradorId))
+    const candidatos = listaPersonas.filter(item =>
+      evaluarOpcion(item, proyecto, Number(formularioInicial.porcentajeDedicacion)).elegible)
     setFormulario({
       ...formularioInicial,
       proyectoId: proyectoSeleccionado,
@@ -200,7 +221,7 @@ export default function LiderAsignacionesVista() {
 
   const guardar = async evento => {
     evento.preventDefault()
-    if (!modal || guardando) return
+    if (!puedeGestionar || !modal || guardando) return
     if (modal.tipo === 'crear' && !historialCompleto) {
       setErrorFormulario('No se pudo verificar el historial completo de asignaciones. Recarga los datos antes de continuar.')
       return
@@ -228,6 +249,10 @@ export default function LiderAsignacionesVista() {
       return
     }
     const esDemo = modal.item?.esEjemplo || proyecto?.esEjemplo || colaborador?.esEjemplo
+    if (!esDemo) {
+      const evaluacion = evaluarOpcion(colaborador, proyecto, porcentajeDedicacion, modal.tipo === 'editar' ? modal.item : null)
+      if (!evaluacion.elegible) { setErrorFormulario(evaluacion.motivos.join('. ')); return }
+    }
     const cambios = { porcentajeDedicacion, horasAsignadas, horasCompletadas }
     setGuardando(true)
     setErrorFormulario('')
@@ -266,6 +291,7 @@ export default function LiderAsignacionesVista() {
       }
       setModal(null)
     } catch (fallo) {
+      if (fallo.response?.status === 409) await cargar()
       setErrorFormulario(getApiErrorMessage(fallo, 'No se pudo guardar la asignación.'))
     } finally {
       setGuardando(false)
@@ -273,7 +299,7 @@ export default function LiderAsignacionesVista() {
   }
 
   const finalizar = async item => {
-    if (guardando || item.estado !== 'ACTIVA' ||
+    if (!puedeGestionar || guardando || item.estado !== 'ACTIVA' ||
       !window.confirm('¿Finalizar esta asignación y liberar su dedicación?')) return
     setGuardando(true)
     setMenuAbierto(null)
@@ -296,7 +322,7 @@ export default function LiderAsignacionesVista() {
   }
 
   const desvincular = async () => {
-    if (!porDesvincular || guardando) return
+    if (!puedeGestionar || !porDesvincular || guardando) return
     setGuardando(true)
     setError('')
     try {
@@ -317,22 +343,26 @@ export default function LiderAsignacionesVista() {
     }
   }
 
+  const evaluarOpcion = (persona, proyecto, porcentaje, asignacionActual = null) =>
+    evaluarAsignacion({
+      colaborador: persona, proyecto, porcentaje, asignacionActual,
+      asignaciones: listaAsignaciones,
+      requisitos: requisitosPorProyecto[proyecto?.proyectoId],
+      habilidades: habilidadesPorPersona[persona?.colaboradorId],
+    })
   const opcionesProyectos = listaProyectos.filter(item => item.estado === 'ACTIVO')
   const hayCandidatosPara = proyecto => listaPersonas.some(persona =>
-    persona.estado !== 'INACTIVO' && esCandidatoAsignable(persona, proyecto) &&
-    !listaAsignaciones.some(asignacion => asignacion.proyectoId === proyecto.proyectoId &&
-      asignacion.colaboradorId === persona.colaboradorId))
-  const opcionesPersonas = listaPersonas.filter(item => item.estado !== 'INACTIVO' &&
-    (modal?.tipo === 'editar' || esCandidatoAsignable(item,
-      listaProyectos.find(proyecto => proyecto.proyectoId === formulario.proyectoId))) &&
-    (modal?.tipo === 'editar' || !listaAsignaciones.some(asignacion =>
-      asignacion.proyectoId === formulario.proyectoId && asignacion.colaboradorId === item.colaboradorId)))
+    evaluarOpcion(persona, proyecto, Number(formularioInicial.porcentajeDedicacion)).elegible)
+  const opcionesPersonas = listaPersonas.filter(item => modal?.tipo === 'editar'
+    ? item.colaboradorId === formulario.colaboradorId
+    : evaluarOpcion(item, listaProyectos.find(proyecto =>
+      proyecto.proyectoId === formulario.proyectoId), Number(formulario.porcentajeDedicacion)).elegible)
 
   return (
     <div className="emp-dashboard lider-asignaciones-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de líder de proyecto">
             {menu.map(([nombre, ruta]) => (
@@ -365,7 +395,7 @@ export default function LiderAsignacionesVista() {
           <div className="lider-asignaciones-heading">
             <h2 id="lider-asignaciones-titulo">Asignaciones de mis proyectos</h2>
             <button type="button" className="lider-asignaciones-primary" onClick={() => abrirCrear('')}
-              disabled={cargando || guardando || !historialCompleto || !opcionesProyectos.some(hayCandidatosPara)}>
+              disabled={!puedeGestionar || cargando || guardando || !historialCompleto || !opcionesProyectos.some(hayCandidatosPara)}>
               <Plus size={16} aria-hidden="true" /> Nueva asignación
             </button>
           </div>
@@ -386,11 +416,11 @@ export default function LiderAsignacionesVista() {
                   onChange={evento => setBusqueda(evento.target.value)} />
               </span>
             </label>
-            <label className="lider-asignaciones-filter-field">
+            <label className="lider-asignaciones-filter-field estado-filtro-inline">
               <span>Estado</span>
               <select value={estado} onChange={evento => setEstado(evento.target.value)}>
-                <option value="ACTIVA">Estado: Activas</option>
-                 <option value="TODOS">Todos los estados</option>
+                <option value="ACTIVA">Activas</option>
+                 <option value="TODOS">Todas</option>
                 
                 <option value="FINALIZADA">Finalizada</option>
                 <option value="DESVINCULADA">Desvinculada</option>
@@ -459,16 +489,16 @@ export default function LiderAsignacionesVista() {
                               <button type="button" className="lider-asignaciones-more"
                                 aria-label={'Opciones de ' + item.colaborador}
                                 aria-expanded={menuAbierto === item.asignacionId}
-                                onClick={() => setMenuAbierto(actual => actual === item.asignacionId ? null : item.asignacionId)}>
+                                onClick={() => setMenuAbierto(actual => actual === item.asignacionId ? null : item.asignacionId)} disabled={!puedeGestionar}>
                                 <MoreHorizontal size={18} aria-hidden="true" />
                               </button>
                               {menuAbierto === item.asignacionId && (
                                 <div className="lider-asignaciones-menu">
                                   {item.estado === 'ACTIVA' ? <>
-                                    <button type="button" onClick={() => abrirEditar(item)}>
+                                    <button type="button" onClick={() => abrirEditar(item)} disabled={!puedeGestionar}>
                                       <Pencil size={14} aria-hidden="true" /> Editar horas y dedicación
                                     </button>
-                                    <button type="button" onClick={() => finalizar(item)} disabled={guardando}>
+                                    <button type="button" onClick={() => finalizar(item)} disabled={!puedeGestionar || guardando}>
                                        <CheckCircle2 size={14} aria-hidden="true" /> Finalizar
                                      </button>
                                      <button type="button" className="lider-asignaciones-unlink" onClick={() => {
@@ -483,7 +513,7 @@ export default function LiderAsignacionesVista() {
                             </div>
                           </div>
                           {item.estado === 'ACTIVA' && (
-                            <button type="button" className="lider-asignaciones-edit-link" onClick={() => abrirEditar(item)}>
+                            <button type="button" className="lider-asignaciones-edit-link" onClick={() => abrirEditar(item)} disabled={!puedeGestionar}>
                               <Pencil size={13} aria-hidden="true" /> Editar horas
                             </button>
                           )}
@@ -492,7 +522,7 @@ export default function LiderAsignacionesVista() {
                     </div> : <div className="lider-asignaciones-no-members">
                       <p>Aún no hay colaboradores asignados</p>
                       <button type="button" className="lider-asignaciones-secondary"
-                        disabled={proyecto.estado !== 'ACTIVO' || !hayCandidatosPara(proyecto)}
+                        disabled={!puedeGestionar || proyecto.estado !== 'ACTIVO' || !hayCandidatosPara(proyecto)}
                         onClick={() => abrirCrear(proyecto.proyectoId)}>Asignar colaborador</button>
                     </div>}
                   </article>
@@ -519,10 +549,8 @@ export default function LiderAsignacionesVista() {
               onChange={evento => {
                 const nuevoProyecto = evento.target.value
                 const proyecto = listaProyectos.find(item => item.proyectoId === nuevoProyecto)
-                const candidato = listaPersonas.find(item => item.estado !== 'INACTIVO' &&
-                  esCandidatoAsignable(item, proyecto) &&
-                  !listaAsignaciones.some(asignacion => asignacion.proyectoId === nuevoProyecto &&
-                    asignacion.colaboradorId === item.colaboradorId))
+                const candidato = listaPersonas.find(item =>
+                  evaluarOpcion(item, proyecto, Number(formulario.porcentajeDedicacion)).elegible)
                 setFormulario({ ...formulario, proyectoId: nuevoProyecto, colaboradorId: candidato?.colaboradorId || '' })
               }}>
               <option value="">Seleccionar proyecto</option>
@@ -534,7 +562,7 @@ export default function LiderAsignacionesVista() {
               onChange={evento => setFormulario({ ...formulario, colaboradorId: evento.target.value })}>
               <option value="">Seleccionar colaborador</option>
               {opcionesPersonas.map(item => <option key={item.colaboradorId} value={item.colaboradorId}>
-                {item.nombre}{item.esEjemplo ? ' (ejemplo)' : item.nombre === 'Colaborador ' + item.colaboradorId ? '' : ' · ' + item.colaboradorId}
+                {item.nombre}{item.esEjemplo ? ' (ejemplo)' : ' · ' + evaluarOpcion(item, listaProyectos.find(proyecto => proyecto.proyectoId === formulario.proyectoId), 1).libre + '% libre'}
               </option>)}
             </select>
             {modal.tipo === 'crear' && !opcionesPersonas.length && (
@@ -561,7 +589,7 @@ export default function LiderAsignacionesVista() {
           <div className="lider-asignaciones-dialog-actions">
             <button type="button" className="lider-asignaciones-secondary" onClick={() => setModal(null)} disabled={guardando}>Cancelar</button>
             <button type="submit" className="lider-asignaciones-primary"
-              disabled={guardando || !formulario.proyectoId || !formulario.colaboradorId}>
+              disabled={!puedeGestionar || guardando || !formulario.proyectoId || !formulario.colaboradorId}>
               {guardando ? 'Guardando...' : 'Guardar asignación'}
             </button>
           </div>
@@ -581,7 +609,7 @@ export default function LiderAsignacionesVista() {
           </p>
           <div className="lider-asignaciones-dialog-actions">
             <button type="button" className="lider-asignaciones-secondary" disabled={guardando} onClick={() => setPorDesvincular(null)}>Volver</button>
-            <button type="button" className="lider-asignaciones-danger" onClick={desvincular} disabled={guardando}>
+            <button type="button" className="lider-asignaciones-danger" onClick={desvincular} disabled={!puedeGestionar || guardando}>
               <Unlink2 size={16} aria-hidden="true" /> {guardando ? 'Desvinculando...' : 'Desvincular'}
             </button>
           </div>

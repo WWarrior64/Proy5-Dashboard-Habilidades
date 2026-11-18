@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useAutoDismiss } from '../../hooks/useAutoDismiss.js'
 import { asignacionesService } from '../../services/asignaciones.service.js'
 import { proyectosService } from '../../services/proyectos.service.js'
 import { extractItems } from '../../utils/apiResponses.js'
@@ -14,6 +15,7 @@ export default function MisParticipaciones() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
+  useAutoDismiss(aviso, setAviso)
   const [sinPerfil, setSinPerfil] = useState(false)
   const [recarga, setRecarga] = useState(0)
 
@@ -105,22 +107,34 @@ export default function MisParticipaciones() {
       {aviso && <p role="status" className="lider-participaciones-error">{aviso}</p>}
       {!cargando && !sinPerfil && !error && (
         visibles.length ? (
-          <div className="lider-participaciones-scroll">
-            <table>
-              <thead><tr><th>Proyecto</th><th>Dedicación</th><th>Horas</th><th>Inicio</th><th>Fin</th><th>Estado</th></tr></thead>
-              <tbody>
-                {visibles.map(item => (
-                  <tr key={item.asignacionId}>
-                    <td><strong>{item.nombreProyecto}</strong></td>
-                    <td>{item.porcentajeDedicacion ?? '—'} %</td>
-                    <td>{item.horasCompletadas ?? 0} / {item.horasAsignadas ?? '—'} h</td>
-                    <td>{formatoFechaProyecto(item.inicio)}</td>
-                    <td>{formatoFechaProyecto(item.fin)}{item.finEstimado ? ' (estimada)' : ''}</td>
-                    <td>{estados[item.estado] || item.estado || 'Sin estado'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="lider-participaciones-cards">
+            {visibles.map(item => {
+              const horas = Number(item.horasAsignadas) || 0
+              const completadas = Number(item.horasCompletadas) || 0
+              const dedicacion = Number(item.porcentajeDedicacion) || 0
+              return (
+                <article className="lider-participaciones-card" key={item.asignacionId}>
+                  <header className="lider-participaciones-card-heading">
+                    <h3>{item.nombreProyecto}</h3>
+                    <span className={'lider-asignaciones-state ' + String(item.estado || '').toLowerCase()}>
+                      {estados[item.estado] || item.estado || 'Sin estado'}
+                    </span>
+                  </header>
+                  <div className="lider-participaciones-grid">
+                    <div className="lider-participaciones-metrica">
+                      <span>Dedicación</span><strong>{item.porcentajeDedicacion ?? '—'} %</strong>
+                      <div className="lider-participaciones-barra"><span style={{ width: Math.min(100, Math.max(0, dedicacion)) + '%' }} /></div>
+                    </div>
+                    <div className="lider-participaciones-metrica">
+                      <span>Horas completadas</span><strong>{completadas} / {item.horasAsignadas ?? '—'} h</strong>
+                      <div className="lider-participaciones-barra"><span style={{ width: (horas > 0 ? Math.min(100, Math.max(0, completadas / horas * 100)) : 0) + '%' }} /></div>
+                    </div>
+                    <div className="lider-participaciones-metrica"><span>Inicio</span><strong>{formatoFechaProyecto(item.inicio)}</strong></div>
+                    <div className="lider-participaciones-metrica"><span>Fin</span><strong>{formatoFechaProyecto(item.fin)}{item.finEstimado ? ' (estimada)' : ''}</strong></div>
+                  </div>
+                </article>
+              )
+            })}
           </div>
         ) : <p className="lider-participaciones-vacio">No hay participaciones que coincidan con el estado seleccionado.</p>
       )}

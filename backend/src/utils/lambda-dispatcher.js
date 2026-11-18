@@ -43,7 +43,9 @@ function crearDespachador(routes) {
         return error('Ruta no encontrada', 404, CODIGOS.NO_ENCONTRADO);
       }
 
-      if (selected === 'GET /api/v1/health') return handlerFn(event, context);
+      if (selected === 'GET /api/v1/health' || selected === 'GET /api/v1/branding') {
+        return handlerFn(event, context);
+      }
       return await autenticar(event, async (authenticated) => {
         await proteger(authenticated, selected);
         const respuesta = await handlerFn(authenticated, context);

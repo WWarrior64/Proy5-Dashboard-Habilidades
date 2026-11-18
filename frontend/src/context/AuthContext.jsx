@@ -11,7 +11,7 @@ import {
 } from '../services/token-refresh.service.js'
 
 const AuthContext = createContext(null)
-const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true'
+const DEMO_MODE = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')
 
 function readDemoUser() {
   try { return JSON.parse(sessionStorage.getItem('demo_auth_user') || 'null') } catch { return null }
