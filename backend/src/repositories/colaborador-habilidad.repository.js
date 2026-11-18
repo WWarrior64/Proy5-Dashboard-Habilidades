@@ -1,15 +1,46 @@
 const {
   dynamoDb,
   GetCommand,
-  PutCommand,
-  UpdateCommand,
-  DeleteCommand,
   QueryCommand,
+  TransactWriteCommand,
 } = require('../config/dynamodb');
 const { tableColaboradorHabilidad, tableColaboradores, tableHabilidades } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
+const { recolectarPaginas } = require('../utils/paginacion');
 
 const NIVELES_VALIDOS = ['JUNIOR', 'MID', 'SENIOR'];
+
+async function obtenerRevisionColaborador(colaboradorId) {
+  const respuesta = await dynamoDb.send(new GetCommand({
+    TableName: tableColaboradores, Key: { colaboradorId }, ConsistentRead: true,
+  }));
+  if (!respuesta.Item) throw new ErrorApp('Colaborador no encontrado', 404, CODIGOS.NO_ENCONTRADO);
+  if (respuesta.Item.estado !== 'ACTIVO') {
+    throw new ErrorApp('El colaborador está inactivo', 409, CODIGOS.CONFLICTO);
+  }
+  return respuesta.Item;
+}
+
+function revisarHabilidades(colaborador) {
+  return { Update: {
+    TableName: tableColaboradores,
+    Key: { colaboradorId: colaborador.colaboradorId },
+    UpdateExpression: 'SET #rev = if_not_exists(#rev, :cero) + :uno',
+    ConditionExpression: 'attribute_exists(colaboradorId) AND #estado = :activo AND ' +
+      '(attribute_not_exists(#rev) OR #rev = :anterior)',
+    ExpressionAttributeNames: { '#rev': 'habilidadesRevision', '#estado': 'estado' },
+    ExpressionAttributeValues: {
+      ':cero': 0, ':uno': 1, ':activo': 'ACTIVO', ':anterior': colaborador.habilidadesRevision ?? 0,
+    },
+  } };
+}
+
+function relanzarConflicto(err) {
+  if (['ConditionalCheckFailedException', 'TransactionCanceledException', 'TransactionConflictException'].includes(err.name)) {
+    throw new ErrorApp('La habilidad o el estado del colaborador cambió; recargue antes de reintentar', 409, CODIGOS.CONFLICTO);
+  }
+  throw err;
+}
 
 function validarNivel(nivel) {
   if (!NIVELES_VALIDOS.includes(nivel)) {
@@ -47,6 +78,7 @@ async function asociar(data) {
     new GetCommand({
       TableName: tableColaboradores,
       Key: { colaboradorId: data.colaboradorId },
+      ConsistentRead: true,
     })
   );
   if (!colaborador.Item) {
@@ -75,40 +107,31 @@ async function asociar(data) {
     nivel: data.nivel,
     anosExperiencia: obtenerAnosExperiencia(data) ?? 0,
     observaciones: data.observaciones || null,
+    fechaUltimoUso: data.fechaUltimoUso || null,
     fechaCreacion: new Date().toISOString(),
     fechaActualizacion: new Date().toISOString(),
     nivelColaboradorKey: `${data.nivel}#${data.colaboradorId}`,
   };
 
   try {
-    await dynamoDb.send(new PutCommand({
-      TableName: tableColaboradorHabilidad,
-      Item: item,
-      ConditionExpression: 'attribute_not_exists(colaboradorId)',
-    }));
+    await dynamoDb.send(new TransactWriteCommand({ TransactItems: [
+      revisarHabilidades(colaborador.Item),
+      { Put: { TableName: tableColaboradorHabilidad, Item: item,
+        ConditionExpression: 'attribute_not_exists(colaboradorId)' } },
+    ] }));
   } catch (e) {
-    if (e.name === 'ConditionalCheckFailedException') {
-      throw new ErrorApp('La habilidad ya está asociada a este colaborador', 409, CODIGOS.CONFLICTO);
-    }
-    throw e;
+    relanzarConflicto(e);
   }
   return item;
 }
 
 async function listarPorColaborador(colaboradorId) {
-  const items = [];
-  let lastKey;
-  do {
-    const pagina = await dynamoDb.send(new QueryCommand({
-      TableName: tableColaboradorHabilidad,
-      KeyConditionExpression: 'colaboradorId = :id',
-      ExpressionAttributeValues: { ':id': colaboradorId },
-      ...(lastKey && { ExclusiveStartKey: lastKey }),
-    }));
-    items.push(...(pagina.Items || []));
-    lastKey = pagina.LastEvaluatedKey;
-  } while (lastKey);
-  return items;
+  return recolectarPaginas(lastKey => dynamoDb.send(new QueryCommand({
+    TableName: tableColaboradorHabilidad,
+    KeyConditionExpression: 'colaboradorId = :id',
+    ExpressionAttributeValues: { ':id': colaboradorId },
+    ...(lastKey && { ExclusiveStartKey: lastKey }),
+  })));
 }
 
 async function obtenerPorColaboradorYHabilidad(colaboradorId, habilidadId) {
@@ -126,6 +149,7 @@ async function actualizarNivel(colaboradorId, habilidadId, data) {
   if (!existente) {
     throw new ErrorApp('Relación colaborador-habilidad no encontrada', 404, CODIGOS.NO_ENCONTRADO);
   }
+  const colaborador = await obtenerRevisionColaborador(colaboradorId);
 
   if (data.nivel !== undefined) {
     validarNivel(data.nivel);
@@ -154,24 +178,32 @@ async function actualizarNivel(colaboradorId, habilidadId, data) {
     expressionAttributeNames['#observaciones'] = 'observaciones';
     expressionAttributeValues[':observaciones'] = data.observaciones;
   }
+  if (data.fechaUltimoUso !== undefined) {
+    updateParts.push('#fechaUltimoUso = :fechaUltimoUso');
+    expressionAttributeNames['#fechaUltimoUso'] = 'fechaUltimoUso';
+    expressionAttributeValues[':fechaUltimoUso'] = data.fechaUltimoUso;
+  }
 
   updateParts.push('#fechaActualizacion = :fechaActualizacion');
   expressionAttributeNames['#fechaActualizacion'] = 'fechaActualizacion';
   expressionAttributeValues[':fechaActualizacion'] = new Date().toISOString();
 
-  const result = await dynamoDb.send(
-    new UpdateCommand({
-      TableName: tableColaboradorHabilidad,
-      Key: { colaboradorId, habilidadId },
-      UpdateExpression: `SET ${updateParts.join(', ')}`,
-      ConditionExpression: 'attribute_exists(colaboradorId) AND attribute_exists(habilidadId)',
-      ExpressionAttributeNames: expressionAttributeNames,
-      ExpressionAttributeValues: expressionAttributeValues,
-      ReturnValues: 'ALL_NEW',
-    })
-  );
-
-  return result.Attributes;
+  try {
+    await dynamoDb.send(new TransactWriteCommand({ TransactItems: [
+      revisarHabilidades(colaborador),
+      { Update: {
+        TableName: tableColaboradorHabilidad, Key: { colaboradorId, habilidadId },
+        UpdateExpression: `SET ${updateParts.join(', ')}`,
+        ConditionExpression: 'attribute_exists(colaboradorId) AND attribute_exists(habilidadId)',
+        ExpressionAttributeNames: expressionAttributeNames,
+        ExpressionAttributeValues: expressionAttributeValues,
+      } },
+    ] }));
+  } catch (err) { relanzarConflicto(err); }
+  const actualizado = await dynamoDb.send(new GetCommand({
+    TableName: tableColaboradorHabilidad, Key: { colaboradorId, habilidadId }, ConsistentRead: true,
+  }));
+  return actualizado.Item;
 }
 
 async function actualizarExperiencia(colaboradorId, habilidadId, data) {
@@ -183,15 +215,17 @@ async function retirar(colaboradorId, habilidadId) {
   if (!existente) {
     throw new ErrorApp('Relación colaborador-habilidad no encontrada', 404, CODIGOS.NO_ENCONTRADO);
   }
+  const colaborador = await obtenerRevisionColaborador(colaboradorId);
 
-  await dynamoDb.send(
-    new DeleteCommand({
-      TableName: tableColaboradorHabilidad,
-      Key: { colaboradorId, habilidadId },
-      ConditionExpression: 'attribute_exists(colaboradorId) AND attribute_exists(habilidadId)',
-    })
-  );
-
+  try {
+    await dynamoDb.send(new TransactWriteCommand({ TransactItems: [
+      revisarHabilidades(colaborador),
+      { Delete: {
+        TableName: tableColaboradorHabilidad, Key: { colaboradorId, habilidadId },
+        ConditionExpression: 'attribute_exists(colaboradorId) AND attribute_exists(habilidadId)',
+      } },
+    ] }));
+  } catch (err) { relanzarConflicto(err); }
   return true;
 }
 

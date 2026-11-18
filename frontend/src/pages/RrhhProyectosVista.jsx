@@ -1,3 +1,4 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Eye, Pencil, Plus, Search, UserRound } from 'lucide-react'
@@ -7,6 +8,7 @@ import { asignacionesService } from '../services/asignaciones.service.js'
 import { habilidadesService } from '../services/habilidades.service.js'
 import { obtenerFechasProyecto, formatoFechaProyecto } from '../utils/proyectoFechas.js'
 import api from '../services/api.js'
+import { proyectoEditable } from '../utils/proyectoEstados.js'
 import './rrhh-proyectos.css'
 
 const menu = [
@@ -98,7 +100,7 @@ export default function RrhhProyectosVista({
   }, [proyectos])
 
   // Vista previa exclusivamente en desarrollo, si la API aún no devuelve proyectos.
-  const mostrandoEjemplo = import.meta.env.VITE_DEMO_MODE === 'true' && !loading && !error && proyectos.length === 0
+  const mostrandoEjemplo = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && !loading && !error && proyectos.length === 0
   const catalogo = useMemo(() => {
     if (mostrandoEjemplo) return proyectosEjemplo.map(item => ({ ...item, esEjemplo: true }))
     const liderPorId = new Map(lideres.map(item => [item.usuarioId || item.id, item.nombre || item.email || 'Sin nombre']))
@@ -161,7 +163,7 @@ export default function RrhhProyectosVista({
     <div className="emp-dashboard rrhh-proyectos-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label={esAdministrador ? 'Menú de administrador' : 'Menú de recursos humanos'}>
             {(esAdministrador ? menuAdministrador : menu).map(([texto, ruta]) => (
@@ -238,19 +240,22 @@ export default function RrhhProyectosVista({
                     onChange={evento => setBusqueda(evento.target.value)}
                   />
                 </label>
-                <select aria-label="Filtrar por estado" value={estado} onChange={evento => setEstado(evento.target.value)}>
-                  <option value="VIGENTES">Estado: Vigentes</option>
-                   <option value="TODOS">Todos los estados</option>
+                <label className="estado-filtro-inline"><span>Estado</span>
+                 <select aria-label="Filtrar por estado" value={estado} onChange={evento => setEstado(evento.target.value)}>
+                  <option value="VIGENTES">Vigentes</option>
+                   <option value="TODOS">Todos</option>
                   {estados.map(([clave, etiqueta]) => <option value={clave} key={clave}>{etiqueta}</option>)}
-                </select>
-                <select aria-label="Filtrar por líder" value={lider} onChange={evento => setLider(evento.target.value)}>
-                  <option value="">Líder: Todos</option>
+                </select></label>
+                <label className="estado-filtro-inline"><span>Líder</span>
+                 <select aria-label="Filtrar por líder" value={lider} onChange={evento => setLider(evento.target.value)}>
+                  <option value="">Todos</option>
                   {lideresFiltro.map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}
-                </select>
-                <select aria-label="Filtrar por habilidad" value={habilidad} onChange={evento => setHabilidad(evento.target.value)}>
-                  <option value="">Habilidad: Todas</option>
+                </select></label>
+                <label className="estado-filtro-inline"><span>Habilidad</span>
+                 <select aria-label="Filtrar por habilidad" value={habilidad} onChange={evento => setHabilidad(evento.target.value)}>
+                  <option value="">Todas</option>
                   {habilidadesFiltro.map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}
-                </select>
+                </select></label>
               </div>
             </div>
 
@@ -327,7 +332,7 @@ export default function RrhhProyectosVista({
                                   <Eye size={16} aria-hidden="true" />
                                 </button>
                                 {canManage && (
-                                  <button type="button" aria-label={'Editar ' + item.nombre} title={item.esEjemplo ? 'Vista previa: no se puede editar' : 'Editar ' + item.nombre} disabled={loading || item.esEjemplo} onClick={() => onEdit(item)}>
+                                  <button type="button" aria-label={'Editar ' + item.nombre} title={item.esEjemplo ? 'Vista previa: no se puede editar' : 'Editar ' + item.nombre} disabled={loading || item.esEjemplo || !proyectoEditable(item)} onClick={() => onEdit(item)}>
                                     <Pencil size={16} aria-hidden="true" />
                                   </button>
                                 )}

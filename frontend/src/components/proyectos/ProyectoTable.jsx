@@ -1,5 +1,6 @@
 import DataTable from '../common/DataTable.jsx'
 import Button from '../common/Button.jsx'
+import { proyectoEditable } from '../../utils/proyectoEstados.js'
 
 export default function ProyectoTable({ proyectos = [], onEdit, onViewDetails, onToggleStatus, loading = false }) {
   const columns = [
@@ -17,10 +18,10 @@ export default function ProyectoTable({ proyectos = [], onEdit, onViewDetails, o
     acciones: (
       <div style={{ display: 'flex', gap: '0.5rem' }}>
         <Button variant="outline" size="sm" onClick={() => onViewDetails(p)}>Ver</Button>
-        <Button variant="outline" size="sm" onClick={() => onEdit(p)}>Editar</Button>
-        <Button variant="outline" size="sm" onClick={() => onToggleStatus(p)} style={{ color: '#ef4444' }}>
+        {proyectoEditable(p) && <Button variant="outline" size="sm" onClick={() => onEdit(p)}>Editar</Button>}
+        {proyectoEditable(p) && <Button variant="outline" size="sm" onClick={() => onToggleStatus(p)} style={{ color: '#ef4444' }}>
           Cancelar
-        </Button>
+        </Button>}
       </div>
     ),
   }))

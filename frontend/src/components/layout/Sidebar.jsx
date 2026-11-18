@@ -1,3 +1,5 @@
+import BrandName from '../common/BrandName.jsx'
+import logo from '../../assets/internal-marketplace-mark.svg'
 import { Link, useLocation } from 'react-router-dom'
 import { Home, Users, Briefcase, BadgePercent, ClipboardList, FileText, ShieldAlert, Search, LogOut } from 'lucide-react'
 import { usePermissions } from '../../hooks/usePermissions.js'
@@ -32,8 +34,8 @@ export default function Sidebar({ user, onLogout }) {
   return (
     <aside className="w-64" style={{ backgroundColor: 'var(--color-sidebar)', color: '#e2e8f0', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
       <div className="p-5 flex items-center gap-2 border-b" style={{ borderColor: '#1e293b' }}>
-        <BadgePercent size={24} strokeWidth={2} className="text-[#2563eb]" />
-        <span className="font-bold text-lg tracking-tight">Internal<span style={{ color: '#2563eb' }}>Market</span></span>
+        <img src={logo} alt="" aria-hidden="true" style={{ width: 48, height: 48, flexShrink: 0 }} />
+        <span className="font-bold text-lg tracking-tight" style={{ fontSize: 14, lineHeight: 1.25, overflowWrap: 'anywhere', textTransform: 'uppercase' }}><BrandName /></span>
       </div>
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         {visibleItems.map((item) => {

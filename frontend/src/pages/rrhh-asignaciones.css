@@ -132,6 +132,16 @@
   font-size: 12px;
 }
 
+.rrhh-asignaciones-panel-controls .estado-filtro-inline {
+  display: inline-flex;
+  align-items: center;
+  flex-direction: row;
+  gap: 8px;
+  color: #16255a;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 .rrhh-asignaciones-panel-controls select:focus { outline-color: #2563eb; }
 
 .rrhh-asignaciones-table-scroll {

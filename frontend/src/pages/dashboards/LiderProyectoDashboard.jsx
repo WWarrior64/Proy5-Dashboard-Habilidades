@@ -1,3 +1,4 @@
+import BrandName from '../../components/common/BrandName.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { BriefcaseBusiness, CheckCircle2, Clock3, UserRound, UsersRound } from 'lucide-react'
@@ -124,7 +125,7 @@ export default function LiderProyectoDashboard() {
     return () => { cancelado = true }
   }, [user?.usuarioId, recarga])
 
-  const vistaPrevia = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error
+  const vistaPrevia = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && !cargando && !error
   const mostrarProyectosEjemplo = vistaPrevia && datos.proyectos?.length === 0
   const mostrarPostulacionesEjemplo = vistaPrevia && datos.postulaciones?.length === 0
   const mostrarCandidatosEjemplo = vistaPrevia && datos.colaboradores?.length === 0
@@ -199,7 +200,7 @@ export default function LiderProyectoDashboard() {
     <div className="emp-dashboard lider-dashboard-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de líder de proyecto">
             {menu.map(([nombre, ruta]) => (

@@ -6,8 +6,9 @@ const {
   DeleteCommand,
   QueryCommand,
   ScanCommand,
+  TransactWriteCommand,
 } = require('../config/dynamodb');
-const { tableUsuarios } = require('../config/environment');
+const { tableUsuarios, tableColaboradores, tableAsignaciones } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
 
 /**
@@ -162,9 +163,12 @@ async function actualizar(usuarioId, data) {
   const expressionAttributeNames = {};
 
   data = { ...data };
+  if (data.estado !== undefined) {
+    throw new ErrorApp('Utilice el cambio de estado transaccional para desactivar o activar cuentas', 400, CODIGOS.VALIDACION);
+  }
   if (data.email !== undefined) data.correo = data.email.trim().toLowerCase();
   if (data.nombre !== undefined) data.nombreCompleto = data.nombre;
-  const camposPermitidos = ['nombre', 'email', 'nombreCompleto', 'correo', 'rol', 'estado'];
+  const camposPermitidos = ['nombre', 'email', 'nombreCompleto', 'correo', 'rol'];
   camposPermitidos.forEach((campo) => {
     if (data[campo] !== undefined) {
       updateParts.push(`#${campo} = :${campo}`);
@@ -233,9 +237,116 @@ async function cambiarRol(usuarioId, rol) {
  * @param {boolean} activo
  * @returns {Promise<Object>}
  */
+async function obtenerColaboradorVinculado(usuarioId) {
+  const reserva = await dynamoDb.send(new GetCommand({
+    TableName: tableColaboradores, Key: { colaboradorId: 'USUARIO#' + usuarioId }, ConsistentRead: true,
+  }));
+  if (reserva.Item?.propietarioColaboradorId) {
+    const vinculado = await dynamoDb.send(new GetCommand({
+      TableName: tableColaboradores,
+      Key: { colaboradorId: reserva.Item.propietarioColaboradorId }, ConsistentRead: true,
+    }));
+    if (!vinculado.Item || vinculado.Item.usuarioId !== usuarioId) {
+      throw new ErrorApp('La reserva del perfil no corresponde al usuario; requiere reconciliación', 409, CODIGOS.CONFLICTO);
+    }
+    return vinculado.Item;
+  }
+  if (reserva.Item) {
+    throw new ErrorApp('La reserva del perfil está incompleta; requiere reconciliación', 409, CODIGOS.CONFLICTO);
+  }
+  // El GSI1 es eventualmente consistente y podría ocultar un perfil histórico.
+  // La lectura fuerte de la tabla base, paginada hasta el final, evita desactivar
+  // únicamente la cuenta cuando ya existe un colaborador sin reserva USUARIO#.
+  const historicos = [];
+  let cursor;
+  do {
+    const pagina = await dynamoDb.send(new ScanCommand({
+      TableName: tableColaboradores,
+      ConsistentRead: true,
+      FilterExpression: '#usuario = :usuario',
+      ExpressionAttributeNames: { '#usuario': 'usuarioId' },
+      ExpressionAttributeValues: { ':usuario': usuarioId },
+      ...(cursor && { ExclusiveStartKey: cursor }),
+    }));
+    historicos.push(...(pagina.Items || []));
+    if (historicos.length > 1) {
+      throw new ErrorApp('Existen perfiles duplicados; revise la reconciliación antes de cambiar la cuenta', 409, CODIGOS.CONFLICTO);
+    }
+    cursor = pagina.LastEvaluatedKey;
+  } while (cursor);
+  return historicos[0] || null;
+}
+
 async function cambiarEstado(usuarioId, activo) {
+  if (typeof activo !== 'boolean') {
+    throw new ErrorApp('activo debe ser booleano', 400, CODIGOS.VALIDACION);
+  }
+  const usuario = await obtenerPorId(usuarioId);
+  if (!usuario) throw new ErrorApp('Usuario no encontrado', 404, CODIGOS.NO_ENCONTRADO);
   const estado = activo ? 'ACTIVO' : 'INACTIVO';
-  return actualizar(usuarioId, { estado });
+  const ahora = new Date().toISOString();
+  const perfil = await obtenerColaboradorVinculado(usuarioId);
+  const actualizarUsuario = {
+    TableName: tableUsuarios,
+    Key: { usuarioId },
+    UpdateExpression: 'SET #estado = :nuevo, #fecha = :fecha',
+    ConditionExpression: 'attribute_exists(usuarioId) AND #estado = :anterior',
+    ExpressionAttributeNames: { '#estado': 'estado', '#fecha': 'fechaActualizacion' },
+    ExpressionAttributeValues: { ':nuevo': estado, ':anterior': usuario.estado, ':fecha': ahora },
+  };
+  if (activo || !perfil) {
+    try {
+      const resultado = await dynamoDb.send(new UpdateCommand({
+        ...actualizarUsuario, ReturnValues: 'ALL_NEW',
+      }));
+      return resultado.Attributes;
+    } catch (err) {
+      if (err.name === 'ConditionalCheckFailedException') {
+        throw new ErrorApp('La cuenta cambió de estado; recargue antes de reintentar', 409, CODIGOS.CONFLICTO);
+      }
+      throw err;
+    }
+  }
+  if (perfil.dedicacionReservada !== 0) {
+    throw new ErrorApp('No se puede desactivar la cuenta: revise la dedicación y finalice sus asignaciones activas', 409, CODIGOS.CONFLICTO);
+  }
+  // Comprobación adicional de historial; la condición de reserva se valida de nuevo en la transacción.
+  const asignaciones = await dynamoDb.send(new QueryCommand({
+    TableName: tableAsignaciones, IndexName: 'GSI1',
+    KeyConditionExpression: '#colaborador = :colaborador AND begins_with(#clave, :prefijo)',
+    ExpressionAttributeNames: { '#colaborador': 'colaboradorId', '#clave': 'colaboradorFechaKey' },
+    ExpressionAttributeValues: { ':colaborador': perfil.colaboradorId, ':prefijo': 'ACTIVA#' },
+    Limit: 1,
+  }));
+  if (asignaciones.Items?.length) {
+    throw new ErrorApp('Finalice o desvincule las asignaciones activas antes de desactivar la cuenta', 409, CODIGOS.CONFLICTO);
+  }
+  const cambioPerfil = perfil.estado === 'ACTIVO'
+    ? ', #baja = :fecha' : '';
+  try {
+    await dynamoDb.send(new TransactWriteCommand({ TransactItems: [
+      { Update: actualizarUsuario },
+      { Update: {
+        TableName: tableColaboradores, Key: { colaboradorId: perfil.colaboradorId },
+        UpdateExpression: 'SET #estado = :inactivo, #fecha = :fecha' + cambioPerfil,
+        ConditionExpression: 'attribute_exists(colaboradorId) AND #estado = :anterior AND dedicacionReservada = :cero AND usuarioId = :usuario',
+        ExpressionAttributeNames: {
+          '#estado': 'estado', '#fecha': 'fechaActualizacion',
+          ...(cambioPerfil && { '#baja': 'fechaBaja' }),
+        },
+        ExpressionAttributeValues: {
+          ':inactivo': 'INACTIVO', ':anterior': perfil.estado,
+          ':fecha': ahora, ':cero': 0, ':usuario': usuarioId,
+        },
+      } },
+    ] }));
+  } catch (err) {
+    if (['TransactionCanceledException', 'ConditionalCheckFailedException', 'TransactionConflictException'].includes(err.name)) {
+      throw new ErrorApp('La cuenta o las asignaciones cambiaron; recargue antes de desactivar', 409, CODIGOS.CONFLICTO);
+    }
+    throw err;
+  }
+  return { ...usuario, estado, fechaActualizacion: ahora };
 }
 
 module.exports = {

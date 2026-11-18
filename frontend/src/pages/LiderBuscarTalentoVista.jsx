@@ -1,7 +1,10 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Search, UserRound, X } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
+import { useAutoDismiss } from '../hooks/useAutoDismiss.js'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import { colaboradoresService } from '../services/colaboradores.service.js'
 import { cargosService } from '../services/cargos.service.js'
@@ -10,8 +13,10 @@ import { proyectosService } from '../services/proyectos.service.js'
 import { asignacionesService } from '../services/asignaciones.service.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
 import { nombreColaborador } from '../utils/formatters.js'
-import { esCandidatoAsignable } from '../utils/asignacionElegibilidad.js'
+import { evaluarAsignacion } from '../utils/asignacionElegibilidad.js'
+import { evaluarCoincidenciaVisible } from '../utils/coincidenciaTalento.js'
 import api from '../services/api.js'
+import { busquedaService } from '../services/busqueda.service.js'
 import './lider-buscar-talento.css'
 
 const menu = [
@@ -55,8 +60,9 @@ const iniciales = nombre => String(nombre || 'C').trim().split(/\s+/).slice(0, 2
 const nombreNivel = nivel => nivel ? (nivel === 'MID' ? 'Mid' : nivel.charAt(0) + nivel.slice(1).toLowerCase()) : ''
 
 function tipoDisponibilidad(item) {
-  if (item.estado === 'INACTIVO') return 'NO_DISPONIBLE'
+  if (item.estado !== 'ACTIVO' || (!item.esEjemplo && item.usuarioEstado !== 'ACTIVO')) return 'NO_DISPONIBLE'
   if (!item.esEjemplo) {
+    if (item.disponibilidad === 'NO_DISPONIBLE') return 'NO_DISPONIBLE'
     if (!Number.isFinite(item.dedicacion)) return 'SIN_DATOS'
     if (item.dedicacion >= 100) return 'NO_DISPONIBLE'
     if (item.dedicacion > 0) return 'PARCIAL'
@@ -77,14 +83,22 @@ function nombreDisponibilidad(item) {
 
 export default function LiderBuscarTalentoVista() {
   const { user } = useAuth()
+  const { canOperate } = useOperationalPermissions()
+  const puedeAsignar = canOperate('gestionar_asignaciones')
   const [colaboradores, setColaboradores] = useState([])
   const [habilidadesCatalogo, setHabilidadesCatalogo] = useState([])
   const [cargos, setCargos] = useState([])
   const [proyectos, setProyectos] = useState([])
   const [requisitos, setRequisitos] = useState({})
   const [habilidadesColaboradores, setHabilidadesColaboradores] = useState({})
+  const [asignacionesRegistradas, setAsignacionesRegistradas] = useState([])
+  const [historialCompleto, setHistorialCompleto] = useState(false)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
+  const [errorProyectos, setErrorProyectos] = useState('')
+  const [resultadosBusqueda, setResultadosBusqueda] = useState(null)
+  const [consultando, setConsultando] = useState(false)
+  const [totalCoincidencias, setTotalCoincidencias] = useState(0)
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [habilidadFiltro, setHabilidadFiltro] = useState('')
@@ -93,6 +107,7 @@ export default function LiderBuscarTalentoVista() {
   const [estadoPerfilFiltro, setEstadoPerfilFiltro] = useState('ACTIVO')
   const [cargoFiltro, setCargoFiltro] = useState('')
   const [proyectoFiltro, setProyectoFiltro] = useState('')
+  const [proyectoElegidoManualmente, setProyectoElegidoManualmente] = useState(false)
   const [pagina, setPagina] = useState(1)
   const [detalle, setDetalle] = useState(null)
   const [asignar, setAsignar] = useState(null)
@@ -102,11 +117,13 @@ export default function LiderBuscarTalentoVista() {
   const [guardando, setGuardando] = useState(false)
   const [errorAsignacion, setErrorAsignacion] = useState('')
   const [aviso, setAviso] = useState('')
+  useAutoDismiss(aviso, setAviso)
   const [demostracionAsignada, setDemostracionAsignada] = useState({})
 
   const cargar = useCallback(async () => {
     setCargando(true)
     setError('')
+    setErrorProyectos('')
     const [listaColaboradores, listaHabilidades, listaCargos, listaProyectos] = await Promise.allSettled([
       colaboradoresService.listAll(),
       habilidadesService.listAll(),
@@ -119,11 +136,16 @@ export default function LiderBuscarTalentoVista() {
     const cargosDisponibles = listaCargos.status === 'fulfilled' ? obtenerItems(listaCargos.value) : []
     const proyectosDisponibles = listaProyectos.status === 'fulfilled'
       ? obtenerItems(listaProyectos.value).filter(item => item.liderId === user?.usuarioId) : []
+    if (listaProyectos.status === 'rejected') {
+      setErrorProyectos(getApiErrorMessage(listaProyectos.reason,
+        'No fue posible cargar los proyectos a tu cargo.'))
+    }
 
     const nombresHabilidad = new Map(habilidades.map(item => [item.habilidadId, item.nombre]))
     const resultados = await Promise.allSettled([
       ...personas.map(item => colaboradoresService.listSkills(item.colaboradorId)),
       ...proyectosDisponibles.map(item => api.get(`/proyectos/${encodeURIComponent(item.proyectoId)}/habilidades`)),
+      ...proyectosDisponibles.map(item => asignacionesService.listByProject(item.proyectoId)),
     ])
     const relacionesPersonas = {}
     personas.forEach((item, indice) => {
@@ -131,6 +153,7 @@ export default function LiderBuscarTalentoVista() {
       if (resultado?.status === 'fulfilled') {
         relacionesPersonas[item.colaboradorId] = obtenerItems(resultado.value).map(habilidad => ({
           nombre: nombresHabilidad.get(habilidad.habilidadId) || habilidad.nombre || habilidad.habilidadId,
+          habilidadId: habilidad.habilidadId,
           nivel: String(habilidad.nivel || 'JUNIOR').toUpperCase(),
         }))
       }
@@ -141,7 +164,10 @@ export default function LiderBuscarTalentoVista() {
       if (resultado?.status === 'fulfilled') {
         relacionesProyectos[item.proyectoId] = obtenerItems(resultado.value).map(habilidad => ({
           nombre: nombresHabilidad.get(habilidad.habilidadId) || habilidad.nombre || habilidad.habilidadId,
+          habilidadId: habilidad.habilidadId,
+          esObligatoria: habilidad.esObligatoria,
           nivelMinimo: String(habilidad.nivelMinimo || 'JUNIOR').toUpperCase(),
+          peso: Number(habilidad.peso ?? 1),
         }))
       }
     })
@@ -152,6 +178,10 @@ export default function LiderBuscarTalentoVista() {
     setProyectos(proyectosDisponibles)
     setHabilidadesColaboradores(relacionesPersonas)
     setRequisitos(relacionesProyectos)
+    const respuestasAsignaciones = resultados.slice(personas.length + proyectosDisponibles.length)
+    setHistorialCompleto(respuestasAsignaciones.every(item => item.status === 'fulfilled'))
+    setAsignacionesRegistradas(respuestasAsignaciones.flatMap(item =>
+      item.status === 'fulfilled' ? obtenerItems(item.value) : []))
     if (listaColaboradores.status === 'rejected') {
       setError(getApiErrorMessage(listaColaboradores.reason, 'No se pudieron cargar los colaboradores.'))
     }
@@ -160,20 +190,42 @@ export default function LiderBuscarTalentoVista() {
 
   useEffect(() => { cargar() }, [cargar])
 
+  // Al cargar, compara con el primer proyecto activo con requisitos válidos.
+  // Elegir "Ningún proyecto" manualmente conserva la decisión del usuario.
+  useEffect(() => {
+    if (proyectoElegidoManualmente || proyectoFiltro) return
+    const primero = proyectos.find(item =>
+      item.estado === 'ACTIVO' && Array.isArray(requisitos[item.proyectoId]) &&
+      requisitos[item.proyectoId].length > 0)
+    if (primero) setProyectoFiltro(primero.proyectoId)
+  }, [proyectos, requisitos, proyectoFiltro, proyectoElegidoManualmente])
+
   // En desarrollo, los seis perfiles de ejemplo acompañan a los registros reales.
-  const mostrarEjemplos = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error
+  const mostrarEjemplos = import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error && !proyectoFiltro && !habilidadFiltro
   const proyectosDisponibles = mostrarEjemplos && proyectos.length === 0 ? proyectosEjemplo : proyectos
+  const evaluarOpcion = (persona, proyecto, porcentaje) => {
+    // El backend comprueba duplicados y dedicación en una transacción.
+    // Un fallo de lectura del historial no debe bloquear toda la interfaz del líder.
+    return evaluarAsignacion({
+      colaborador: persona, proyecto, porcentaje,
+      asignaciones: asignacionesRegistradas,
+      requisitos: requisitos[proyecto?.proyectoId],
+      habilidades: habilidadesColaboradores[persona?.colaboradorId],
+    })
+  }
   const opcionesAsignacion = (asignar?.esEjemplo ? proyectosDisponibles : proyectos)
-    .filter(item => item.estado === 'ACTIVO' && esCandidatoAsignable(asignar, item))
-  const tieneProyectoAsignable = item => (item.esEjemplo ? proyectosDisponibles : proyectos)
-    .some(proyecto => proyecto.estado === 'ACTIVO' && esCandidatoAsignable(item, proyecto))
+    .filter(item => item.estado === 'ACTIVO')
+  const proyectosActivos = proyectos.filter(item => item.estado === 'ACTIVO')
+  const evaluacionAsignacion = asignar && proyectoAsignacion
+    ? evaluarOpcion(asignar, opcionesAsignacion.find(item => item.proyectoId === proyectoAsignacion),
+      Number(dedicacionAsignacion)) : null
 
   const tarjetas = useMemo(() => {
     const cargosPorId = new Map(cargos.map(item => [item.cargoId, item.nombre]))
     const reales = colaboradores.map(item => ({
       ...item,
       nombre: nombreColaborador(item),
-      cargo: cargosPorId.get(item.cargoId) || item.cargoNombre || item.rolProfesional || 'Sin cargo',
+      cargo: cargosPorId.get(item.cargoId) || item.cargoNombre || 'Sin cargo registrado',
       dedicacion: Number.isFinite(item.dedicacionReservada) ? item.dedicacionReservada : null,
       habilidades: habilidadesColaboradores[item.colaboradorId] ||
         (Array.isArray(item.habilidades) ? item.habilidades.map(h => typeof h === 'string' ? { nombre: h, nivel: '' } : {
@@ -203,24 +255,71 @@ export default function LiderBuscarTalentoVista() {
   const requisitosActivos = proyectoFiltro
     ? (proyectosDisponibles.find(item => item.proyectoId === proyectoFiltro)?.requisitos || requisitos[proyectoFiltro] || [])
     : []
-  const requisitosFiltrados = habilidadFiltro
-    ? [{ nombre: habilidadFiltro, nivelMinimo: nivelFiltro || 'JUNIOR' }]
-    : requisitosActivos
+  const habilidadesBuscadas = [...new Set([
+    ...requisitosActivos.map(item => item.habilidadId ||
+      habilidadesCatalogo.find(habilidad => normalizar(habilidad.nombre) === normalizar(item.nombre))?.habilidadId),
+    ...(habilidadFiltro ? [habilidadesCatalogo.find(habilidad =>
+      normalizar(habilidad.nombre) === normalizar(habilidadFiltro))?.habilidadId] : []),
+  ].filter(Boolean))]
+  const criteriosActivos = Boolean(proyectoFiltro || habilidadFiltro)
+  const claveHabilidades = habilidadesBuscadas.join(',')
+  useEffect(() => {
+    if (!criteriosActivos || (!claveHabilidades && !proyectoFiltro)) {
+      setResultadosBusqueda(null)
+      setTotalCoincidencias(0)
+      setConsultando(false)
+      return
+    }
+    let vigente = true
+    setConsultando(true)
+    setResultadosBusqueda(null)
+    setError('')
+    busquedaService.colaboradores({
+      proyectoId: proyectoFiltro,
+      habilidades: claveHabilidades.split(','),
+      nivelMinimo: nivelFiltro || 'JUNIOR',
+      considerarDisponibilidad: disponibilidadFiltro === 'DISPONIBLE' || disponibilidadFiltro === 'PARCIAL',
+    }).then(({ data }) => {
+      if (!vigente) return
+      setResultadosBusqueda(data?.datos?.candidatos || [])
+      setTotalCoincidencias(data?.datos?.total || 0)
+    }).catch(fallo => {
+      if (!vigente) return
+      setResultadosBusqueda([])
+      setTotalCoincidencias(0)
+      setError(getApiErrorMessage(fallo, 'No fue posible buscar talento en el backend.'))
+    }).finally(() => { if (vigente) setConsultando(false) })
+    return () => { vigente = false }
+  }, [criteriosActivos, claveHabilidades, proyectoFiltro, nivelFiltro, disponibilidadFiltro])
 
-  const coincidencia = item => {
-    if (item.esEjemplo && !habilidadFiltro && !proyectoFiltro) return item.coincidencia
-    if (!requisitosFiltrados.length) return null
-    if (!item.habilidades?.length) return null
-    const acertadas = requisitosFiltrados.filter(requisito =>
-      item.habilidades.some(habilidad =>
-        normalizar(habilidad.nombre) === normalizar(requisito.nombre) &&
-        (niveles[habilidad.nivel] || 0) >= (niveles[nivelFiltro || requisito.nivelMinimo] || 1),
-      ),
-    ).length
-    return Math.round(acertadas / requisitosFiltrados.length * 100)
-  }
-
-  const visibles = tarjetas.map(item => ({ ...item, puntuacion: coincidencia(item) })).filter(item => {
+  const candidatosPorId = new Map((resultadosBusqueda || []).map(item => [item.colaboradorId, item]))
+  const nombresPorId = new Map(habilidadesCatalogo.map(item => [item.habilidadId, item.nombre]))
+  const requisitosPuntuacion = proyectoFiltro
+    ? requisitosActivos.map(item => ({ ...item, nombre: item.nombre || nombresPorId.get(item.habilidadId) }))
+    : habilidadFiltro
+      ? [{ habilidadId: habilidadesCatalogo.find(item => normalizar(item.nombre) === normalizar(habilidadFiltro))?.habilidadId,
+          nombre: habilidadFiltro, nivelMinimo: nivelFiltro || 'JUNIOR', peso: 1, esObligatoria: false }]
+      : []
+  const visibles = tarjetas.map(item => {
+      const candidato = candidatosPorId.get(item.colaboradorId)
+      const habilidadesEvaluables = item.esEjemplo ? item.habilidades : habilidadesColaboradores[item.colaboradorId] || item.habilidades
+      const coincidenciaLocal = evaluarCoincidenciaVisible(habilidadesEvaluables, requisitosPuntuacion)
+      const acertadas = candidato?.habilidadesCoincidentes
+      const pendientes = candidato?.habilidadesFaltantes
+      return {
+        ...item,
+        // El backend devuelve 0 cuando falta una habilidad obligatoria (inelegible).
+        // El porcentaje visible expresa coincidencias parciales, no autorización para asignar.
+        puntuacion: criteriosActivos ? coincidenciaLocal?.puntuacion ?? candidato?.puntuacion ?? null
+          : item.esEjemplo ? item.coincidencia : null,
+        coincidentes: acertadas
+          ? acertadas.map(habilidad => nombresPorId.get(habilidad.habilidadId) || habilidad.habilidadId)
+          : coincidenciaLocal?.coincidentes || [],
+        faltantes: pendientes
+          ? pendientes.map(habilidad => nombresPorId.get(habilidad.habilidadId) || habilidad.habilidadId)
+          : coincidenciaLocal?.faltantes || [],
+      }
+    }).filter(item => {
     const contenido = [item.nombre, item.rolProfesional, item.cargo, ...item.habilidades.map(h => h.nombre)]
       .join(' ').toLocaleLowerCase('es')
     const terminos = [busqueda, busquedaSuperior].map(texto => normalizar(texto))
@@ -248,10 +347,11 @@ export default function LiderBuscarTalentoVista() {
   const abrirAsignacion = colaborador => {
     setErrorAsignacion('')
     const opciones = (colaborador.esEjemplo ? proyectosDisponibles : proyectos)
-      .filter(item => item.estado === 'ACTIVO' && esCandidatoAsignable(colaborador, item))
+      .filter(item => item.estado === 'ACTIVO')
     setProyectoAsignacion(opciones.some(item => item.proyectoId === proyectoFiltro)
       ? proyectoFiltro : opciones[0]?.proyectoId || '')
-    setDedicacionAsignacion('25')
+    const libre = Number.isFinite(colaborador.dedicacion) ? Math.max(0, 100 - colaborador.dedicacion) : 0
+    setDedicacionAsignacion(String(libre > 0 ? Math.min(25, libre) : 25))
     setHorasAsignacion('20')
     setAsignar(colaborador)
   }
@@ -266,8 +366,10 @@ export default function LiderBuscarTalentoVista() {
       setErrorAsignacion('Selecciona un proyecto activo, con dedicación de 1 a 100 % y horas mayores que cero.')
       return
     }
-    if (!esCandidatoAsignable(asignar, proyectosDisponibles.find(item => item.proyectoId === proyectoAsignacion))) {
-      setErrorAsignacion('El líder no puede asignarse como colaborador a su propio proyecto.')
+    const evaluacion = evaluarOpcion(asignar,
+      proyectosDisponibles.find(item => item.proyectoId === proyectoAsignacion), dedicacion)
+    if (!evaluacion.elegible) {
+      setErrorAsignacion(evaluacion.motivos.join('. '))
       return
     }
     if (asignar.dedicacion != null && asignar.dedicacion + dedicacion > 100) {
@@ -296,6 +398,7 @@ export default function LiderBuscarTalentoVista() {
       }
       setAsignar(null)
     } catch (fallo) {
+      if (fallo.response?.status === 409) await cargar()
       setErrorAsignacion(getApiErrorMessage(fallo, 'No se pudo crear la asignación.'))
     } finally {
       setGuardando(false)
@@ -306,7 +409,7 @@ export default function LiderBuscarTalentoVista() {
     <div className="emp-dashboard lider-talento-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de líder de proyecto">
             {menu.map(([texto, ruta]) => (
@@ -366,11 +469,11 @@ export default function LiderBuscarTalentoVista() {
                   <option value="NO_DISPONIBLE">No disponible</option>
                 </select>
               </label>
-              <label>Estado del colaborador
+              <label className="estado-filtro-inline"><span>Estado</span>
                  <select value={estadoPerfilFiltro} onChange={evento => cambiarFiltro(setEstadoPerfilFiltro, evento.target.value)}>
                    <option value="ACTIVO">Activos</option>
                    <option value="INACTIVO">Dados de baja</option>
-                   <option value="TODOS">Todos los estados</option>
+                   <option value="TODOS">Todos</option>
                  </select>
                </label>
                <label>Cargo
@@ -382,15 +485,33 @@ export default function LiderBuscarTalentoVista() {
             </div>
             <div className="lider-talento-proyecto-filtro">
               <label>Cargar requisitos desde un proyecto <span>(opcional)</span>
-                <select value={proyectoFiltro} onChange={evento => cambiarFiltro(setProyectoFiltro, evento.target.value)}>
+                <select value={proyectoFiltro} onChange={evento => {
+                    setProyectoElegidoManualmente(true)
+                    cambiarFiltro(setProyectoFiltro, evento.target.value)
+                  }}>
                   <option value="">Ningún proyecto seleccionado</option>
                   {proyectosDisponibles.map(item => <option key={item.proyectoId} value={item.proyectoId}>{item.nombre}</option>)}
                 </select>
               </label>
               <p>Compara las habilidades del colaborador con los requisitos del proyecto.</p>
             </div>
+            {!puedeAsignar && (
+              <p className="lider-talento-ayuda" role="status">Tu rol no tiene habilitado el permiso
+                «Gestionar asignaciones». El administrador debe revisarlo en Roles y permisos.</p>
+            )}
+            {!proyectosActivos.length && !cargando && !errorProyectos && (
+              <p className="lider-talento-ayuda">No tienes proyectos activos a tu cargo para asignar colaboradores.
+                Publica un proyecto con habilidades requeridas desde Mis proyectos, o selecciona una habilidad
+                para consultar coincidencias sin realizar asignaciones.</p>
+            )}
           </section>
 
+          {errorProyectos && (
+            <div className="lider-talento-error" role="alert">
+              <span>{errorProyectos}</span>
+              <button type="button" onClick={cargar} disabled={cargando}>Reintentar</button>
+            </div>
+          )}
           {error && (
             <div className="lider-talento-error" role="alert">
               <span>{error}</span>
@@ -408,24 +529,30 @@ export default function LiderBuscarTalentoVista() {
             <strong>Mostrando {visibles.length} colaboradores{mostrarEjemplos
               ? ` (${visibles.filter(item => !item.esEjemplo).length} reales · ${visibles.filter(item => item.esEjemplo).length} de ejemplo)`
               : ''}</strong>
-            <span>Ordenados por mejor coincidencia</span>
+            <span>{criteriosActivos
+              ? `Coincidencia con los requisitos seleccionados · ${totalCoincidencias} candidatos elegibles según el backend`
+              : 'Selecciona una habilidad o un proyecto activo para calcular la coincidencia'}</span>
           </div>
 
-          {cargando ? (
+          {cargando || consultando ? (
             <p className="lider-talento-vacio" role="status">Cargando colaboradores...</p>
           ) : (
             <>
               <div className="lider-talento-grid">
                 {visiblesPagina.map(item => {
                   const tipo = tipoDisponibilidad(item)
-                  const asignable = tipo !== 'NO_DISPONIBLE' && tieneProyectoAsignable(item)
+                  const proyectosDelLider = item.esEjemplo ? proyectosDisponibles : proyectos
+                  const proyectosActivosDelLider = proyectosDelLider.filter(proyecto => proyecto.estado === 'ACTIVO')
+                  const asignable = proyectosActivosDelLider.some(proyecto =>
+                    evaluarOpcion(item, proyecto, 1).elegible)
                   return (
                     <article className="lider-talento-card" key={item.colaboradorId}>
                       <div className="lider-talento-card-top">
                         <div className="lider-talento-avatar" aria-hidden="true">{iniciales(item.nombre)}</div>
                         <div className="lider-talento-identity">
                           <h3>{item.nombre}</h3>
-                          <p>{item.rolProfesional || item.cargo}</p>
+                          <p>{item.rolProfesional || 'Sin rol profesional registrado'}</p>
+                           <p className="lider-talento-cargo">Cargo: {item.cargo}</p>
                           {item.esEjemplo && <small className="lider-talento-ejemplo-label">Perfil de ejemplo</small>}
                         </div>
                         <div className="lider-talento-match">
@@ -453,11 +580,22 @@ export default function LiderBuscarTalentoVista() {
                           </span>
                         )) : <span className="lider-talento-muted">Sin habilidades registradas</span>}
                       </div>
+                      {criteriosActivos && (item.coincidentes.length > 0 || item.faltantes.length > 0) && (
+                        <div className="lider-talento-skills">
+                          {item.coincidentes.length > 0 && <small className="lider-talento-muted">Coinciden: {item.coincidentes.join(", ")}</small>}
+                          {item.faltantes.length > 0 && <small className="lider-talento-muted">Faltan: {item.faltantes.join(", ")}</small>}
+                        </div>
+                      )}
                       <div className="lider-talento-card-actions">
                         <button type="button" className="lider-talento-ver" onClick={() => setDetalle(item)}>Ver perfil</button>
-                        <button type="button" className="lider-talento-asignar" disabled={!asignable || guardando}
-                          title={!asignable ? 'No hay disponibilidad o proyectos activos para asignar' : 'Asignar a proyecto'}
-                          onClick={() => abrirAsignacion(item)}>Asignar a proyecto</button>
+                        <button type="button" className="lider-talento-asignar"
+                          disabled={!puedeAsignar || !proyectosActivosDelLider.length || guardando}
+                          title={!puedeAsignar ? 'Tu rol no tiene habilitado el permiso Gestionar asignaciones'
+                            : !proyectosActivosDelLider.length ? 'No tienes proyectos activos a tu cargo'
+                            : asignable ? 'Asignar a un proyecto' : 'Consultar por qué no se puede asignar'}
+                          onClick={() => abrirAsignacion(item)}>
+                          {asignable ? 'Asignar a proyecto' : 'Evaluar asignación'}
+                        </button>
                       </div>
                     </article>
                   )
@@ -487,7 +625,7 @@ export default function LiderBuscarTalentoVista() {
             </div>
             <div className="lider-talento-modal-profile">
               <div className="lider-talento-avatar" aria-hidden="true">{iniciales(detalle.nombre)}</div>
-              <div><strong>{detalle.nombre}</strong><p>{detalle.rolProfesional || detalle.cargo}</p></div>
+              <div><strong>{detalle.nombre}</strong><p>{detalle.rolProfesional || 'Sin rol profesional registrado'}</p></div>
             </div>
             <dl className="lider-talento-detalle-lista">
               <dt>Cargo</dt><dd>{detalle.cargo}</dd>
@@ -506,8 +644,9 @@ export default function LiderBuscarTalentoVista() {
             <div className="lider-talento-modal-actions">
               <button type="button" className="lider-talento-ver" onClick={() => setDetalle(null)}>Cerrar</button>
               <button type="button" className="lider-talento-asignar"
-                disabled={tipoDisponibilidad(detalle) === 'NO_DISPONIBLE' || !tieneProyectoAsignable(detalle)}
-                onClick={() => { setDetalle(null); abrirAsignacion(detalle) }}>Asignar a proyecto</button>
+                disabled={!puedeAsignar || !(detalle.esEjemplo ? proyectosDisponibles : proyectos)
+                  .some(proyecto => proyecto.estado === 'ACTIVO')}
+                onClick={() => { setDetalle(null); abrirAsignacion(detalle) }}>Evaluar asignación</button>
             </div>
           </section>
         </div>
@@ -524,6 +663,19 @@ export default function LiderBuscarTalentoVista() {
             <p className="lider-talento-modal-intro">Colaborador: <strong>{asignar.nombre}</strong></p>
             {asignar.esEjemplo && <p className="lider-talento-preview">Vista previa: esta asignación no se guardará en el backend.</p>}
             {errorAsignacion && <p className="lider-talento-form-error" role="alert">{errorAsignacion}</p>}
+            {!historialCompleto && !asignar.esEjemplo && <p className="lider-talento-ayuda" role="status">
+              El historial de algunas asignaciones no se pudo consultar. El servidor verificará
+              duplicados y dedicación antes de confirmar cualquier cambio.
+            </p>}
+            {!opcionesAsignacion.length && <p className="lider-talento-form-error" role="status">
+              No hay proyectos activos bajo tu responsabilidad. Debes publicar uno antes de asignar.
+            </p>}
+            {evaluacionAsignacion && !evaluacionAsignacion.elegible && (
+              <div className="lider-talento-form-error" role="status">
+                <strong>No se puede confirmar esta asignación:</strong>
+                <ul>{evaluacionAsignacion.motivos.map(motivo => <li key={motivo}>{motivo}</li>)}</ul>
+              </div>
+            )}
             <label>Proyecto activo
               <select value={proyectoAsignacion} required disabled={guardando}
                 onChange={evento => setProyectoAsignacion(evento.target.value)}>
@@ -541,7 +693,8 @@ export default function LiderBuscarTalentoVista() {
             </label>
             <div className="lider-talento-modal-actions">
               <button type="button" className="lider-talento-ver" onClick={() => setAsignar(null)} disabled={guardando}>Cancelar</button>
-              <button type="submit" className="lider-talento-asignar" disabled={guardando}>
+              <button type="submit" className="lider-talento-asignar"
+                 disabled={!puedeAsignar || guardando || !evaluacionAsignacion?.elegible}>
                 {guardando ? 'Guardando...' : 'Confirmar asignación'}
               </button>
             </div>

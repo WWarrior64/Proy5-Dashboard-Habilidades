@@ -76,12 +76,190 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
-      - name: Ejecutar pruebas del Frontend
+      - name: Ejecutar pruebas del Frontend (Vitest)
         working-directory: frontend
         run: npm test
 
-      - name: Compilar Frontend (Build)
+      # Este build solo valida. El deploy compila de nuevo con las salidas reales de CloudFormation.
+      - name: Compilar Frontend (sin publicar)
         working-directory: frontend
         run: npm run build
-        env:
-          VITE_API_URL: https://placeholder.execute-api.us-east-2.amazonaws.com/prod/api/v1
+
+  deploy-production:
+    name: Desplegar AWS (SAM, S3 y CloudFront)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [validate-backend, validate-frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: internal-marketplace-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: us-east-2
+      AWS_STACK_NAME: ${{ vars.AWS_STACK_NAME }}
+      AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
+    steps:
+      - name: Descargar exactamente el commit aprobado
+        uses: actions/checkout@v4
+
+      - name: Comprobar configuración del despliegue
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$AWS_STACK_NAME" || -z "$AWS_ROLE_TO_ASSUME" ]]; then
+            echo '::error::Configura AWS_STACK_NAME y AWS_ROLE_TO_ASSUME en GitHub Actions > Variables.'
+            exit 1
+          fi
+          if [[ ! "$AWS_ROLE_TO_ASSUME" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]]; then
+            echo '::error::AWS_ROLE_TO_ASSUME debe ser el ARN de un rol IAM para OIDC.'
+            exit 1
+          fi
+
+      - name: Configurar credenciales temporales AWS mediante OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: us-east-2
+          role-session-name: internal-marketplace-github-deploy
+
+      - name: Verificar identidad AWS y pila existente
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity --query Account --output text
+          status="$(aws cloudformation describe-stacks \
+            --stack-name "$AWS_STACK_NAME" --region "$AWS_REGION" \
+            --query 'Stacks[0].StackStatus' --output text)"
+          if [[ "$status" != 'CREATE_COMPLETE' && "$status" != 'UPDATE_COMPLETE' && "$status" != 'UPDATE_ROLLBACK_COMPLETE' ]]; then
+            echo "::error::La pila $AWS_STACK_NAME no está en estado desplegable: $status"
+            exit 1
+          fi
+
+      - name: Configurar Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependencias desde package-lock.json
+        run: npm ci
+
+      - name: Instalar AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Compilar backend para Lambda
+        run: sam build --template-file infrastructure/template.yaml
+
+      - name: Desplegar infraestructura y backend en la pila existente
+        shell: bash
+        run: |
+          set -euo pipefail
+          sam deploy \
+            --template-file .aws-sam/build/template.yaml \
+            --stack-name "$AWS_STACK_NAME" \
+            --region "$AWS_REGION" \
+            --parameter-overrides StageName=prod \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --resolve-s3 \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
+
+      - name: Obtener destinos y configuración pública de la misma pila
+        id: outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          output() {
+            aws cloudformation describe-stacks \
+              --stack-name "$AWS_STACK_NAME" --region "$AWS_REGION" \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue | [0]" \
+              --output text
+          }
+          api_url="$(output ApiGatewayUrl)"
+          bucket="$(output FrontendBucketName)"
+          cloudfront_url="$(output CloudFrontUrl)"
+          user_pool_id="$(output CognitoUserPoolId)"
+          client_id="$(output CognitoUserPoolClientId)"
+          distribution_id="$(aws cloudformation describe-stack-resource \
+            --stack-name "$AWS_STACK_NAME" --logical-resource-id FrontendDistribution \
+            --region "$AWS_REGION" --query 'StackResourceDetail.PhysicalResourceId' --output text)"
+
+          if [[ ! "$api_url" =~ ^https://[^[:space:]]+/prod/api/v1/?$ ]]; then
+            echo '::error::ApiGatewayUrl no corresponde a la API HTTPS de producción.'
+            exit 1
+          fi
+          for value in "$bucket" "$cloudfront_url" "$user_pool_id" "$client_id" "$distribution_id"; do
+            if [[ -z "$value" || "$value" == 'None' || "$value" == 'null' ]]; then
+              echo '::error::Falta una salida AWS obligatoria para publicar el frontend.'
+              exit 1
+            fi
+          done
+          if [[ ! "$cloudfront_url" =~ ^https://[^/]+$ ]]; then
+            echo '::error::CloudFrontUrl no corresponde a un dominio HTTPS.'
+            exit 1
+          fi
+
+          {
+            echo "VITE_API_URL=$api_url"
+            echo "VITE_COGNITO_USER_POOL_ID=$user_pool_id"
+            echo "VITE_COGNITO_CLIENT_ID=$client_id"
+            echo "VITE_AWS_REGION=$AWS_REGION"
+            echo "VITE_DEMO_MODE=false"
+            echo "FRONTEND_BUCKET=$bucket"
+            echo "CLOUDFRONT_URL=$cloudfront_url"
+            echo "CLOUDFRONT_DISTRIBUTION_ID=$distribution_id"
+          } >> "$GITHUB_ENV"
+
+      - name: Comprobar endpoint público de salud tras desplegar
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 "$VITE_API_URL/health" \
+            | jq -e '.success == true and .datos.status == "ok"' > /dev/null
+
+      - name: Compilar frontend conectado a API y Cognito del despliegue
+        working-directory: frontend
+        run: npm run build
+
+      - name: Publicar assets versionados en S3
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f frontend/dist/index.html
+          test -d frontend/dist/assets
+          aws s3 sync frontend/dist/assets/ "s3://$FRONTEND_BUCKET/assets/" \
+            --region "$AWS_REGION" --cache-control 'public,max-age=31536000,immutable' --no-progress
+
+      - name: Publicar recursos auxiliares e index.html al final
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws s3 sync frontend/dist/ "s3://$FRONTEND_BUCKET/" \
+            --region "$AWS_REGION" --exclude 'index.html' --exclude 'assets/*' \
+            --cache-control 'public,max-age=300' --no-progress
+          aws s3 cp frontend/dist/index.html "s3://$FRONTEND_BUCKET/index.html" \
+            --region "$AWS_REGION" --content-type 'text/html; charset=utf-8' \
+            --cache-control 'no-cache,no-store,must-revalidate' --no-progress
+
+      - name: Invalidar caché y comprobar frontend de producción
+        shell: bash
+        run: |
+          set -euo pipefail
+          invalidation_id="$(aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" --paths '/*' \
+            --query 'Invalidation.Id' --output text)"
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" --id "$invalidation_id"
+          pagina="$(curl --fail --silent --show-error --retry 3 "$CLOUDFRONT_URL/")"
+          if [[ "$pagina" != *'<div id="root"></div>'* ]]; then
+            echo '::error::CloudFront respondió, pero no entregó el index.html de React.'
+            exit 1
+          fi
+          echo "Despliegue verificado. Commit: $GITHUB_SHA"
+          echo "Frontend: $CLOUDFRONT_URL"
+          echo "API: $VITE_API_URL"

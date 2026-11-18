@@ -15,7 +15,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/equipo/proy5-dashboard-habilidades.git"
+    "url": "https://github.com/WWarrior64/Proy5-Dashboard-Habilidades.git"
   },
   "keywords": ["react", "nodejs", "aws", "dynamodb", "dashboard", "talento"],
   "author": "Grupo B - Universidad Católica de El Salvador",

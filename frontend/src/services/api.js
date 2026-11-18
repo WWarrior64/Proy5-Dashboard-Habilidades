@@ -1,13 +1,15 @@
 import axios from 'axios'
+import { resolverApiUrl } from '../utils/apiConfig.js'
 import { getValidIdToken, cleanup } from './token-refresh.service.js'
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://hcy3yy7u7c.execute-api.us-east-2.amazonaws.com/prod/api/v1'
+const API_URL = resolverApiUrl({ direccion: import.meta.env.VITE_API_URL, desarrollo: import.meta.env.DEV })
 const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
 })
 
 api.interceptors.request.use(async (config) => {
+  if (!API_URL) throw new Error('Falta VITE_API_URL en la configuración de este despliegue.')
   // El autorizador COGNITO_USER_POOLS de esta API REST no declara OAuth scopes:
   // API Gateway espera el ID Token, no el Access Token.
   const token = await getValidIdToken()

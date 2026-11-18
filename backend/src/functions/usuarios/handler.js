@@ -1,6 +1,8 @@
 const { exito, creado, error } = require('../../utils/responses');
 const { CODIGOS } = require('../../utils/errors');
 const usuariosRepository = require('../../repositories/usuarios.repository');
+const administracionRepository = require('../../repositories/administracion.repository');
+const { PERMISOS, permisoEfectivo } = require('../../config/permisos-operativos');
 const { resolverIdentidad } = require('../../services/cognito-admin.service');
 
 const ROLES_VALIDOS = ['EMPLEADO', 'RRHH', 'LIDER_PROYECTO', 'ADMINISTRADOR'];
@@ -178,10 +180,20 @@ async function actualizarUsuario(event, context) {
       return error('No tiene autorización para modificar este usuario', 403, CODIGOS.PROHIBIDO);
     }
 
+    const usuarioObjetivo = esPropioPerfil ? solicitante : await usuariosRepository.obtenerPorId(usuarioId);
+    if (!usuarioObjetivo) {
+      return error('Usuario no encontrado', 404, CODIGOS.NO_ENCONTRADO);
+    }
+
     const body = obtenerBody(event);
 
     // Política de seguridad: el correo se gestiona en Cognito para evitar desincronizaciones
-    if (body.email !== undefined && body.email !== solicitante.email) {
+    const emailNormalizado = typeof body.email === 'string' ? body.email.trim().toLowerCase() : body.email;
+    const emailObjetivoNormalizado = typeof usuarioObjetivo.email === 'string'
+      ? usuarioObjetivo.email.trim().toLowerCase()
+      : usuarioObjetivo.email;
+
+    if (body.email !== undefined && emailNormalizado !== emailObjetivoNormalizado) {
       return error(
         'El correo electrónico no puede modificarse directamente en el perfil; debe actualizarse mediante el flujo de identidad de Cognito',
         400,
@@ -259,6 +271,20 @@ async function cambiarEstado(event, context) {
   }
 }
 
+async function obtenerPermisosActuales(event) {
+  try {
+    const usuario = event.usuarioAutenticado;
+    if (!usuario) return error('Autenticación requerida', 401, CODIGOS.NO_AUTORIZADO);
+    const politica = process.env.ENFORCE_PERMISSION_POLICY === 'true'
+      ? await administracionRepository.obtener('roles-permisos') : null;
+    const operaciones = PERMISOS.filter(item => permisoEfectivo(politica, usuario.rol, item.id))
+      .map(item => item.id);
+    return exito({ operaciones });
+  } catch (err) {
+    return error(err.message, err.codigo || 500, err.codigoError);
+  }
+}
+
 const { crearDespachador } = require('../../utils/lambda-dispatcher');
 
 const handler = crearDespachador({
@@ -269,12 +295,14 @@ const handler = crearDespachador({
   'PATCH /api/v1/usuarios/{usuarioId}/rol': cambiarRol,
   'PATCH /api/v1/usuarios/{usuarioId}/estado': cambiarEstado,
   'GET /api/v1/usuarios/yo': obtenerPerfil,
+  'GET /api/v1/usuarios/yo/permisos': obtenerPermisosActuales,
   'POST /api/v1/usuarios/yo/acceso': registrarAcceso,
 });
 
 module.exports = {
   obtenerUsuario,
   obtenerPerfil,
+  obtenerPermisosActuales,
   registrarAcceso,
   listarUsuarios,
   crearUsuario,

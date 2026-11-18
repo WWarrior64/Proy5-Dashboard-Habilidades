@@ -12,6 +12,31 @@ const cache = require('../../src/services/cache.service.js');
 
 const CACHE_TTL_MS = 60000;
 const ESTADOS_VALIDOS = ['BORRADOR', 'ACTIVO', 'PAUSADO', 'COMPLETADO', 'CANCELADO'];
+const TRANSICIONES = Object.freeze({
+  BORRADOR: ['ACTIVO', 'CANCELADO'],
+  ACTIVO: ['PAUSADO', 'COMPLETADO', 'CANCELADO'],
+  PAUSADO: ['ACTIVO', 'COMPLETADO', 'CANCELADO'],
+  COMPLETADO: [],
+  CANCELADO: [],
+});
+
+function validarTransicion(origen, destino) {
+  validarEstado(destino);
+  if (origen !== destino && !TRANSICIONES[origen]?.includes(destino)) {
+    throw new ErrorApp(`No se permite cambiar un proyecto de ${origen} a ${destino}`, 409, CODIGOS.CONFLICTO);
+  }
+  if (['COMPLETADO', 'CANCELADO'].includes(origen)) {
+    throw new ErrorApp('Un proyecto completado o cancelado no puede modificarse', 409, CODIGOS.CONFLICTO);
+  }
+}
+
+async function consultarProyectoConsistente(proyectoId) {
+  const respuesta = await dynamoDb.send(new GetCommand({
+    TableName: tableProyectos, Key: { proyectoId }, ConsistentRead: true,
+  }));
+  if (!respuesta.Item) throw new ErrorApp('Proyecto no encontrado', 404, CODIGOS.NO_ENCONTRADO);
+  return respuesta.Item;
+}
 
 function ahoraISO() {
   return new Date().toISOString();
@@ -36,11 +61,11 @@ function claveProyecto(proyectoId) {
 }
 
 function claveListaProyectos(filtros = {}) {
-  return `proyectos:list:${cache.construirClave(
-    String(filtros.estado ?? ''),
-    String(filtros.liderId ?? ''),
-    String(filtros.fecha ?? '')
-  )}`;
+  return `proyectos:list:${JSON.stringify({
+    estado: filtros.estado ?? null,
+    liderId: filtros.liderId ?? null,
+    fecha: filtros.fecha ?? null,
+  })}`;
 }
 
 function claveProyectosActivos() {
@@ -117,6 +142,19 @@ async function comprobarPrimeraPublicacion(proyectoId, estado) {
   return resultado.Item.estado === 'BORRADOR';
 }
 
+function validarTextoProyecto(valor, campo, maximo = 2000) {
+  if (typeof valor !== 'string' || !valor.trim() || valor.trim().length > maximo) {
+    throw new ErrorApp(`${campo} debe ser un texto no vacío de hasta ${maximo} caracteres`, 400, CODIGOS.VALIDACION);
+  }
+  return valor.trim();
+}
+
+function validarHorasProyecto(valor) {
+  if (typeof valor !== 'number' || !Number.isFinite(valor) || valor <= 0) {
+    throw new ErrorApp('Las horas requeridas deben ser un número positivo', 400, CODIGOS.VALIDACION);
+  }
+}
+
 function validarFechas(inicio, fin) {
   for (const valor of [inicio, fin]) {
     if (valor !== undefined && valor !== null &&
@@ -138,6 +176,8 @@ function itemBaseProyecto(proyectoId, datos, ahora) {
     liderId: datos.liderId,
     horasRequeridas: datos.horasRequeridas,
     estado,
+    asignacionesActivas: 0,
+    requisitosRevision: 0,
     ...(estado === 'ACTIVO' && { fechaPublicacion: fechaPublicacion || ahora }),
     fechaCreacion: ahora,
     fechaActualizacion: ahora,
@@ -169,13 +209,14 @@ async function crearProyecto(datos) {
       CODIGOS.VALIDACION
     );
   }
-  if (typeof horasRequeridas !== 'number' || !Number.isFinite(horasRequeridas) || horasRequeridas <= 0) {
-    throw new ErrorApp('Las horas requeridas deben ser un número positivo', 400, CODIGOS.VALIDACION);
-  }
+  const nombreValido = validarTextoProyecto(nombre, 'nombre', 200);
+  const descripcionValida = validarTextoProyecto(descripcion, 'descripcion');
+  if (datos.objetivo !== undefined && datos.objetivo !== null) validarTextoProyecto(datos.objetivo, 'objetivo');
+  validarHorasProyecto(horasRequeridas);
 
   const estado = datos.estado || 'BORRADOR';
   validarEstado(estado);
-  if (estado === 'ACTIVO') {
+  if (estado !== 'BORRADOR') {
     throw new ErrorApp('Crea el proyecto como BORRADOR, registra sus habilidades requeridas y luego publícalo',
       400, CODIGOS.VALIDACION);
   }
@@ -185,7 +226,10 @@ async function crearProyecto(datos) {
 
   const proyectoId = proyectoIdEntrada || uuidv4();
   const ahora = ahoraISO();
-  const item = itemBaseProyecto(proyectoId, { ...datos, estado }, ahora);
+  const item = itemBaseProyecto(proyectoId, {
+    ...datos, nombre: nombreValido, descripcion: descripcionValida,
+    ...(datos.objetivo != null && { objetivo: datos.objetivo.trim() }), estado,
+  }, ahora);
 
   await dynamoDb.send(
     new PutCommand({
@@ -308,26 +352,34 @@ async function verificarSinAsignacionesActivas(proyectoId) {
 }
 
 async function actualizarProyecto(proyectoId, cambios) {
-  const { nombre, descripcion, liderId, horasRequeridas, fechaInicio, fechaFin, estado } = cambios;
-  if (fechaInicio !== undefined || fechaFin !== undefined) {
-    const actual = await obtenerProyecto(proyectoId);
-    validarFechas(fechaInicio ?? actual.fechaInicio, fechaFin ?? actual.fechaFin);
+  const { nombre, descripcion, objetivo, liderId, horasRequeridas, fechaInicio, fechaFin, estado } = cambios;
+  const actual = await consultarProyectoConsistente(proyectoId);
+  if (estado !== undefined) validarTransicion(actual.estado, estado);
+  else if (['COMPLETADO', 'CANCELADO'].includes(actual.estado)) {
+    throw new ErrorApp('No se pueden modificar proyectos completados o cancelados', 409, CODIGOS.CONFLICTO);
   }
+  const primeraPublicacion = estado === 'ACTIVO' && actual.estado === 'BORRADOR';
+  if (estado === 'ACTIVO' && actual.estado !== 'ACTIVO') await verificarHabilidadesParaPublicar(proyectoId);
+  validarFechas(fechaInicio ?? actual.fechaInicio, fechaFin ?? actual.fechaFin);
   const sets = [];
   const nombresAtributos = {};
   const valoresAtributos = {};
   const ahora = ahoraISO();
-  const primeraPublicacion = estado === 'ACTIVO' && await comprobarPrimeraPublicacion(proyectoId, estado);
 
   if (nombre !== undefined) {
     nombresAtributos['#n'] = 'nombre';
-    valoresAtributos[':n'] = nombre;
+    valoresAtributos[':n'] = validarTextoProyecto(nombre, 'nombre', 200);
     sets.push('#n = :n');
   }
   if (descripcion !== undefined) {
     nombresAtributos['#d'] = 'descripcion';
-    valoresAtributos[':d'] = descripcion;
+    valoresAtributos[':d'] = validarTextoProyecto(descripcion, 'descripcion');
     sets.push('#d = :d');
+  }
+  if (objetivo !== undefined) {
+    nombresAtributos['#obj'] = 'objetivo';
+    valoresAtributos[':obj'] = validarTextoProyecto(objetivo, 'objetivo');
+    sets.push('#obj = :obj');
   }
   if (liderId !== undefined) {
     await validarLider(liderId);
@@ -336,9 +388,7 @@ async function actualizarProyecto(proyectoId, cambios) {
     sets.push('#lid = :lid');
   }
   if (horasRequeridas !== undefined) {
-    if (typeof horasRequeridas !== 'number' || !Number.isFinite(horasRequeridas) || horasRequeridas <= 0) {
-      throw new ErrorApp('Las horas requeridas deben ser un número positivo', 400, CODIGOS.VALIDACION);
-    }
+    validarHorasProyecto(horasRequeridas);
     nombresAtributos['#hr'] = 'horasRequeridas';
     valoresAtributos[':hr'] = horasRequeridas;
     sets.push('#hr = :hr');
@@ -372,6 +422,14 @@ async function actualizarProyecto(proyectoId, cambios) {
   }
 
   nombresAtributos['#ua'] = 'fechaActualizacion';
+  nombresAtributos['#actual'] = 'estado';
+  valoresAtributos[':estadoAnterior'] = actual.estado;
+  nombresAtributos['#revision'] = 'requisitosRevision';
+  valoresAtributos[':revisionAnterior'] = actual.requisitosRevision ?? 0;
+  if (['CANCELADO', 'COMPLETADO'].includes(estado)) {
+    nombresAtributos['#activas'] = 'asignacionesActivas';
+    valoresAtributos[':cero'] = 0;
+  }
   valoresAtributos[':ua'] = ahora;
   sets.push('#ua = :ua');
 
@@ -386,7 +444,8 @@ async function actualizarProyecto(proyectoId, cambios) {
       UpdateExpression: `SET ${sets.join(', ')}`,
       ExpressionAttributeNames: nombresAtributos,
       ExpressionAttributeValues: valoresAtributos,
-      ConditionExpression: 'attribute_exists(proyectoId)',
+      ConditionExpression: 'attribute_exists(proyectoId) AND #actual = :estadoAnterior AND (attribute_not_exists(#revision) OR #revision = :revisionAnterior)' +
+        (['CANCELADO', 'COMPLETADO'].includes(estado) ? ' AND #activas = :cero' : ''),
       ReturnValues: 'ALL_NEW',
     }));
     if (!resultado.Attributes) {
@@ -396,40 +455,48 @@ async function actualizarProyecto(proyectoId, cambios) {
     return resultado.Attributes;
   } catch (e) {
     if (e.name === 'ConditionalCheckFailedException') {
-      throw new ErrorApp('Proyecto no encontrado', 404, CODIGOS.NO_ENCONTRADO);
+      throw new ErrorApp('El estado del proyecto cambió durante la operación; recargue antes de reintentar', 409, CODIGOS.CONFLICTO);
     }
     throw e;
   }
 }
 
 async function cambiarEstado(proyectoId, estado) {
-  validarEstado(estado);
-  const primeraPublicacion = await comprobarPrimeraPublicacion(proyectoId, estado);
+  const actual = await consultarProyectoConsistente(proyectoId);
+  validarTransicion(actual.estado, estado);
+  const primeraPublicacion = estado === 'ACTIVO' && actual.estado === 'BORRADOR';
+  if (estado === 'ACTIVO' && actual.estado !== 'ACTIVO') await verificarHabilidadesParaPublicar(proyectoId);
   if (['CANCELADO', 'COMPLETADO'].includes(estado)) await verificarSinAsignacionesActivas(proyectoId);
   const ahora = ahoraISO();
+  const cierre = ['CANCELADO', 'COMPLETADO'].includes(estado);
   try {
     const resultado = await dynamoDb.send(new UpdateCommand({
       TableName: tableProyectos,
       Key: { proyectoId },
       UpdateExpression: `SET #est = :est, #s2 = :s2, #ua = :ua${primeraPublicacion ? ', #fp = :fp, #fpk = :fpk' : ''}`,
       ExpressionAttributeNames: {
-        '#est': 'estado', '#s2': 'estadoFechaKey', '#ua': 'fechaActualizacion',
+        '#est': 'estado', '#s2': 'estadoFechaKey', '#ua': 'fechaActualizacion', '#revision': 'requisitosRevision',
+        ...(cierre && { '#activas': 'asignacionesActivas' }),
         ...(primeraPublicacion && { '#fp': 'fechaPublicacion', '#fpk': 'fechaPublicacionKey' }),
       },
       ExpressionAttributeValues: {
         ':est': estado,
+        ':estadoAnterior': actual.estado,
+        ':revisionAnterior': actual.requisitosRevision ?? 0,
+        ...(cierre && { ':cero': 0 }),
         ':s2': `${estado}#${ahora}`,
         ':ua': ahora,
         ...(primeraPublicacion && { ':fp': ahora, ':fpk': `${ahora}#${proyectoId}` }),
       },
-      ConditionExpression: 'attribute_exists(proyectoId)',
+      ConditionExpression: 'attribute_exists(proyectoId) AND #est = :estadoAnterior AND (attribute_not_exists(#revision) OR #revision = :revisionAnterior)' +
+        (cierre ? ' AND #activas = :cero' : ''),
       ReturnValues: 'ALL_NEW',
     }));
     invalidarCachéProyecto(proyectoId);
     return resultado.Attributes;
   } catch (e) {
     if (e.name === 'ConditionalCheckFailedException') {
-      throw new ErrorApp('Proyecto no encontrado', 404, CODIGOS.NO_ENCONTRADO);
+      throw new ErrorApp('El proyecto cambió de estado durante la operación', 409, CODIGOS.CONFLICTO);
     }
     throw e;
   }

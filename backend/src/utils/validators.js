@@ -33,7 +33,6 @@ const cambiarEstadoSchema = Joi.object({
 });
 
 const crearColaboradorSchema = Joi.object({
-  colaboradorId: Joi.string().min(1).max(50),
   usuarioId: Joi.string().min(1).max(50).required(),
   cargoId: Joi.string().min(1).max(50).required(),
   rolProfesional: Joi.string().min(1).max(100).required(),
@@ -84,13 +83,41 @@ const asociarHabilidadSchema = Joi.object({
   nivel: Joi.string().valid(...NIVELES_VALIDOS).required(),
   anosExperiencia: Joi.number().integer().min(0).default(0),
   observaciones: Joi.string().max(500).allow('', null),
+  fechaUltimoUso: Joi.string().isoDate().allow(null),
 });
 
 const actualizarNivelHabilidadSchema = Joi.object({
   nivel: Joi.string().valid(...NIVELES_VALIDOS),
   anosExperiencia: Joi.number().integer().min(0),
   observaciones: Joi.string().max(500).allow('', null),
+  fechaUltimoUso: Joi.string().isoDate().allow(null),
 });
+
+const ESTADOS_PROYECTO = ['BORRADOR', 'ACTIVO', 'PAUSADO', 'COMPLETADO', 'CANCELADO'];
+const camposProyecto = {
+  nombre: Joi.string().trim().min(1).max(200),
+  descripcion: Joi.string().trim().min(1).max(2000),
+  objetivo: Joi.string().trim().min(1).max(2000),
+  liderId: Joi.string().trim().min(1).max(100),
+  horasRequeridas: Joi.number().strict().positive(),
+  fechaInicio: Joi.string().isoDate(),
+  fechaFin: Joi.string().isoDate(),
+};
+const crearProyectoSchema = Joi.object({
+  ...camposProyecto,
+  nombre: camposProyecto.nombre.required(),
+  descripcion: camposProyecto.descripcion.required(),
+  liderId: camposProyecto.liderId.required(),
+  horasRequeridas: camposProyecto.horasRequeridas.required(),
+  creadoPor: Joi.string().trim().min(1).max(100).required(),
+  proyectoId: Joi.string().trim().min(1).max(100),
+  estado: Joi.string().valid('BORRADOR'),
+  fechaPublicacion: Joi.string().isoDate(),
+});
+const actualizarProyectoSchema = Joi.object({
+  ...camposProyecto,
+  estado: Joi.string().valid(...ESTADOS_PROYECTO),
+}).min(1);
 
 const buscarCandidatosSchema = Joi.object({
   habilidades: Joi.array().items(Joi.string().min(1)).min(1).required(),
@@ -137,6 +164,8 @@ module.exports = {
   asociarHabilidadSchema,
   actualizarNivelHabilidadSchema,
   buscarCandidatosSchema,
+  crearProyectoSchema,
+  actualizarProyectoSchema,
   validarUsuario,
   validarColaborador,
   ROLES_VALIDOS,

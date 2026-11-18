@@ -2,9 +2,11 @@ const filteringService = require('../src/services/filtering.service');
 const busquedaHandler = require('../src/functions/busqueda/handler');
 const colaboradorHabilidadRepository = require('../src/repositories/colaborador-habilidad.repository');
 const colaboradoresRepository = require('../src/repositories/colaboradores.repository');
+const usuariosRepository = require('../src/repositories/usuarios.repository');
 
 jest.mock('../src/repositories/colaborador-habilidad.repository');
 jest.mock('../src/repositories/colaboradores.repository');
+jest.mock('../src/repositories/usuarios.repository');
 
 describe('Algoritmo de Búsqueda de Candidatos', () => {
   beforeEach(() => {
@@ -63,6 +65,11 @@ describe('Algoritmo de Búsqueda de Candidatos', () => {
         .mockResolvedValueOnce({ colaboradorId: 'col_1', usuarioId: 'usr_1', estado: 'ACTIVO', cargoId: 'cargo_1', rolProfesional: 'Dev' })
         .mockResolvedValueOnce({ colaboradorId: 'col_2', usuarioId: 'usr_2', estado: 'ACTIVO', cargoId: 'cargo_1', rolProfesional: 'Dev' });
 
+      // Mock de usuarios vinculados activos
+      usuariosRepository.obtenerPorId
+        .mockResolvedValueOnce({ usuarioId: 'usr_1', estado: 'ACTIVO' })
+        .mockResolvedValueOnce({ usuarioId: 'usr_2', estado: 'ACTIVO' });
+
       const event = {
         queryStringParameters: {
           habilidades: 'hab_1,hab_2',
@@ -85,6 +92,7 @@ describe('Algoritmo de Búsqueda de Candidatos', () => {
       colaboradoresRepository.obtenerPorId.mockResolvedValue({
         colaboradorId: 'col_1', usuarioId: 'usr_1', estado: 'ACTIVO', cargoId: 'cargo_1', rolProfesional: 'Dev',
       });
+      usuariosRepository.obtenerPorId.mockResolvedValue({ usuarioId: 'usr_1', estado: 'ACTIVO' });
 
       const event = {
         queryStringParameters: {
@@ -106,6 +114,7 @@ describe('Algoritmo de Búsqueda de Candidatos', () => {
       colaboradoresRepository.obtenerPorId.mockResolvedValue({
         colaboradorId: 'col_1', usuarioId: 'usr_1', estado: 'ACTIVO', cargoId: 'cargo_1', rolProfesional: 'Dev',
       });
+      usuariosRepository.obtenerPorId.mockResolvedValue({ usuarioId: 'usr_1', estado: 'ACTIVO' });
 
       const event = {
         queryStringParameters: {
@@ -129,6 +138,7 @@ describe('Algoritmo de Búsqueda de Candidatos', () => {
       colaboradoresRepository.obtenerPorId.mockResolvedValue({
         colaboradorId: 'col_1', usuarioId: 'usr_1', estado: 'INACTIVO', cargoId: 'cargo_1', rolProfesional: 'Dev',
       });
+      usuariosRepository.obtenerPorId.mockResolvedValue({ usuarioId: 'usr_1', estado: 'ACTIVO' });
 
       const event = {
         queryStringParameters: {
@@ -163,6 +173,10 @@ describe('Algoritmo de Búsqueda de Candidatos', () => {
       colaboradoresRepository.obtenerPorId
         .mockResolvedValueOnce({ colaboradorId: 'col_1', usuarioId: 'usr_1', estado: 'ACTIVO' })
         .mockResolvedValueOnce({ colaboradorId: 'col_2', usuarioId: 'usr_2', estado: 'ACTIVO' });
+
+      usuariosRepository.obtenerPorId
+        .mockResolvedValueOnce({ usuarioId: 'usr_1', estado: 'ACTIVO' })
+        .mockResolvedValueOnce({ usuarioId: 'usr_2', estado: 'ACTIVO' });
 
       const event = {
         queryStringParameters: {

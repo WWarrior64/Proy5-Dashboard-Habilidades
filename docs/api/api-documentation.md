@@ -1,6 +1,6 @@
 # Documentacion de la API - Internal Marketplace
 
-**Versión documental:** 2.1.0 (contrato de código vigente; despliegue en AWS pendiente de validación)  
+**Versión documental:** 2.2.0 (contrato revisado según el código local; el despliegue publicado debe comprobarse por separado)  
 **Prefijo base comun:** `/api/v1`  
 **Base URL (produccion / API Gateway):** `https://{api-id}.execute-api.us-east-2.amazonaws.com/prod/api/v1`  
 **Base URL (SAM Local):** `http://127.0.0.1:3000/api/v1`  
@@ -16,7 +16,7 @@
 - **Proveedor de Identidad:** Amazon Cognito User Pools gestiona el registro, inicio de sesion, contraseñas y renovacion de tokens. La API no expone endpoints propios de inicio de sesion (`/auth/login`).
 - **Proteccion de rutas:** Todas las operaciones de negocio (carpetas 01 a 09) requieren el token JWT en la cabecera HTTP:
   `Authorization: Bearer <token_cognito>`
-- **Ruta publica:** Unicamente `GET /api/v1/health` no requiere autenticacion.
+- **Rutas públicas:** `GET /api/v1/health` y `GET /api/v1/branding` no requieren autenticación. Las demás rutas aplican el autorizador Cognito y los permisos definidos por el backend.
 - **Roles de plataforma soportados:** `ADMINISTRADOR`, `RRHH`, `LIDER_PROYECTO`, `EMPLEADO`.
 
 ### 1.2 Formato Estandar de Respuestas Lambda
@@ -66,6 +66,9 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **GET /api/v1/usuarios/yo**
   - Descripcion: Consultar perfil del usuario autenticado (resuelto via cognitoSub), sin modificar el último acceso al recargar páginas o restaurar la sesión.
   - Roles permitidos: Todos.
+- **GET /api/v1/usuarios/yo/permisos**
+  - Descripción: devuelve las operaciones efectivas del usuario autenticado conforme al rol y la política de Administración; la respuesta incluye `datos.operaciones`.
+  - Roles permitidos: los cuatro roles activos, exclusivamente para su propia sesión.
 - **POST /api/v1/usuarios/yo/acceso**
   - Descripcion: Registrar en DynamoDB el campo `ultimoAcceso` (ISO 8601, hora del servidor) tras un inicio de sesión exitoso en Cognito o la confirmación de contraseña nueva. No recibe `usuarioId` ni fecha desde el cliente.
   - Roles permitidos: Todos los usuarios autenticados y activos; solo se actualiza el propio registro.
@@ -98,7 +101,7 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
   - Descripcion: Listar plantilla con filtros `estado`, `cargoId` y `rolProfesional`.
   - Paginacion: `limit` (entero entre 1 y 100, predeterminado 25) y `cursor` (token opaco `base64url` recibido como `datos.nextCursor` en la respuesta anterior). La respuesta conserva `datos.items` y `datos.lastKey` por compatibilidad y agrega `datos.nextCursor`, que es `null` al terminar. Un cursor inválido devuelve 400. No deben fabricarse cursores manualmente. DynamoDB filtra después de leer la página: puede devolver menos de `limit`, incluso cero elementos, y todavía proporcionar `nextCursor`; debe continuarse mientras no sea `null`.
 - **POST /api/v1/colaboradores**
-  - Descripcion: Dar de alta un colaborador. Requiere `usuarioId`, `cargoId` y `rolProfesional`; `colaboradorId` es opcional (UUID automático). La creación reserva `USUARIO#<usuarioId>` en la misma transacción para impedir duplicados concurrentes.
+  - Descripción: registra un colaborador con `usuarioId`, `cargoId` y `rolProfesional`. El servidor genera `colaboradorId` mediante UUID y rechaza el identificador si se envía desde el cliente. Solo se permiten usuarios activos que no pertenezcan a RRHH ni Administrador y no tengan otro perfil, incluso inactivo. Se reserva `USUARIO#<usuarioId>` en la misma transacción para impedir duplicidades concurrentes.
 - **GET /api/v1/colaboradores/{colaboradorId}**
   - Descripcion: Consultar detalle de colaborador por PK.
 - **GET /api/v1/colaboradores/yo**
@@ -106,13 +109,17 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 - **PUT /api/v1/colaboradores/{colaboradorId}**
   - Descripcion: Actualizar informacion profesional.
 - **PATCH /api/v1/colaboradores/{colaboradorId}/estado**
-  - Descripcion: Baja logica de colaborador (cambia estado a INACTIVO).
+  - Descripción: recibe `{ "activo": false }` para dar de baja o `{ "activo": true }` para reincorporar un colaborador, conforme a las validaciones de estado y relaciones.
+- **DELETE /api/v1/colaboradores/{colaboradorId}**
+  - Descripción: conserva el endpoint histórico de baja lógica; desactiva el perfil sin eliminarlo de DynamoDB.
+- **DELETE /api/v1/colaboradores/{colaboradorId}/definitivo**
+  - Descripción: eliminación definitiva exclusivamente de un perfil inactivo con dedicación reservada igual a cero, sin asignaciones ni postulaciones históricas. Elimina de forma transaccional la ficha, sus relaciones de habilidades y, si corresponde, la reserva de unicidad del usuario. Conserva la cuenta Cognito/DynamoDB del usuario. Devuelve 409 si existen dependencias, conflictos de concurrencia o un estado incompatible. La operación es irreversible.
 - **GET /api/v1/colaboradores/{colaboradorId}/habilidades**
   - Descripcion: Consultar habilidades asociadas al colaborador.
 - **POST /api/v1/colaboradores/{colaboradorId}/habilidades**
-  - Descripcion: Asociar habilidad a colaborador (niveles: JUNIOR, MID, SENIOR).
+  - Descripción: asocia una habilidad registrada en el catálogo a un colaborador (`JUNIOR`, `MID`, `SENIOR`), con años de experiencia y observaciones opcionales. El servidor controla las relaciones duplicadas.
 - **PUT /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}**
-  - Descripcion: Modificar nivel de dominio o experiencia en tabla N:M.
+  - Descripción: modifica nivel (`JUNIOR`, `MID` o `SENIOR`), `anosExperiencia`, observaciones opcionales y `fechaUltimoUso` cuando se proporciona, sobre la relación N:M. Las fechas ausentes no deben enviarse innecesariamente.
 - **DELETE /api/v1/colaboradores/{colaboradorId}/habilidades/{habilidadId}**
   - Descripcion: Retirar habilidad del perfil de colaborador.
 
@@ -255,10 +262,16 @@ Todas las respuestas devuelven el esquema estandar compatible con Lambda proxy i
 ### 2.11 Modulo 10: Administración y Auditoría
 - **Funcion Lambda:** `AdministracionFunction` (`src/functions/administracion/handler.js`).
 - **Tabla DynamoDB:** `internal-marketplace-auditoria-{entorno}` (PK: `auditoriaId`; GSI1: `tipoRegistro` + `fechaId`). Se crea con SAM y facturación bajo demanda.
+- **GET /api/v1/branding**
+  - Descripción: consulta pública y limitada al nombre de la organización. No divulga otros parámetros administrativos.
+- **GET /api/v1/administracion/configuracion** y **PUT /api/v1/administracion/configuracion**
+  - Descripción: consulta y modificación de parámetros oficiales de configuración. Solo el rol `ADMINISTRADOR` puede operar estas rutas; el backend valida la integridad del catálogo.
+- **GET /api/v1/administracion/roles-permisos** y **PUT /api/v1/administracion/roles-permisos**
+  - Descripción: consulta y actualización de los cuatro roles y ocho permisos operativos oficiales. No es posible conceder facultades superiores a las definidas para cada rol; el servidor aplica la política en las escrituras.
 - **GET /api/v1/administracion/auditoria**
   - Descripcion: Consultar los eventos persistidos que se generaron después de habilitar la auditoría.
   - Rol permitido: únicamente `ADMINISTRADOR`.
-  - Parametros: `desde` y `hasta` (YYYY-MM-DD, horario de El Salvador), `limite` (1-100) y `cursor` paginado.
+  - Parametros: `desde` y `hasta` (YYYY-MM-DD, fechas predeterminadas calculadas en UTC por el servidor), `limite` (1-100) y `cursor` paginado.
   - Respuesta: `datos.items` y `datos.nextCursor`.
 - **Registro automático de eventos:** el despachador guarda acciones de escritura exitosas (POST, PUT, PATCH y DELETE) y el inicio de sesión en la tabla de auditoría cuando `AUDIT_ENABLED=true`. El actor proviene de Cognito y no del cliente. No se almacenan credenciales ni tokens.
 - **Interfaz administrativa:** `Administrador → Auditoría` consulta los eventos persistidos, con filtros por usuario, entidad, tipo de acción y fechas. Los eventos anteriores al despliegue de la tabla no se atribuyen retroactivamente a un usuario.

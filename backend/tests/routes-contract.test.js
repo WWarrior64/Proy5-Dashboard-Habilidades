@@ -76,6 +76,7 @@ describe('Contrato de Rutas - Handlers vs SAM Template', () => {
       'POST /api/v1/usuarios/yo/acceso',
       'POST /api/v1/usuarios',
       'GET /api/v1/colaboradores',
+      'DELETE /api/v1/colaboradores/{colaboradorId}/definitivo',
       'GET /api/v1/asignaciones/mias',
       'GET /api/v1/dashboard/resumen',
       'GET /api/v1/busqueda/colaboradores',
@@ -89,5 +90,42 @@ describe('Contrato de Rutas - Handlers vs SAM Template', () => {
     rutasCriticas.forEach((ruta) => {
       expect(samRoutes).toContain(ruta);
     });
+  });
+
+  it('restringe el despliegue a main y exige validaciones, OIDC y la configuración AWS vigente', () => {
+    const workflow = fs.readFileSync(
+      path.resolve(__dirname, '../../.github/workflows/deploy.yml'), 'utf8'
+    );
+    const despliegue = workflow.split('  deploy-production:')[1];
+    expect(despliegue).toBeDefined();
+    expect(despliegue).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
+    expect(despliegue).toContain('needs: [validate-backend, validate-frontend]');
+    expect(despliegue).toContain('id-token: write');
+    expect(despliegue).toContain('aws-actions/configure-aws-credentials@v4');
+    expect(despliegue).toContain('sam deploy');
+    expect(despliegue).toContain('StageName=prod');
+    expect(despliegue).toContain('CognitoUserPoolClientId');
+    expect(despliegue).toContain('VITE_API_URL=$api_url');
+    expect(despliegue).toContain('aws s3 sync');
+    expect(despliegue).toContain('aws cloudfront create-invalidation');
+  });
+
+  it('incluye una prueba Postman de eliminación definitiva protegida contra ejecuciones en lote', () => {
+    const coleccion = JSON.parse(fs.readFileSync(
+      path.resolve(__dirname, '../../postman/internal-marketplace.postman_collection.json'), 'utf8'
+    ));
+    const entorno = JSON.parse(fs.readFileSync(
+      path.resolve(__dirname, '../../postman/internal-marketplace.postman_environment.json'), 'utf8'
+    ));
+    const carpeta = coleccion.item.find(item => item.name === '02 - Colaboradores');
+    const solicitud = carpeta.item.find(item => item.name.includes('Eliminar definitivamente'));
+    expect(solicitud.request.method).toBe('DELETE');
+    expect(solicitud.request.url).toBe('{{baseUrl}}/colaboradores/{{colaboradorEliminarId}}/definitivo');
+    expect(solicitud.event.find(item => item.listen === 'prerequest').script.exec.join('\n'))
+      .toContain('pm.execution.skipRequest()');
+    expect(solicitud.event.find(item => item.listen === 'test').script.exec.join('\n'))
+      .toContain('pm.response.code');
+    expect(entorno.values.find(item => item.key === 'confirmarEliminacionDefinitiva').value).toBe('false');
+    expect(entorno.values.find(item => item.key === 'colaboradorEliminarId').value).toBe('');
   });
 });

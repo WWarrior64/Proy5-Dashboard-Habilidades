@@ -106,8 +106,8 @@ La ruta `GET /api/v1/asignaciones/mias` obtiene el perfil de colaborador del usu
 
 ## 4. Estrategia de Caché y Rendimiento
 
-* **Caché local de desarrollo:** `cache.service.js` conserva claves e intervalos TTL cuando se ejecuta fuera de AWS Lambda, con invalidación local tras las escrituras.
-* **Lecturas en Lambda sin caché de proceso:** Cuando existe `AWS_LAMBDA_FUNCTION_NAME`, el servicio no devuelve ni guarda entradas en memoria. Esto evita que una instancia reutilice una lectura obsoleta tras una escritura de otra Lambda. Aumenta las consultas y costos potenciales de DynamoDB, pero no requiere caché distribuida. Los índices secundarios DynamoDB siguen ofreciendo consistencia eventual; esta medida no garantiza lectura fuertemente consistente en GSIs.
+* **Caché en memoria por instancia:** `cache.service.js` conserva entradas con TTL y expulsión LRU, también durante invocaciones cálidas de AWS Lambda. Cada entorno de ejecución mantiene su propio estado; un inicio en frío comienza con la caché vacía.
+* **Limitación de coherencia:** Una escritura invalida las entradas correspondientes en su instancia, pero no las de otras instancias Lambda. Por ello pueden existir lecturas temporalmente obsoletas hasta que expire el TTL. Los índices secundarios globales de DynamoDB también mantienen consistencia eventual; la caché no garantiza lecturas fuertemente consistentes.
 * **Decisiones críticas:** La dedicación y sus límites se comprueban mediante condiciones transaccionales contra DynamoDB, nunca utilizando la caché.
 * **CloudFront Edge Caching:** Configurado con la directiva optimizada de AWS (`Managed-CachingOptimized`) para servir activos estáticos del frontend desde puntos perimetrales con latencia mínima.
 
@@ -115,12 +115,12 @@ La ruta `GET /api/v1/asignaciones/mias` obtiene el perfil de colaborador del usu
 
 ## 5. Pipeline de CI/CD (GitHub Actions)
 
-El ciclo de integración continua implementado en `.github/workflows/deploy.yml` valida automáticamente cada entrega:
+El workflow `.github/workflows/deploy.yml` valida el código en las ramas habilitadas y despliega automáticamente a AWS únicamente los commits de `main` que superen las comprobaciones:
 1. **Entorno de ejecución:** Node.js 24 en runners `ubuntu-latest`.
 2. **Control de Calidad:**
    * Ejecución de ESLint del backend y pruebas unitarias Jest.
-   * Compilación del frontend; el lint y las pruebas automatizadas React en CI deberán incorporarse al integrar las ramas correspondientes.
+   * Ejecución de ESLint, pruebas Vitest y compilación de producción del frontend con `VITE_API_URL` configurada para el entorno.
 3. **Validación de Infraestructura:**
    * `sam validate --lint`: Comprobación de sintaxis y buenas prácticas en `infrastructure/template.yaml`.
    * `sam build`: Compilación y empaquetado de las funciones Lambda y sus dependencias.
-4. **Política de Despliegue:** El despliegue automático está deshabilitado por seguridad de costos; los despliegues hacia AWS se realizan de forma controlada mediante `sam deploy` con perfiles IAM no-root.
+4. **Política de Despliegue:** Los jobs de validación no tienen acceso de escritura a AWS. Tras un push a `main`, y solo si las suites y compilaciones anteriores son satisfactorias, el job `deploy-production` asume un rol temporal IAM mediante GitHub OIDC, actualiza la pila existente con SAM y recupera las salidas de CloudFormation. La SPA se compila con la API y el Cognito correspondientes a la pila, se distribuye desde el bucket S3 privado y se solicita invalidación de CloudFront. La concurrencia se serializa y los demás tipos de evento nunca despliegan producción. Es necesario configurar `AWS_STACK_NAME`, `AWS_ROLE_TO_ASSUME` y la relación de confianza IAM antes de utilizar el pipeline.

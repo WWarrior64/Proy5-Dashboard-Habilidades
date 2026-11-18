@@ -14,26 +14,19 @@ const {
   dynamoDb,
   ScanCommand,
   GetCommand,
-  QueryCommand,
   TransactWriteCommand,
 } = require('../src/config/dynamodb');
 const { tableColaboradores, tableAsignaciones } = require('../src/config/environment');
+const { recolectarPaginas, recorrerSecuencial } = require('../src/utils/paginacion');
 
 const aplicar = process.argv.includes('--apply');
 const confirmado = process.argv.includes('--sin-escrituras-concurrentes');
 
 async function consultarPaginas(Comando, parametros) {
-  const items = [];
-  let lastKey;
-  do {
-    const respuesta = await dynamoDb.send(new Comando({
-      ...parametros,
-      ...(lastKey && { ExclusiveStartKey: lastKey }),
-    }));
-    items.push(...(respuesta.Items || []));
-    lastKey = respuesta.LastEvaluatedKey;
-  } while (lastKey);
-  return items;
+  return recolectarPaginas(lastKey => dynamoDb.send(new Comando({
+    ...parametros,
+    ...(lastKey && { ExclusiveStartKey: lastKey }),
+  })));
 }
 
 async function listarColaboradores() {
@@ -46,35 +39,62 @@ async function listarColaboradores() {
   });
 }
 
-async function sumaAsignacionesActivas(colaboradorId) {
-  const asignaciones = await consultarPaginas(QueryCommand, {
+async function dedicacionesActivasPorColaborador() {
+  // Una sola lectura consistente de la tabla base evita los retrasos del GSI1
+  // y permite comparar las reservas contra el historial real.
+  const asignaciones = await consultarPaginas(ScanCommand, {
     TableName: tableAsignaciones,
-    IndexName: 'GSI1',
-    KeyConditionExpression: '#colaborador = :colaborador AND begins_with(#clave, :prefijo)',
-    ExpressionAttributeNames: {
-      '#colaborador': 'colaboradorId',
-      '#clave': 'colaboradorFechaKey',
-    },
-    ExpressionAttributeValues: {
-      ':colaborador': colaboradorId,
-      ':prefijo': 'ACTIVA#',
-    },
-    ProjectionExpression: 'porcentajeDedicacion',
+    ConsistentRead: true,
+    FilterExpression: '#estado = :activa',
+    ExpressionAttributeNames: { '#estado': 'estado' },
+    ExpressionAttributeValues: { ':activa': 'ACTIVA' },
+    ProjectionExpression: 'asignacionId, colaboradorId, porcentajeDedicacion',
   });
-  let total = 0;
+  const totales = new Map();
   for (const asignacion of asignaciones) {
+    const id = asignacion.colaboradorId;
     const porcentaje = asignacion.porcentajeDedicacion;
-    if (!Number.isFinite(porcentaje) || porcentaje <= 0 || porcentaje > 100) {
-      throw new Error('Asignación activa con porcentaje inválido de ' + colaboradorId);
+    if (!id || !Number.isFinite(porcentaje) || porcentaje <= 0 || porcentaje > 100) {
+      throw new Error('Asignación activa sin colaborador o porcentaje válido: ' + asignacion.asignacionId);
     }
-    total += porcentaje;
+    const total = (totales.get(id) || 0) + porcentaje;
+    if (total > 100) throw new Error('Dedicación acumulada superior a 100 %: ' + id);
+    totales.set(id, total);
   }
-  if (total > 100) throw new Error('Dedicación acumulada superior a 100 %: ' + colaboradorId);
-  return total;
+  return totales;
+}
+
+async function revisarColaborador(item, totales) {
+  const total = totales.get(item.colaboradorId) || 0;
+  const reserva = await dynamoDb.send(new GetCommand({
+    TableName: tableColaboradores,
+    Key: { colaboradorId: 'USUARIO#' + item.usuarioId },
+    ConsistentRead: true,
+  }));
+  if (reserva.Item && reserva.Item.propietarioColaboradorId !== item.colaboradorId) {
+    throw new Error('Reserva de usuario en conflicto: ' + item.usuarioId);
+  }
+  const actual = item.dedicacionReservada;
+  if (actual !== undefined && (!Number.isFinite(actual) || actual !== total)) {
+    throw new Error('Dedicación del colaborador ' + item.colaboradorId +
+      ' no coincide con sus asignaciones: almacenada=' + actual + ', calculada=' + total);
+  }
+  const necesitaReserva = !reserva.Item;
+  const necesitaDedicacion = actual === undefined;
+  return necesitaReserva || necesitaDedicacion
+    ? { item, total, necesitaReserva, necesitaDedicacion }
+    : null;
 }
 
 async function preparar() {
   const colaboradores = await listarColaboradores();
+  const totales = await dedicacionesActivasPorColaborador();
+  const ids = new Set(colaboradores.map(item => item.colaboradorId));
+  for (const colaboradorId of totales.keys()) {
+    if (!ids.has(colaboradorId)) {
+      throw new Error('Asignación activa de un colaborador inexistente: ' + colaboradorId);
+    }
+  }
   const duplicados = new Map();
   for (const item of colaboradores) {
     if (!item.usuarioId || !item.colaboradorId) throw new Error('Colaborador sin identificadores completos');
@@ -86,33 +106,15 @@ async function preparar() {
   }
 
   const pendientes = [];
-  for (const item of colaboradores) {
-    const total = await sumaAsignacionesActivas(item.colaboradorId);
-    const reserva = await dynamoDb.send(new GetCommand({
-      TableName: tableColaboradores,
-      Key: { colaboradorId: 'USUARIO#' + item.usuarioId },
-      ConsistentRead: true,
-    }));
-    if (reserva.Item && reserva.Item.propietarioColaboradorId !== item.colaboradorId) {
-      throw new Error('Reserva de usuario en conflicto: ' + item.usuarioId);
-    }
-
-    const actual = item.dedicacionReservada;
-    if (actual !== undefined && (!Number.isFinite(actual) || actual !== total)) {
-      throw new Error('Dedicación del colaborador ' + item.colaboradorId +
-        ' no coincide con sus asignaciones: almacenada=' + actual + ', calculada=' + total);
-    }
-    const necesitaReserva = !reserva.Item;
-    const necesitaDedicacion = actual === undefined;
-    if (necesitaReserva || necesitaDedicacion) {
-      pendientes.push({ item, total, necesitaReserva, necesitaDedicacion });
-    }
-  }
+  await recorrerSecuencial(colaboradores, async item => {
+    const pendiente = await revisarColaborador(item, totales);
+    if (pendiente) pendientes.push(pendiente);
+  });
   return { total: colaboradores.length, pendientes };
 }
 
 async function aplicarCambios(preparados) {
-  for (const pendiente of preparados.pendientes) {
+  await recorrerSecuencial(preparados.pendientes, async pendiente => {
     const { item, total, necesitaReserva, necesitaDedicacion } = pendiente;
     const operaciones = [];
     if (necesitaReserva) {
@@ -136,7 +138,7 @@ async function aplicarCambios(preparados) {
     }
     await dynamoDb.send(new TransactWriteCommand({ TransactItems: operaciones }));
     process.stdout.write('Reconciliado: ' + item.colaboradorId + '\n');
-  }
+  });
 }
 
 async function main() {

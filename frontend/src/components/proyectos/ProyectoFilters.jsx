@@ -11,14 +11,15 @@ export default function ProyectoFilters({ onFilter }) {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', marginBottom: '1rem' }}>
-      <select value={estado} onChange={(e) => setEstado(e.target.value)} className="input" style={{ minWidth: '160px' }}>
-        <option value="">Todos los estados</option>
+      <label className="estado-filtro-inline"><span>Estado</span>
+       <select aria-label="Filtrar proyectos por estado" value={estado} onChange={(e) => setEstado(e.target.value)} className="input" style={{ minWidth: '160px' }}>
+        <option value="">Todos</option>
         <option value="BORRADOR">Por iniciar</option>
         <option value="ACTIVO">Activo</option>
         <option value="PAUSADO">Pausado</option>
         <option value="COMPLETADO">Completado</option>
         <option value="CANCELADO">Cancelado</option>
-      </select>
+      </select></label>
       <Button type="submit" variant="primary" size="sm">Filtrar</Button>
     </form>
   )

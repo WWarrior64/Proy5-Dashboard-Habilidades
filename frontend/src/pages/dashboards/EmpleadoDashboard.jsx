@@ -1,7 +1,9 @@
+import BrandName from '../../components/common/BrandName.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { BriefcaseBusiness, CheckCircle2, Clock3, UserRound, UsersRound } from 'lucide-react'
 import EmpleadoLogoutButton from '../../components/layout/EmpleadoLogoutButton.jsx'
+import AvisoSinPerfilColaborador, { esAvisoSinPerfilColaborador } from '../../components/common/AvisoSinPerfilColaborador.jsx'
 import api from '../../services/api.js'
 import { colaboradoresService } from '../../services/colaboradores.service.js'
 import { proyectosService } from '../../services/proyectos.service.js'
@@ -35,7 +37,7 @@ const postulacionesEjemplo = [
   { id: 4, proyecto: 'App móvil', estado: 'Rechazada', fecha: '18/10/2026' },
 ]
 
-const modoDemo = import.meta.env.VITE_DEMO_MODE === 'true'
+const modoDemo = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true')
 const niveles = { JUNIOR: 1, MID: 2, SENIOR: 3 }
 const fechas = valor => valor ? new Date(valor).toLocaleDateString('es-SV', { timeZone: 'UTC' }) : '—'
 const estados = { PENDIENTE: 'En revisión', ACEPTADA: 'Aceptada', RECHAZADA: 'Rechazada', RETIRADA: 'Retirada' }
@@ -151,7 +153,7 @@ export default function EmpleadoDashboard() {
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
           <div className="emp-sidebar-brand">
-            INTERNAL<br />MARKETPLACE
+            <BrandName />
           </div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu">
@@ -199,7 +201,9 @@ export default function EmpleadoDashboard() {
           <div className="emp-dashboard-intro">
             <h2 className="dashboard-section-label">Resumen general</h2>
             <span className="emp-dashboard-preview">{modoDemo ? 'Datos de ejemplo' : cargando ? 'Cargando datos' : 'Datos de tu cuenta'}</span>
-            {error && <p role="alert">{error}</p>}
+            {error && (esAvisoSinPerfilColaborador(error)
+              ? <AvisoSinPerfilColaborador mensaje={error} />
+              : <p role="alert">{error}</p>)}
           </div>
 
           <div className="emp-metrics">

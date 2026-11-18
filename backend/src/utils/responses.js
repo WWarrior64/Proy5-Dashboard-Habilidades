@@ -42,6 +42,10 @@ function creado(datos) {
  */
 function error(mensaje, codigo = 500, codigoError = null) {
   const status = Number.isInteger(codigo) && codigo >= 400 && codigo <= 599 ? codigo : 500;
+  if (status >= 500) {
+    // Los detalles técnicos quedan en CloudWatch; nunca se incluyen en el cuerpo HTTP.
+    console.error('Error interno de API', { mensaje: String(mensaje || ''), codigoError });
+  }
   const mensajePublico = status >= 500 ? 'Error interno del servidor' : String(mensaje || 'Solicitud inválida');
   const cuerpo = {
     success: false,

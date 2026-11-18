@@ -14,7 +14,7 @@ module.exports = {
   cacheEnabled: process.env.CACHE_ENABLED === 'true',
   cacheTtlSeconds: Number(process.env.CACHE_TTL_SECONDS) || 300,
 
-  // Nombres físicos de las nueve tablas DynamoDB (convención: internal-marketplace-<entidad>-<entorno>)
+  // Nombres físicos de las once tablas DynamoDB (convención: internal-marketplace-<entidad>-<entorno>)
   // Los valores por defecto apuntan al entorno de desarrollo (-dev). En producción deben definirse
   // las variables de entorno TABLE_* con el sufijo -prod (ej. TABLE_USUARIOS=internal-marketplace-usuarios-prod).
   tableUsuarios: process.env.TABLE_USUARIOS || 'internal-marketplace-usuarios-dev',

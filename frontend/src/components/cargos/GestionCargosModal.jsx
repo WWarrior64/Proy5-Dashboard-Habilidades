@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pencil, Plus, Search } from 'lucide-react'
 import Modal from '../common/Modal.jsx'
 import { cargosService } from '../../services/cargos.service.js'
+import { useOperationalPermissions } from '../../hooks/useOperationalPermissions.js'
+import { useAutoDismiss } from '../../hooks/useAutoDismiss.js'
 import { extractItems } from '../../utils/apiResponses.js'
 import { getApiErrorMessage } from '../../utils/apiErrors.js'
 import './gestion-cargos.css'
@@ -9,6 +11,8 @@ import './gestion-cargos.css'
 const formularioVacio = { nombre: '', descripcion: '', categoria: 'GENERAL' }
 
 export default function GestionCargosModal({ abierto, onClose, onUpdated }) {
+  const { canOperate } = useOperationalPermissions()
+  const puedeGestionar = canOperate('gestionar_cargos')
   const [cargos, setCargos] = useState([])
   const [busqueda, setBusqueda] = useState('')
   const [estadoFiltro, setEstadoFiltro] = useState('ACTIVO')
@@ -19,6 +23,7 @@ export default function GestionCargosModal({ abierto, onClose, onUpdated }) {
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
+  useAutoDismiss(aviso, setAviso)
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -68,7 +73,7 @@ export default function GestionCargosModal({ abierto, onClose, onUpdated }) {
 
   const guardar = async evento => {
     evento.preventDefault()
-    if (guardando || cargando || !formulario) return
+    if (!puedeGestionar || guardando || cargando || !formulario) return
     const payload = {
       nombre: formulario.nombre.trim(),
       descripcion: formulario.descripcion.trim(),
@@ -106,7 +111,7 @@ export default function GestionCargosModal({ abierto, onClose, onUpdated }) {
   }
 
   const confirmarCambioEstado = async () => {
-    if (!confirmacion || guardando || cargando) return
+    if (!puedeGestionar || !confirmacion || guardando || cargando) return
     const activar = confirmacion.estado !== 'ACTIVO'
     setGuardando(true)
     setError('')
@@ -136,7 +141,7 @@ export default function GestionCargosModal({ abierto, onClose, onUpdated }) {
             <p className="gestion-cargos-descripcion">La modificación se aplicará al catálogo utilizado por Recursos Humanos.</p>
             <div className="gestion-cargos-confirmacion-acciones">
               <button type="button" className="btn btn-outline" onClick={() => setConfirmacion(null)} disabled={guardando}>Volver</button>
-              <button type="button" className="btn btn-primary" onClick={confirmarCambioEstado} disabled={guardando}>
+              <button type="button" className="btn btn-primary" onClick={confirmarCambioEstado} disabled={!puedeGestionar || guardando}>
                 {guardando ? 'Guardando...' : 'Confirmar cambio'}
               </button>
             </div>
@@ -158,7 +163,7 @@ export default function GestionCargosModal({ abierto, onClose, onUpdated }) {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
               <button type="button" className="btn btn-outline" onClick={() => setFormulario(null)}
                 disabled={guardando}>Cancelar</button>
-              <button type="submit" className="btn btn-primary" disabled={guardando}>
+              <button type="submit" className="btn btn-primary" disabled={!puedeGestionar || guardando}>
                 {guardando ? 'Guardando...' : editandoId ? 'Guardar cambios' : 'Registrar cargo'}
               </button>
             </div>
@@ -172,14 +177,15 @@ export default function GestionCargosModal({ abierto, onClose, onUpdated }) {
                   placeholder="Buscar cargos..." value={busqueda}
                   onChange={e => setBusqueda(e.target.value)} />
               </label>
-              <select className="input" aria-label="Filtrar cargos por estado" value={estadoFiltro}
+              <label className="estado-filtro-inline"><span>Estado</span>
+               <select className="input" aria-label="Filtrar cargos por estado" value={estadoFiltro}
                   onChange={evento => setEstadoFiltro(evento.target.value)}>
-                  <option value="ACTIVO">Estado: Activos</option>
+                  <option value="ACTIVO">Activos</option>
                   <option value="INACTIVO">Desactivados</option>
-                  <option value="TODOS">Todos los estados</option>
-                </select>
+                  <option value="TODOS">Todos</option>
+                </select></label>
                 <button type="button" className="btn btn-primary" onClick={() => abrirFormulario(null)}
-                disabled={cargando || guardando}>
+                disabled={!puedeGestionar || cargando || guardando}>
                 <Plus size={16} aria-hidden="true" /> Nuevo cargo
               </button>
             </div>
@@ -197,10 +203,10 @@ export default function GestionCargosModal({ abierto, onClose, onUpdated }) {
                           <div className="gestion-cargos-acciones">
                             <button type="button" className="btn btn-outline"
                               aria-label={'Editar cargo ' + cargo.nombre}
-                              onClick={() => abrirFormulario(cargo)} disabled={guardando}>
+                              onClick={() => abrirFormulario(cargo)} disabled={!puedeGestionar || guardando}>
                               <Pencil size={15} aria-hidden="true" /> Editar
                             </button>
-                            <button type="button" className="btn btn-outline" disabled={guardando}
+                            <button type="button" className="btn btn-outline" disabled={!puedeGestionar || guardando}
                               onClick={() => cambiarEstado(cargo)}>
                               {cargo.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}
                             </button>

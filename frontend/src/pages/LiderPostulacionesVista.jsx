@@ -1,13 +1,16 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { ClipboardCheck, Eye, Search, UserRound, X } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
+import { useAutoDismiss } from '../hooks/useAutoDismiss.js'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import { proyectosService } from '../services/proyectos.service.js'
 import { colaboradoresService } from '../services/colaboradores.service.js'
 import { getApiErrorMessage } from '../utils/apiErrors.js'
 import { nombreColaborador } from '../utils/formatters.js'
-import api from '../services/api.js'
+import { postulacionesService } from '../services/postulaciones.service.js'
 import './lider-postulaciones.css'
 
 const menu = [
@@ -52,6 +55,9 @@ function textoEstado(estado) {
 
 export default function LiderPostulacionesVista() {
   const { user } = useAuth()
+  const { canOperate } = useOperationalPermissions()
+  const puedeRevisar = canOperate('gestionar_postulaciones')
+  const puedeAceptar = puedeRevisar && canOperate('gestionar_asignaciones')
   const [reales, setReales] = useState([])
   const [ejemplos, setEjemplos] = useState(ejemplosIniciales)
   const [cargando, setCargando] = useState(true)
@@ -67,6 +73,7 @@ export default function LiderPostulacionesVista() {
   const [guardando, setGuardando] = useState(false)
   const [errorDecision, setErrorDecision] = useState('')
   const [mensaje, setMensaje] = useState('')
+  useAutoDismiss(mensaje, setMensaje)
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -83,7 +90,7 @@ export default function LiderPostulacionesVista() {
       const proyectos = obtenerItems(respuestaProyectos).filter(item => item.liderId === user.usuarioId)
       const [respuestaPersonas, ...resultados] = await Promise.allSettled([
         colaboradoresService.listAll(),
-        ...proyectos.map(item => api.get(`/proyectos/${encodeURIComponent(item.proyectoId)}/postulaciones`)),
+        ...proyectos.map(item => postulacionesService.listByProject(item.proyectoId)),
       ])
 
       const personas = respuestaPersonas.status === 'fulfilled'
@@ -122,7 +129,7 @@ export default function LiderPostulacionesVista() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  const mostrarEjemplos = import.meta.env.VITE_DEMO_MODE === 'true' && !cargando && !error
+  const mostrarEjemplos = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && !cargando && !error
   const postulaciones = useMemo(() => [
     ...reales,
     ...(mostrarEjemplos ? ejemplos : []),
@@ -146,6 +153,7 @@ export default function LiderPostulacionesVista() {
   }
 
   const abrirDecision = item => {
+    if (item.estado !== 'PENDIENTE') return
     setPorDecidir(item)
     setErrorDecision('')
     setObservacion('')
@@ -154,7 +162,8 @@ export default function LiderPostulacionesVista() {
   }
 
   const decidir = async nuevoEstado => {
-    if (!porDecidir || porDecidir.estado !== 'PENDIENTE' || guardando) return
+    if (!puedeRevisar || (nuevoEstado === 'ACEPTADA' && !puedeAceptar) ||
+      !porDecidir || porDecidir.estado !== 'PENDIENTE' || guardando) return
     if (nuevoEstado === 'ACEPTADA' && porDecidir.esLiderDelProyecto) {
       setErrorDecision('El líder no puede asignarse como colaborador a su propio proyecto.')
       return
@@ -181,19 +190,23 @@ export default function LiderPostulacionesVista() {
         ))
         setMensaje('Decisión de ejemplo registrada en esta pantalla. No se modificó el backend.')
       } else {
-        await api.patch(
-          `/proyectos/${encodeURIComponent(porDecidir.proyectoId)}/postulaciones/${encodeURIComponent(porDecidir.colaboradorId)}/estado`,
-          {
-            estado: nuevoEstado,
+        const confirmacion = await postulacionesService.decide(
+          porDecidir.proyectoId, porDecidir.colaboradorId, {
+            estado: nuevoEstado, revisadoPor: user.usuarioId,
             observacionRevision: observacion.trim(),
             ...(nuevoEstado === 'ACEPTADA' ? { porcentajeDedicacion, horasAsignadas } : {}),
           },
         )
+        if (nuevoEstado === 'ACEPTADA' && (!confirmacion.data?.datos?.asignacion?.asignacionId ||
+          confirmacion.data?.datos?.postulacion?.estado !== 'ACEPTADA')) {
+          throw new Error('No se pudo confirmar la asignación generada por el servidor. Recarga las postulaciones.')
+        }
         await cargar()
         setMensaje(nuevoEstado === 'ACEPTADA' ? 'Postulación aceptada y asignación creada.' : 'Postulación rechazada.')
       }
       setPorDecidir(null)
     } catch (fallo) {
+      if (fallo.response?.status === 409) await cargar()
       setErrorDecision(getApiErrorMessage(fallo, 'No se pudo registrar la decisión.'))
     } finally {
       setGuardando(false)
@@ -204,7 +217,7 @@ export default function LiderPostulacionesVista() {
     <div className="emp-dashboard lider-postulaciones-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label="Menú de líder de proyecto">
             {menu.map(([nombre, ruta]) => (
@@ -252,13 +265,14 @@ export default function LiderPostulacionesVista() {
                   <input type="search" placeholder="Buscar..." aria-label="Buscar empleado o proyecto"
                     value={busqueda} onChange={evento => setBusqueda(evento.target.value)} />
                 </label>
-                <select aria-label="Filtrar por estado" value={estadoFiltro} onChange={evento => setEstadoFiltro(evento.target.value)}>
-                  <option value="">Estado: Todos</option>
+                <label className="estado-filtro-inline"><span>Estado</span>
+                 <select aria-label="Filtrar por estado" value={estadoFiltro} onChange={evento => setEstadoFiltro(evento.target.value)}>
+                  <option value="">Todas</option>
                   <option value="PENDIENTE">En revisión</option>
                   <option value="ACEPTADA">Aceptadas</option>
                   <option value="RECHAZADA">Rechazadas</option>
                   <option value="RETIRADA">Retiradas</option>
-                </select>
+                </select></label>
               </div>
             </div>
 
@@ -309,7 +323,7 @@ export default function LiderPostulacionesVista() {
                                 <button type="button" className="lider-postulaciones-decide"
                                   aria-label={'Decidir sobre la postulación de ' + item.candidato}
                                   title={'Decidir sobre la postulación de ' + item.candidato}
-                                  onClick={() => abrirDecision(item)}>
+                                  onClick={() => abrirDecision(item)} disabled={!puedeRevisar}>
                                   <ClipboardCheck size={17} aria-hidden="true" />
                                 </button>
                               )}
@@ -356,7 +370,7 @@ export default function LiderPostulacionesVista() {
                 <button type="button" className="lider-postulaciones-primary" onClick={() => {
                   setDetalle(null)
                   abrirDecision(detalle)
-                }}>Decidir</button>
+                }} disabled={!puedeRevisar}>Decidir</button>
               )}
             </div>
           </section>
@@ -401,9 +415,9 @@ export default function LiderPostulacionesVista() {
             <div className="lider-postulaciones-modal-actions">
               <button type="button" className="lider-postulaciones-secondary" disabled={guardando}
                 onClick={() => setPorDecidir(null)}>Volver</button>
-              <button type="button" className="lider-postulaciones-reject" disabled={guardando}
+              <button type="button" className="lider-postulaciones-reject" disabled={!puedeRevisar || guardando}
                 onClick={() => decidir('RECHAZADA')}>Rechazar</button>
-              <button type="button" className="lider-postulaciones-primary" disabled={guardando || porDecidir.esLiderDelProyecto}
+              <button type="button" className="lider-postulaciones-primary" disabled={!puedeAceptar || guardando || porDecidir.esLiderDelProyecto}
                 onClick={() => decidir('ACEPTADA')}>{guardando ? 'Guardando...' : 'Aceptar'}</button>
             </div>
           </section>

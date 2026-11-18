@@ -3,6 +3,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import GestionCargosModal from '../components/cargos/GestionCargosModal.jsx'
 import { cargosService } from '../services/cargos.service.js'
 
+vi.mock('../hooks/useOperationalPermissions.js', () => ({
+  useOperationalPermissions: () => ({ canOperate: permiso => permiso === 'gestionar_cargos' }),
+}))
+
 vi.mock('../services/cargos.service.js', () => ({
   cargosService: {
     list: vi.fn(),

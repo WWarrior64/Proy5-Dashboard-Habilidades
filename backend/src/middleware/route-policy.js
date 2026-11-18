@@ -2,6 +2,8 @@ const { ErrorApp, CODIGOS } = require('../utils/errors');
 const { autorizar } = require('./authorization');
 const { dynamoDb, GetCommand } = require('../config/dynamodb');
 const env = require('../config/environment');
+const administracionRepo = require('../repositories/administracion.repository');
+const { permisoDeRuta, permisoEfectivo } = require('../config/permisos-operativos');
 const TODOS = ['EMPLEADO', 'RRHH', 'LIDER_PROYECTO', 'ADMINISTRADOR'];
 function denegar() { throw new ErrorApp('Permisos insuficientes', 403, CODIGOS.PROHIBIDO); }
 async function leer(table, key) {
@@ -50,8 +52,8 @@ async function proteger(event, route) {
       // El handler toma el ID de event.usuarioAutenticado, nunca del body.
     } else if (path.endsWith('/rol') || path.endsWith('/estado') || method === 'POST') {
       if (!admin) denegar();
-    } else if (path.endsWith('/yo')) {
-      // Perfil autenticado.
+    } else if (path.endsWith('/yo') || (path === '/api/v1/usuarios/yo/permisos' && method === 'GET')) {
+      // Perfil autenticado y capacidades efectivas de la propia cuenta.
     } else if (params.usuarioId) {
       if (!gestor && params.usuarioId !== usuario.usuarioId) denegar();
       if (write && ['rol', 'estado', 'cognitoSub', 'usuarioId'].some((key) => key in body)) denegar();
@@ -95,6 +97,22 @@ async function proteger(event, route) {
   } else if (path.startsWith('/api/v1/dashboard') || path.startsWith('/api/v1/busqueda/colaboradores')) {
     if (!gestor && !lider) denegar();
   } else if (!path.startsWith('/api/v1/busqueda/')) denegar();
+  // La política administrativa solo puede restringir operaciones ya autorizadas
+  // por las reglas de identidad, rol y propiedad de los recursos anteriores.
+  if (write && process.env.ENFORCE_PERMISSION_POLICY === 'true') {
+    const permiso = permisoDeRuta(method, path);
+    const esEdicionDelPerfilPropio = permiso === 'gestionar_usuarios' &&
+      method === 'PUT' && params.usuarioId === usuario.usuarioId;
+    const creaAsignacionDesdePostulacion = method === 'PATCH' &&
+      path.includes('/postulaciones/') && path.endsWith('/estado') && body.estado === 'ACEPTADA';
+    if ((permiso && !esEdicionDelPerfilPropio) || creaAsignacionDesdePostulacion) {
+      const politica = await administracionRepo.obtener('roles-permisos');
+      if (permiso && !esEdicionDelPerfilPropio && !permisoEfectivo(politica, usuario.rol, permiso)) denegar();
+      // Aceptar una postulación crea además una asignación: requiere ambas capacidades.
+      if (creaAsignacionDesdePostulacion &&
+          !permisoEfectivo(politica, usuario.rol, 'gestionar_asignaciones')) denegar();
+    }
+  }
   if (write) {
     // Los campos de auditoría son responsabilidad del servidor, nunca del cliente.
     // Los esquemas Joi de las demás entidades rechazan campos no reconocidos.

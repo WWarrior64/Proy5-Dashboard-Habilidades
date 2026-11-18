@@ -127,7 +127,20 @@
   font-size: 12px;
 }
 
-.rrhh-habilidades-filters select:last-child { width: 125px; }
+.rrhh-habilidades-categoria-filtro,
+.rrhh-habilidades-filters .estado-filtro-inline {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #16255a;
+  font-size: 12px;
+  font-weight: 600;
+}
+.rrhh-habilidades-categoria-filtro > span { white-space: nowrap; }
+.rrhh-habilidades-filters .rrhh-habilidades-categoria-filtro select { width: 145px; }
+.rrhh-habilidades-filters .estado-filtro-inline select { width: 125px; }
 .rrhh-habilidades-filters select:focus { outline-color: var(--color-primary); }
 
 .rrhh-habilidades-table-scroll {
@@ -257,9 +270,34 @@
 .rrhh-habilidades-count {
   margin: 0;
   padding: 14px 8px;
-  color: #8b939f;
+  color: #64748b;
   font-size: 12px;
-  text-align: center;
+}
+.rrhh-habilidades-paginacion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 8px;
+}
+.rrhh-habilidades-paginacion-controles {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #475569;
+  font-size: 12px;
+}
+.rrhh-habilidades-paginacion-controles button {
+  border: 1px solid #2563eb;
+  border-radius: 5px;
+  color: #2563eb;
+  background: #fff;
+  padding: 6px 10px;
+}
+.rrhh-habilidades-paginacion-controles button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
 }
 
 .rrhh-habilidades-feedback {
@@ -386,7 +424,8 @@
   .rrhh-habilidades-page .rrhh-habilidades-metrics .emp-card { height: 78px; padding: 8px; }
   .rrhh-habilidades-page .emp-card-label { font-size: 10px; line-height: 1.2; }
   .rrhh-habilidades-page .rrhh-habilidades-metrics .emp-card-value { font-size: 20px; }
-  .rrhh-habilidades-filters select, .rrhh-habilidades-filters select:last-child { flex: 1 1 125px; width: auto; }
+  .rrhh-habilidades-filters .rrhh-habilidades-categoria-filtro select,
+  .rrhh-habilidades-filters .estado-filtro-inline select { flex: 1 1 125px; width: auto; }
 }
 
 @media (max-width: 430px) {

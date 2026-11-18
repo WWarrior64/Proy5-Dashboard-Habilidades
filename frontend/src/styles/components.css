@@ -294,12 +294,14 @@ tr:hover td {
   background-color: var(--color-bg-login);
   font-family: var(--font-family-login);
   margin: 0;
-  padding: 0;
+  padding: 24px 16px;
+  box-sizing: border-box;
 }
 
 .login-card {
-  width: 420px;
-  height: 480px;
+  width: min(420px, 100%);
+  min-height: 480px;
+  height: auto;
   background: #ffffff;
   border: 1px solid var(--color-card-border);
   border-radius: 6px;
@@ -307,7 +309,8 @@ tr:hover td {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0;
+  padding: 0 16px 30px;
+  box-sizing: border-box;
   position: relative;
 }
 
@@ -315,29 +318,30 @@ tr:hover td {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 58px;
+  margin-top: 42px;
 }
 
 .login-logo {
-  width: 82px;
-  height: 82px;
-  background: var(--color-logo-bg);
-  border-radius: 20px;
+  width: 108px;
+  height: 108px;
+  border-radius: 24px;
+  display: block;
+  object-fit: contain;
 }
 
 .login-title {
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 20px;
+  font-weight: 700;
   color: var(--color-text-title);
   font-family: var(--font-family-login);
-  margin: 18px 0 0 0;
+  margin: 14px 0 0 0;
   text-align: center;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.4px;
 }
 
 .login-form {
-  width: 260px;
-  margin-top: 45px;
+  width: min(260px, 100%);
+  margin-top: 32px;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -359,7 +363,7 @@ tr:hover td {
 }
 
 .login-input {
-  width: 260px;
+  width: 100%;
   height: 33px;
   background: var(--color-input-bg);
   border: 1px solid var(--color-input-border);
@@ -382,7 +386,7 @@ tr:hover td {
 }
 
 .login-forgot-password {
-  width: 260px;
+  width: 100%;
   text-align: right;
   margin-top: 8px;
   margin-bottom: 8px;
@@ -400,8 +404,8 @@ tr:hover td {
 }
 
 .login-btn {
-  width: 260px;
-  height: 33px;
+  width: 100%;
+  min-height: 33px;
   background: var(--color-btn);
   color: #ffffff;
   border: none;
@@ -411,7 +415,7 @@ tr:hover td {
   font-family: var(--font-family-login);
   cursor: pointer;
   margin-top: 10px;
-  margin-bottom: 50px;
+  margin-bottom: 0;
 }
 
 .login-btn:hover:not(:disabled) {
@@ -426,8 +430,7 @@ tr:hover td {
 /* Primera sesión: cambio de la contraseña temporal de Cognito.
    Usa la misma tarjeta, tipografía, campos y paleta del inicio de sesión. */
 .password-change-card {
-  width: min(420px, calc(100vw - 32px));
-  height: auto;
+  width: min(420px, 100%);
   min-height: 480px;
   padding-bottom: 24px;
   box-sizing: border-box;
@@ -468,10 +471,17 @@ tr:hover td {
   line-height: 1.5;
 }
 
-.password-change-card .error-message {
-  width: 290px;
-  max-width: calc(100% - 32px);
+.login-card .error-message {
+  width: min(352px, 100%);
+  box-sizing: border-box;
   margin: 16px 0 0;
+  text-align: center;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.password-change-card .error-message {
+  width: min(290px, 100%);
 }
 
 .password-change-back {
@@ -492,11 +502,17 @@ tr:hover td {
 }
 
 @media (max-width: 420px) {
-  .password-change-form,
-  .password-change-form .login-field,
-  .password-change-form .login-input,
-  .password-change-form .login-btn {
-    width: min(260px, calc(100vw - 72px));
+  .login-card {
+    min-height: 0;
+  }
+
+  .login-form,
+  .password-change-form {
+    width: min(260px, 100%);
+  }
+
+  .login-title {
+    font-size: 18px;
   }
 }
 
@@ -531,13 +547,48 @@ tr:hover td {
 }
 
 .emp-sidebar-brand {
-  font-size: 20px;
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 54px;
+  width: 174px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.22;
+  letter-spacing: -0.25px;
   color: #ffffff;
   text-transform: uppercase;
-  line-height: 1.3;
-  margin-bottom: 20px;
-  width: 170px;
+}
+
+.emp-sidebar-brand::before {
+  content: '';
+  width: 50px;
+  height: 50px;
+  flex: 0 0 50px;
+  display: block;
+  padding-right: 8px;
+  border-right: 1px solid rgba(201, 212, 224, .65);
+  background: url('../assets/internal-marketplace-mark.svg') left center / 50px 50px no-repeat;
+}
+
+@media (max-width: 620px) {
+  .emp-sidebar-brand {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+    min-height: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .emp-sidebar-brand::before {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    padding-right: 0;
+    border-right: 0;
+    background-size: 40px 40px;
+  }
 }
 
 .emp-sidebar-divider {
@@ -941,22 +992,22 @@ a.emp-user-icon:focus-visible {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 58px;
+  margin-top: 42px;
 }
 
 .forgot-logo {
-  width: 82px;
-  height: 82px;
-  background: var(--color-logo-bg);
-  border-radius: 20px;
+  width: 108px;
+  height: 108px;
+  border-radius: 24px;
+  object-fit: contain;
 }
 
 .forgot-title {
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 20px;
+  font-weight: 700;
   color: var(--color-text-title);
   font-family: var(--font-family-login);
-  margin: 18px 0 0 0;
+  margin: 14px 0 0 0;
   text-align: center;
   letter-spacing: -0.3px;
 }

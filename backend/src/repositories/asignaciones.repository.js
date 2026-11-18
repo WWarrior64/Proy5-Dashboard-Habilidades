@@ -1,4 +1,5 @@
 const dedicacion = require('../services/dedicacion.service');
+const { recolectarPaginas } = require('../utils/paginacion');
 const {
   dynamoDb,
   GetCommand,
@@ -8,6 +9,8 @@ const {
   tableAsignaciones,
   tableColaboradores,
   tableProyectos,
+  tableUsuarios,
+  tablePostulaciones,
 } = require('../../src/config/environment.js');
 const { ErrorApp, CODIGOS } = require('../../src/utils/errors.js');
 const cache = require('../../src/services/cache.service.js');
@@ -43,17 +46,10 @@ function ahoraISO() {
 }
 
 async function consultarTodasPaginas(parametros) {
-  const items = [];
-  let lastKey;
-  do {
-    const pagina = await dynamoDb.send(new QueryCommand({
-      ...parametros,
-      ...(lastKey && { ExclusiveStartKey: lastKey }),
-    }));
-    items.push(...(pagina.Items || []));
-    lastKey = pagina.LastEvaluatedKey;
-  } while (lastKey);
-  return items;
+  return recolectarPaginas(lastKey => dynamoDb.send(new QueryCommand({
+    ...parametros,
+    ...(lastKey && { ExclusiveStartKey: lastKey }),
+  })));
 }
 
 async function validarColaboradorActivo(colaboradorId) {
@@ -71,6 +67,18 @@ async function validarColaboradorActivo(colaboradorId) {
     throw new ErrorApp('El colaborador no está activo', 400, CODIGOS.VALIDACION);
   }
   return colaborador;
+}
+
+async function validarCuentaActiva(colaborador) {
+  if (!colaborador?.usuarioId) {
+    throw new ErrorApp('No se pudo comprobar la identidad del colaborador', 409, CODIGOS.CONFLICTO);
+  }
+  const cuenta = await dynamoDb.send(new GetCommand({
+    TableName: tableUsuarios, Key: { usuarioId: colaborador.usuarioId }, ConsistentRead: true,
+  }));
+  if (cuenta.Item?.estado !== 'ACTIVO') {
+    throw new ErrorApp('La cuenta del colaborador no existe o está inactiva', 409, CODIGOS.CONFLICTO);
+  }
 }
 
 async function validarProyectoActivo(proyectoId) {
@@ -91,26 +99,17 @@ async function validarProyectoActivo(proyectoId) {
 }
 
 async function obtenerSumaDedicacionActiva(colaboradorId, asignacionIdExcluir) {
-  let lastKey;
-  let suma = 0;
-  do {
-    const resultado = await dynamoDb.send(
-    new QueryCommand({
-      TableName: tableAsignaciones,
-      IndexName: 'GSI1',
-      KeyConditionExpression: '#c = :c AND begins_with(#s, :prefijo)',
-      ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'colaboradorFechaKey' },
-      ExpressionAttributeValues: { ':c': colaboradorId, ':prefijo': 'ACTIVA#' },
-      ProjectionExpression: 'porcentajeDedicacion, asignacionId',
-      ...(lastKey && { ExclusiveStartKey: lastKey }),
-    })
-  );
-    suma += (resultado.Items || [])
-      .filter((item) => item.asignacionId !== asignacionIdExcluir)
-      .reduce((acc, item) => acc + (item.porcentajeDedicacion || 0), 0);
-    lastKey = resultado.LastEvaluatedKey;
-  } while (lastKey);
-  return suma;
+  const asignaciones = await consultarTodasPaginas({
+    TableName: tableAsignaciones,
+    IndexName: 'GSI1',
+    KeyConditionExpression: '#c = :c AND begins_with(#s, :prefijo)',
+    ExpressionAttributeNames: { '#c': 'colaboradorId', '#s': 'colaboradorFechaKey' },
+    ExpressionAttributeValues: { ':c': colaboradorId, ':prefijo': 'ACTIVA#' },
+    ProjectionExpression: 'porcentajeDedicacion, asignacionId',
+  });
+  return asignaciones
+    .filter(item => item.asignacionId !== asignacionIdExcluir)
+    .reduce((suma, item) => suma + (item.porcentajeDedicacion || 0), 0);
 }
 
 async function crearAsignacion(datos) {
@@ -152,6 +151,8 @@ async function crearAsignacion(datos) {
   }
 
   dedicacion.verificarLiderDistinto(proyecto, colaborador);
+  await validarCuentaActiva(colaborador);
+  const elegibilidad = await dedicacion.verificarHabilidadesObligatorias(proyectoId, colaboradorId);
   const sumaActual = await obtenerSumaDedicacionActiva(colaboradorId);
   if (sumaActual + porcentajeDedicacion > 100) {
     throw new ErrorApp(
@@ -183,8 +184,16 @@ async function crearAsignacion(datos) {
   };
 
   await dedicacion.ejecutar([
-    dedicacion.reserva(colaboradorId, porcentajeDedicacion),
-    dedicacion.condicionProyectoAsignable(proyectoId, colaborador.usuarioId, tableProyectos),
+    dedicacion.reserva(colaboradorId, porcentajeDedicacion, elegibilidad.habilidadesRevision ?? 0),
+    dedicacion.actividadProyecto(proyectoId, 1, colaborador.usuarioId, elegibilidad.requisitosRevision ?? 0),
+    dedicacion.cuentaActiva(colaborador.usuarioId, tableUsuarios),
+    { ConditionCheck: {
+      TableName: tablePostulaciones,
+      Key: { proyectoId, postulacionKey: `POSTULACION#${colaboradorId}` },
+      ConditionExpression: 'attribute_not_exists(postulacionKey) OR #estado <> :pendiente',
+      ExpressionAttributeNames: { '#estado': 'estado' },
+      ExpressionAttributeValues: { ':pendiente': 'PENDIENTE' },
+    } },
     { Put: { TableName: tableAsignaciones, Item: item,
       ConditionExpression: 'attribute_not_exists(asignacionId)' } },
   ]);
@@ -262,6 +271,36 @@ async function obtenerAsignacion(asignacionId) {
   return asignacion;
 }
 
+function validarHorasAsignadas(horasAsignadas, horasCompletadas) {
+  if (typeof horasAsignadas !== 'number' || !Number.isFinite(horasAsignadas) || horasAsignadas <= 0) {
+    throw new ErrorApp('Las horas asignadas deben ser un número positivo', 400, CODIGOS.VALIDACION);
+  }
+  if (horasCompletadas > horasAsignadas) {
+    throw new ErrorApp('Las horas asignadas no pueden ser menores a las horas completadas', 400, CODIGOS.VALIDACION);
+  }
+}
+
+async function validarPorcentajeActualizado(porcentajeDedicacion, existente, asignacionId) {
+  if (typeof porcentajeDedicacion !== 'number' || !Number.isFinite(porcentajeDedicacion) ||
+      porcentajeDedicacion <= 0 || porcentajeDedicacion > 100) {
+    throw new ErrorApp('El porcentaje de dedicación debe estar entre 1 y 100', 400, CODIGOS.VALIDACION);
+  }
+  const sumaOtros = await obtenerSumaDedicacionActiva(existente.colaboradorId, asignacionId);
+  if (sumaOtros + porcentajeDedicacion > 100) {
+    throw new ErrorApp('La suma de dedicaciones activas del colaborador superaría el 100 %',
+      400, CODIGOS.VALIDACION);
+  }
+}
+
+function validarHorasCompletadas(horasCompletadas, horasAsignadas) {
+  if (typeof horasCompletadas !== 'number' || !Number.isFinite(horasCompletadas) || horasCompletadas < 0) {
+    throw new ErrorApp('Las horas completadas no pueden ser negativas', 400, CODIGOS.VALIDACION);
+  }
+  if (horasCompletadas > horasAsignadas) {
+    throw new ErrorApp('Las horas completadas no pueden superar las horas asignadas', 400, CODIGOS.VALIDACION);
+  }
+}
+
 async function actualizarAsignacion(asignacionId, cambios) {
   const { horasAsignadas, porcentajeDedicacion, horasCompletadas } = cambios;
   const existente = await obtenerAsignacion(asignacionId);
@@ -272,42 +311,14 @@ async function actualizarAsignacion(asignacionId, cambios) {
   const ahora = ahoraISO();
 
   if (horasAsignadas !== undefined) {
-    if (typeof horasAsignadas !== 'number' || !Number.isFinite(horasAsignadas) || horasAsignadas <= 0) {
-      throw new ErrorApp('Las horas asignadas deben ser un número positivo', 400, CODIGOS.VALIDACION);
-    }
-    if (existente.horasCompletadas > horasAsignadas) {
-      throw new ErrorApp(
-        'Las horas asignadas no pueden ser menores a las horas completadas',
-        400,
-        CODIGOS.VALIDACION
-      );
-    }
+    validarHorasAsignadas(horasAsignadas, existente.horasCompletadas);
     nombresAtributos['#ha'] = 'horasAsignadas';
     valoresAtributos[':ha'] = horasAsignadas;
     sets.push('#ha = :ha');
   }
 
   if (porcentajeDedicacion !== undefined) {
-    if (
-      typeof porcentajeDedicacion !== 'number' ||
-      !Number.isFinite(porcentajeDedicacion) ||
-      porcentajeDedicacion <= 0 ||
-      porcentajeDedicacion > 100
-    ) {
-      throw new ErrorApp(
-        'El porcentaje de dedicación debe estar entre 1 y 100',
-        400,
-        CODIGOS.VALIDACION
-      );
-    }
-    const sumaOtros = await obtenerSumaDedicacionActiva(existente.colaboradorId, asignacionId);
-    if (sumaOtros + porcentajeDedicacion > 100) {
-      throw new ErrorApp(
-        'La suma de dedicaciones activas del colaborador superaría el 100 %',
-        400,
-        CODIGOS.VALIDACION
-      );
-    }
+    await validarPorcentajeActualizado(porcentajeDedicacion, existente, asignacionId);
     nombresAtributos['#pd'] = 'porcentajeDedicacion';
     valoresAtributos[':pd'] = porcentajeDedicacion;
     sets.push('#pd = :pd');
@@ -320,17 +331,7 @@ async function actualizarAsignacion(asignacionId, cambios) {
   }
 
   if (horasCompletadas !== undefined) {
-    if (typeof horasCompletadas !== 'number' || !Number.isFinite(horasCompletadas) || horasCompletadas < 0) {
-      throw new ErrorApp('Las horas completadas no pueden ser negativas', 400, CODIGOS.VALIDACION);
-    }
-    const horasFinal = horasAsignadas !== undefined ? horasAsignadas : existente.horasAsignadas;
-    if (horasCompletadas > horasFinal) {
-      throw new ErrorApp(
-        'Las horas completadas no pueden superar las horas asignadas',
-        400,
-        CODIGOS.VALIDACION
-      );
-    }
+    validarHorasCompletadas(horasCompletadas, horasAsignadas ?? existente.horasAsignadas);
     nombresAtributos['#hc'] = 'horasCompletadas';
     valoresAtributos[':hc'] = horasCompletadas;
     sets.push('#hc = :hc');
@@ -379,6 +380,7 @@ async function cambiarEstadoFinal(asignacionId, estadoFinal) {
   const ahora = ahoraISO();
   await dedicacion.ejecutar([
     dedicacion.reserva(existente.colaboradorId, -existente.porcentajeDedicacion),
+    dedicacion.actividadProyecto(existente.proyectoId, -1),
     { Update: {
       TableName: tableAsignaciones, Key: { asignacionId },
       UpdateExpression: 'SET #est = :estado, fechaFin = :fecha, fechaActualizacion = :fecha, colaboradorFechaKey = :key, proyectoFechaKey = :key',

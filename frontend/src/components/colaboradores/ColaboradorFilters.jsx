@@ -12,11 +12,12 @@ export default function ColaboradorFilters({ onFilter }) {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', marginBottom: '1rem' }}>
-      <select value={estado} onChange={(e) => setEstado(e.target.value)} className="input" style={{ minWidth: '140px' }}>
-        <option value="">Todos los estados</option>
+      <label className="estado-filtro-inline"><span>Estado</span>
+       <select aria-label="Filtrar colaboradores por estado" value={estado} onChange={(e) => setEstado(e.target.value)} className="input" style={{ minWidth: '140px' }}>
+        <option value="">Todos</option>
         <option value="ACTIVO">Activo</option>
         <option value="INACTIVO">Inactivo</option>
-      </select>
+      </select></label>
       <select value={rol} onChange={(e) => setRol(e.target.value)} className="input" style={{ minWidth: '180px' }}>
         <option value="">Todos los roles</option>
         <option value="Junior">Junior</option>

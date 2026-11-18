@@ -2,6 +2,8 @@ const { exito, creado, error } = require('../../utils/responses.js');
 const { ErrorApp, CODIGOS } = require('../../utils/errors.js');
 const proyectosRepo = require('../../repositories/proyectos.repository.js');
 const usuariosRepo = require('../../repositories/usuarios.repository.js');
+const { validarDatos } = require('../../middleware/validation.js');
+const { crearProyectoSchema, actualizarProyectoSchema } = require('../../utils/validators.js');
 
 function obtenerBody(event) {
   if (!event.body) return {};
@@ -58,7 +60,7 @@ async function incluirNombreLider(proyectos) {
 
 async function crearProyecto(event, context) {
   try {
-    const datos = obtenerBody(event);
+    const datos = validarDatos(crearProyectoSchema, obtenerBody(event));
     const proyecto = await proyectosRepo.crearProyecto(datos);
     return creado(proyecto);
   } catch (e) {
@@ -99,7 +101,7 @@ async function actualizarProyecto(event, context) {
     if (!proyectoId) {
       throw new ErrorApp('Se requiere el parámetro proyectoId', 400, CODIGOS.VALIDACION);
     }
-    const cambios = obtenerBody(event);
+    const cambios = validarDatos(actualizarProyectoSchema, obtenerBody(event));
     const proyecto = await proyectosRepo.actualizarProyecto(proyectoId, cambios);
     return exito(proyecto);
   } catch (e) {

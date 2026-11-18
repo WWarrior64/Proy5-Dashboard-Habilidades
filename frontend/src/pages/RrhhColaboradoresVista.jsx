@@ -1,9 +1,11 @@
+import BrandName from '../components/common/BrandName.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Pencil, Plus, Search, Trash2, UserRound } from 'lucide-react'
+import { Pencil, Plus, Search, Trash2, UserRound, UserX } from 'lucide-react'
 import EmpleadoLogoutButton from '../components/layout/EmpleadoLogoutButton.jsx'
 import GestionCargosModal from '../components/cargos/GestionCargosModal.jsx'
 import { useAuth } from '../hooks/useAuth.js'
+import { useOperationalPermissions } from '../hooks/useOperationalPermissions.js'
 import { colaboradoresService } from '../services/colaboradores.service.js'
 import { habilidadesService } from '../services/habilidades.service.js'
 import './rrhh-colaboradores.css'
@@ -36,9 +38,9 @@ const ejemploInactivo = {
   esEjemplo: true,
 }
 
-function disponibilidadReal(colaborador) {
+function disponibilidadReal(colaborador, usuario = null) {
   if (colaborador.esEjemplo) return colaborador.disponibilidad || 'SIN_DATOS'
-  if (colaborador.estado === 'INACTIVO') return 'NO_DISPONIBLE'
+  if (colaborador.estado !== 'ACTIVO' || usuario?.estado !== 'ACTIVO') return 'NO_DISPONIBLE'
   const reserva = colaborador.dedicacionReservada
   if (!Number.isFinite(reserva) || reserva < 0 || reserva > 100) return 'SIN_DATOS'
   return reserva > 0 ? 'ASIGNADA' : 'DISPONIBLE'
@@ -65,12 +67,6 @@ function habilidadesColaborador(colaborador) {
   }).filter(Boolean)
 }
 
-function rolResumido(rol) {
-  if (/front[\s-]?end/i.test(rol)) return 'Frontend'
-  if (/back[\s-]?end/i.test(rol)) return 'Backend'
-  return rol
-}
-
 function iniciales(nombre) {
   return nombre.trim().split(/\s+/).slice(0, 2).map(palabra => palabra.charAt(0)).join('').toUpperCase()
 }
@@ -91,12 +87,16 @@ export default function RrhhColaboradoresVista({
   onUpdatedCargos,
 }) {
   const { user } = useAuth()
+  const { canOperate } = useOperationalPermissions()
   const esAdministrador = user?.rol === 'ADMINISTRADOR'
+  const puedeGestionarCargos = canOperate('gestionar_cargos')
   const [cargosAbierto, setCargosAbierto] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [busquedaSuperior, setBusquedaSuperior] = useState('')
   const [disponibilidad, setDisponibilidad] = useState('Todas')
   const [estadoPerfil, setEstadoPerfil] = useState('ACTIVO')
+  const [rolProfesionalFiltro, setRolProfesionalFiltro] = useState('')
+  const [cargoFiltro, setCargoFiltro] = useState('')
   const [habilidadesPorColaborador, setHabilidadesPorColaborador] = useState({})
 
   // La lista de colaboradores no incluye siempre habilidades y niveles.
@@ -146,10 +146,17 @@ export default function RrhhColaboradoresVista({
     usuarios.some(usuario => usuario.usuarioId === item.usuarioId && usuario.estado === 'INACTIVO')
   ))
   const hayVistaRealDeHabilidades = colaboradoresConHabilidades.some(item => habilidadesColaborador(item).length >= 3)
-  const mostrarEjemploInactivo = import.meta.env.VITE_DEMO_MODE === 'true' && (!hayInactivoReal || !hayVistaRealDeHabilidades)
+  const mostrarEjemploInactivo = (import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true') && (!hayInactivoReal || !hayVistaRealDeHabilidades)
   const tarjetas = mostrarEjemploInactivo
     ? [...colaboradoresConHabilidades, ejemploInactivo]
     : colaboradoresConHabilidades
+
+  const rolesProfesionales = useMemo(() => [...new Set(colaboradores
+    .map(item => String(item.rolProfesional || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'es')), [colaboradores])
+
+  const cargosDisponibles = useMemo(() => [...cargos]
+    .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es')), [cargos])
 
   const colaboradoresVisibles = useMemo(() => {
     const terminos = [busqueda, busquedaSuperior].map(texto => texto.trim().toLocaleLowerCase('es'))
@@ -159,25 +166,27 @@ export default function RrhhColaboradoresVista({
       const habilidades = habilidadesColaborador(colaborador)
       const texto = [nombre, colaborador.rolProfesional, cargo?.nombre, ...habilidades]
         .filter(Boolean).join(' ').toLocaleLowerCase('es')
-      const estado = disponibilidadReal(colaborador)
       const usuario = usuarios.find(item => item.usuarioId === colaborador.usuarioId)
-      const activo = colaborador.estado !== 'INACTIVO' && usuario?.estado !== 'INACTIVO'
+      const estado = disponibilidadReal(colaborador, usuario)
+      const activo = colaborador.estado === 'ACTIVO' && usuario?.estado === 'ACTIVO'
       return (estadoPerfil === 'TODOS' || (estadoPerfil === 'ACTIVO' ? activo : !activo)) &&
         terminos.every(termino => texto.includes(termino)) &&
+        (!rolProfesionalFiltro || colaborador.rolProfesional === rolProfesionalFiltro) &&
+        (!cargoFiltro || colaborador.cargoId === cargoFiltro) &&
         (disponibilidad === 'Todas' ||
           (disponibilidad === 'Disponibles' && estado === 'DISPONIBLE') ||
           (disponibilidad === 'Asignados' && estado === 'ASIGNADA'))
     })
-  }, [tarjetas, usuarios, cargos, busqueda, busquedaSuperior, disponibilidad, estadoPerfil])
+  }, [tarjetas, usuarios, cargos, busqueda, busquedaSuperior, disponibilidad, estadoPerfil, rolProfesionalFiltro, cargoFiltro])
 
-  const disponibles = colaboradores.filter(item => disponibilidadReal(item) === 'DISPONIBLE').length
-  const asignados = colaboradores.filter(item => disponibilidadReal(item) === 'ASIGNADA').length
+  const disponibles = colaboradores.filter(item => disponibilidadReal(item, usuarios.find(usuario => usuario.usuarioId === item.usuarioId)) === 'DISPONIBLE').length
+  const asignados = colaboradores.filter(item => disponibilidadReal(item, usuarios.find(usuario => usuario.usuarioId === item.usuarioId)) === 'ASIGNADA').length
 
   return (
     <div className="emp-dashboard rrhh-colaboradores-page">
       <aside className="emp-sidebar">
         <div className="emp-sidebar-top">
-          <div className="emp-sidebar-brand">INTERNAL<br />MARKETPLACE</div>
+          <div className="emp-sidebar-brand"><BrandName /></div>
           <div className="emp-sidebar-divider" />
           <nav className="emp-sidebar-menu" aria-label={esAdministrador ? 'Menú de administrador' : 'Menú de recursos humanos'}>
             {(esAdministrador ? menuAdministrador : menu).map(([texto, ruta]) => (
@@ -217,14 +226,14 @@ export default function RrhhColaboradoresVista({
         <section className="emp-content rrhh-colaboradores-content" aria-labelledby="rrhh-colaboradores-title">
           <div className="rrhh-colaboradores-heading">
             <h2 id="rrhh-colaboradores-title">Colaboradores</h2>
-            {canManage && (
+            {(canManage || puedeGestionarCargos) && (
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {!esAdministrador && (
+                {puedeGestionarCargos && (
                   <button type="button" className="rrhh-colaboradores-add" onClick={() => setCargosAbierto(true)}>
                     Gestionar cargos
                   </button>
                 )}
-              <button
+              {canManage && <button
                 type="button"
                 className="rrhh-colaboradores-add"
                 onClick={onCreate}
@@ -232,7 +241,7 @@ export default function RrhhColaboradoresVista({
               >
                 <Plus size={16} aria-hidden="true" />
                 Registrar colaborador
-              </button>
+              </button>}
               </div>
             )}
           </div>
@@ -266,21 +275,35 @@ export default function RrhhColaboradoresVista({
                     onChange={evento => setBusqueda(evento.target.value)}
                   />
                 </label>
-                <select
-                  aria-label="Filtrar por disponibilidad"
-                  value={disponibilidad}
-                  onChange={evento => setDisponibilidad(evento.target.value)}
-                >
-                  <option value="Todas">Disponibilidad: Todas</option>
-                  <option value="Disponibles">Disponibles</option>
-                  <option value="Asignados">Asignados</option>
-                </select>
-                <select aria-label="Filtrar colaboradores por estado" value={estadoPerfil}
+                <label className="rrhh-colaboradores-rol-filtro"><span>Rol profesional</span>
+                  <select aria-label="Filtrar por rol profesional" value={rolProfesionalFiltro}
+                    onChange={evento => setRolProfesionalFiltro(evento.target.value)}>
+                    <option value="">Todos</option>
+                    {rolesProfesionales.map(rol => <option key={rol} value={rol}>{rol}</option>)}
+                  </select>
+                </label>
+                <label className="rrhh-colaboradores-filtro-inline"><span>Cargo</span>
+                  <select aria-label="Filtrar por cargo" value={cargoFiltro}
+                    onChange={evento => setCargoFiltro(evento.target.value)}>
+                    <option value="">Todos</option>
+                    {cargosDisponibles.map(item => <option key={item.cargoId} value={item.cargoId}>{item.nombre}</option>)}
+                  </select>
+                </label>
+                <label className="rrhh-colaboradores-filtro-inline"><span>Disponibilidad</span>
+                  <select aria-label="Filtrar por disponibilidad"
+                    value={disponibilidad} onChange={evento => setDisponibilidad(evento.target.value)}>
+                    <option value="Todas">Todas</option>
+                    <option value="Disponibles">Disponibles</option>
+                    <option value="Asignados">Asignados</option>
+                  </select>
+                </label>
+                <label className="estado-filtro-inline"><span>Estado</span>
+                 <select aria-label="Filtrar colaboradores por estado" value={estadoPerfil}
                   onChange={evento => setEstadoPerfil(evento.target.value)}>
-                  <option value="ACTIVO">Estado: Activos</option>
+                  <option value="ACTIVO">Activos</option>
                   <option value="INACTIVO">Dados de baja</option>
-                  <option value="TODOS">Todos los estados</option>
-                </select>
+                  <option value="TODOS">Todos</option>
+                </select></label>
               </div>
             </div>
 
@@ -301,10 +324,10 @@ export default function RrhhColaboradoresVista({
                   const nivel = nivelColaborador(colaborador)
                   const habilidades = habilidadesColaborador(colaborador)
                   const usuario = usuarios.find(item => item.usuarioId === colaborador.usuarioId)
-                  const estaActivo = colaborador.estado !== 'INACTIVO' && usuario?.estado !== 'INACTIVO'
+                  const estaActivo = colaborador.estado === 'ACTIVO' && (colaborador.esEjemplo || usuario?.estado === 'ACTIVO')
                   const yaDadoDeBaja = colaborador.estado === 'INACTIVO'
-                  const estadoDisponibilidad = disponibilidadReal(colaborador)
-                  const porcentajeLibre = colaborador.estado === 'ACTIVO' && Number.isFinite(colaborador.dedicacionReservada) &&
+                  const estadoDisponibilidad = disponibilidadReal(colaborador, usuario)
+                  const porcentajeLibre = estaActivo && Number.isFinite(colaborador.dedicacionReservada) &&
                     colaborador.dedicacionReservada >= 0 && colaborador.dedicacionReservada <= 100
                     ? 100 - colaborador.dedicacionReservada : null
                   const disponible = estadoDisponibilidad === 'DISPONIBLE'
@@ -315,7 +338,8 @@ export default function RrhhColaboradoresVista({
                         <div className="rrhh-colaborador-identity">
                           <h4 title={nombre}>{nombre}</h4>
                           <p title={rol + ' | ' + nivel}>
-                            {rolResumido(rol)} <span aria-hidden="true">|</span> {nivel === 'Sin especificar' ? 'Sin nivel' : nivel.charAt(0).toUpperCase() + nivel.slice(1).toLowerCase()}
+                            {rol} <span aria-hidden="true">|</span> {nivel === 'Sin especificar' ? 'Sin nivel' : nivel.charAt(0).toUpperCase() + nivel.slice(1).toLowerCase()}
+                             <span className="rrhh-colaborador-cargo">Cargo: {cargo?.nombre || colaborador.cargoNombre || 'Sin cargo registrado'}</span>
                           </p>
                         </div>
                         <div className="rrhh-colaborador-estados">
@@ -330,6 +354,8 @@ export default function RrhhColaboradoresVista({
                       </div>
 
                       <div className="rrhh-colaborador-info">
+                        <p className="rrhh-colaborador-unknown">Dedicación reservada: {Number.isFinite(colaborador.dedicacionReservada) ? colaborador.dedicacionReservada + ' %' : 'Sin datos'}</p>
+                        {colaborador.fechaBaja && colaborador.estado === 'INACTIVO' && <p className="rrhh-colaborador-unknown">Fecha de baja: {new Date(colaborador.fechaBaja).toLocaleDateString('es-SV')}</p>}
                         <div className="rrhh-colaborador-skills">
                           <span>Habilidades</span>
                           <div className="rrhh-colaborador-chips">
@@ -369,11 +395,12 @@ export default function RrhhColaboradoresVista({
                               type="button"
                               className="rrhh-colaborador-remove"
                               onClick={() => onRemove(colaborador)}
-                              aria-label={'Dar de baja colaborador ' + nombre}
-                              title={colaborador.esEjemplo ? 'Vista previa: no se puede eliminar' : yaDadoDeBaja ? 'El perfil ya está dado de baja' : 'Dar de baja colaborador ' + nombre}
-                              disabled={loading || colaborador.esEjemplo || yaDadoDeBaja}
+                              aria-label={(yaDadoDeBaja ? 'Eliminar definitivamente colaborador ' : 'Dar de baja colaborador ') + nombre}
+                              title={colaborador.esEjemplo ? 'Vista previa: no se puede modificar' : yaDadoDeBaja
+                                ? 'Eliminar definitivamente el perfil dado de baja' : 'Dar de baja al colaborador'}
+                              disabled={loading || colaborador.esEjemplo}
                             >
-                              <Trash2 size={16} aria-hidden="true" />
+                              {yaDadoDeBaja ? <Trash2 size={16} aria-hidden="true" /> : <UserX size={16} aria-hidden="true" />}
                             </button>
                           </div>
                         )}
@@ -400,7 +427,7 @@ export default function RrhhColaboradoresVista({
           </section>
         </section>
       </main>
-      {!esAdministrador && (
+      {puedeGestionarCargos && (
         <GestionCargosModal abierto={cargosAbierto} onClose={() => setCargosAbierto(false)}
           onUpdated={onUpdatedCargos} />
       )}

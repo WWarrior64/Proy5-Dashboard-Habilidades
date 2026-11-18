@@ -1,10 +1,8 @@
 const {
   dynamoDb,
   GetCommand,
-  PutCommand,
-  UpdateCommand,
-  DeleteCommand,
   QueryCommand,
+  TransactWriteCommand,
 } = require('../../src/config/dynamodb.js');
 const { tableProyectoHabilidad, tableProyectos, tableHabilidades } = require('../../src/config/environment.js');
 const { ErrorApp, CODIGOS } = require('../../src/utils/errors.js');
@@ -25,11 +23,35 @@ async function comprobarProyectoEditable(proyectoId) {
   const resultado = await dynamoDb.send(new GetCommand({
     TableName: tableProyectos,
     Key: { proyectoId },
+    ConsistentRead: true,
   }));
   if (!resultado.Item) throw new ErrorApp('Proyecto no encontrado', 404, CODIGOS.NO_ENCONTRADO);
   if (['CANCELADO', 'COMPLETADO'].includes(resultado.Item.estado)) {
     throw new ErrorApp('No se pueden modificar requisitos de un proyecto finalizado', 409, CODIGOS.CONFLICTO);
   }
+  return resultado.Item;
+}
+
+function revisarRequisitos(proyecto) {
+  return { Update: {
+    TableName: tableProyectos,
+    Key: { proyectoId: proyecto.proyectoId },
+    UpdateExpression: 'SET #revision = if_not_exists(#revision, :cero) + :uno',
+    ConditionExpression: 'attribute_exists(proyectoId) AND #estado = :estado AND ' +
+      '(attribute_not_exists(#revision) OR #revision = :revisionAnterior)',
+    ExpressionAttributeNames: { '#revision': 'requisitosRevision', '#estado': 'estado' },
+    ExpressionAttributeValues: {
+      ':cero': 0, ':uno': 1, ':estado': proyecto.estado,
+      ':revisionAnterior': proyecto.requisitosRevision ?? 0,
+    },
+  } };
+}
+
+function relanzarConflicto(err) {
+  if (['ConditionalCheckFailedException', 'TransactionCanceledException', 'TransactionConflictException'].includes(err.name)) {
+    throw new ErrorApp('Los requisitos o el estado del proyecto cambiaron; recargue antes de reintentar', 409, CODIGOS.CONFLICTO);
+  }
+  throw err;
 }
 
 async function asociarHabilidad(datos) {
@@ -50,7 +72,7 @@ async function asociarHabilidad(datos) {
   }
 
   const [proyecto, habilidad] = await Promise.all([
-    dynamoDb.send(new GetCommand({ TableName: tableProyectos, Key: { proyectoId } })),
+    dynamoDb.send(new GetCommand({ TableName: tableProyectos, Key: { proyectoId }, ConsistentRead: true })),
     dynamoDb.send(new GetCommand({ TableName: tableHabilidades, Key: { habilidadId } })),
   ]);
   if (!proyecto.Item) throw new ErrorApp('Proyecto no encontrado', 404, CODIGOS.NO_ENCONTRADO);
@@ -76,22 +98,15 @@ async function asociarHabilidad(datos) {
   try {
     // La clave compuesta (proyectoId, habilidadId) es única: no se permiten
     // duplicados de la misma habilidad requerida en un proyecto.
-    await dynamoDb.send(
-      new PutCommand({
-        TableName: tableProyectoHabilidad,
-        Item: item,
+    await dynamoDb.send(new TransactWriteCommand({ TransactItems: [
+      revisarRequisitos(proyecto.Item),
+      { Put: {
+        TableName: tableProyectoHabilidad, Item: item,
         ConditionExpression: 'attribute_not_exists(habilidadId)',
-      })
-    );
+      } },
+    ] }));
   } catch (e) {
-    if (e.name === 'ConditionalCheckFailedException') {
-      throw new ErrorApp(
-        'Ya existe una relación entre este proyecto y la habilidad',
-        409,
-        CODIGOS.CONFLICTO
-      );
-    }
-    throw e;
+    relanzarConflicto(e);
   }
 
   invalidarCachéRelacion(proyectoId, habilidadId);
@@ -141,7 +156,7 @@ async function actualizarPeso(proyectoId, habilidadId, peso) {
 }
 
 async function actualizarCampo(proyectoId, habilidadId, cambios) {
-  await comprobarProyectoEditable(proyectoId);
+  const proyecto = await comprobarProyectoEditable(proyectoId);
   const sets = [];
   const nombresAtributos = {};
   const valoresAtributos = {};
@@ -157,27 +172,24 @@ async function actualizarCampo(proyectoId, habilidadId, cambios) {
   sets.push('#fechaActualizacion = :fechaActualizacion');
 
   try {
-    const resultado = await dynamoDb.send(
-      new UpdateCommand({
+    await dynamoDb.send(new TransactWriteCommand({ TransactItems: [
+      revisarRequisitos(proyecto),
+      { Update: {
         TableName: tableProyectoHabilidad,
         Key: { proyectoId, habilidadId },
         UpdateExpression: `SET ${sets.join(', ')}`,
         ExpressionAttributeNames: nombresAtributos,
         ExpressionAttributeValues: valoresAtributos,
         ConditionExpression: 'attribute_exists(proyectoId) AND attribute_exists(habilidadId)',
-        ReturnValues: 'ALL_NEW',
-      })
-    );
-    if (!resultado.Attributes) {
-      throw new ErrorApp('Relación proyecto-habilidad no encontrada', 404, CODIGOS.NO_ENCONTRADO);
-    }
+      } },
+    ] }));
     invalidarCachéRelacion(proyectoId, habilidadId);
-    return resultado.Attributes;
+    const actualizado = await dynamoDb.send(new GetCommand({
+      TableName: tableProyectoHabilidad, Key: { proyectoId, habilidadId }, ConsistentRead: true,
+    }));
+    return actualizado.Item;
   } catch (e) {
-    if (e.name === 'ConditionalCheckFailedException') {
-      throw new ErrorApp('Relación proyecto-habilidad no encontrada', 404, CODIGOS.NO_ENCONTRADO);
-    }
-    throw e;
+    relanzarConflicto(e);
   }
 }
 
@@ -199,22 +211,53 @@ async function actualizarRelacion(proyectoId, habilidadId, data) {
 }
 
 async function eliminarRelacion(proyectoId, habilidadId) {
-  await comprobarProyectoEditable(proyectoId);
+  const proyecto = await comprobarProyectoEditable(proyectoId);
+  // La consulta fuerte es indispensable: una lectura de caché no protege el último requisito.
+  const relaciones = [];
+  let cursor;
+  do {
+    const pagina = await dynamoDb.send(new QueryCommand({
+      TableName: tableProyectoHabilidad,
+      KeyConditionExpression: '#p = :p',
+      ExpressionAttributeNames: { '#p': 'proyectoId' },
+      ExpressionAttributeValues: { ':p': proyectoId },
+      ConsistentRead: true,
+      ...(cursor && { ExclusiveStartKey: cursor }),
+    }));
+    relaciones.push(...(pagina.Items || []));
+    cursor = pagina.LastEvaluatedKey;
+  } while (cursor);
+  if (!relaciones.some(item => item.habilidadId === habilidadId)) {
+    throw new ErrorApp('Relación proyecto-habilidad no encontrada', 404, CODIGOS.NO_ENCONTRADO);
+  }
+  if (proyecto.estado === 'ACTIVO' && relaciones.length <= 1) {
+    throw new ErrorApp('Un proyecto activo debe conservar al menos una habilidad requerida', 409, CODIGOS.CONFLICTO);
+  }
   try {
-    await dynamoDb.send(
-      new DeleteCommand({
+    // La revisión del proyecto serializa eliminaciones simultáneas de habilidades distintas.
+    await dynamoDb.send(new TransactWriteCommand({ TransactItems: [
+      { Update: {
+        TableName: tableProyectos,
+        Key: { proyectoId },
+        UpdateExpression: 'SET #rev = if_not_exists(#rev, :cero) + :uno',
+        ConditionExpression: 'attribute_exists(proyectoId) AND #estado = :estado AND (attribute_not_exists(#rev) OR #rev = :revision)',
+        ExpressionAttributeNames: { '#rev': 'requisitosRevision', '#estado': 'estado' },
+        ExpressionAttributeValues: {
+          ':cero': 0, ':uno': 1, ':revision': proyecto.requisitosRevision ?? 0, ':estado': proyecto.estado,
+        },
+      } },
+      { Delete: {
         TableName: tableProyectoHabilidad,
         Key: { proyectoId, habilidadId },
         ConditionExpression: 'attribute_exists(proyectoId) AND attribute_exists(habilidadId)',
-      })
-    );
+      } },
+    ] }));
   } catch (e) {
-    if (e.name === 'ConditionalCheckFailedException') {
-      throw new ErrorApp('Relación proyecto-habilidad no encontrada', 404, CODIGOS.NO_ENCONTRADO);
+    if (['TransactionCanceledException', 'ConditionalCheckFailedException', 'TransactionConflictException'].includes(e.name)) {
+      throw new ErrorApp('Los requisitos o el estado del proyecto cambiaron; recargue antes de retirar la habilidad', 409, CODIGOS.CONFLICTO);
     }
     throw e;
   }
-
   invalidarCachéRelacion(proyectoId, habilidadId);
   return { proyectoId, habilidadId, eliminada: true };
 }
