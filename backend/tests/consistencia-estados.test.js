@@ -110,6 +110,7 @@ describe('estado de cuentas y perfiles vinculados', () => {
   });
 
   test('reactiva la cuenta sin reincorporar automáticamente el perfil', async () => {
+    commandMocks.GetCommand.mockResolvedValueOnce({ Item: { ...USUARIO, estado: 'INACTIVO' } });
     commandMocks.UpdateCommand.mockResolvedValueOnce({ Attributes: { ...USUARIO, estado: 'ACTIVO' } });
     const resultado = await usuarios.cambiarEstado('u1', true);
     expect(resultado.estado).toBe('ACTIVO');

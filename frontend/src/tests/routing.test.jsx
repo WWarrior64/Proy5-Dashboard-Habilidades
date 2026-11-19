@@ -22,7 +22,10 @@ describe('Routing Permissions', () => {
   describe('canAccessRoute', () => {
     it('ADMINISTRADOR puede acceder a todas las rutas administrativas', () => {
       expect(canAccessRoute(ROLES.ADMINISTRADOR, '/usuarios')).toBe(true)
-      expect(canAccessRoute(ROLES.ADMINISTRADOR, '/colaboradores')).toBe(true)
+      expect(canAccessRoute(ROLES.ADMINISTRADOR, '/colaboradores')).toBe(false)
+      expect(canAccessRoute(ROLES.ADMINISTRADOR, '/proyectos')).toBe(false)
+      expect(canAccessRoute(ROLES.ADMINISTRADOR, '/roles-permisos')).toBe(true)
+      expect(canAccessRoute(ROLES.ADMINISTRADOR, '/configuracion')).toBe(true)
       expect(canAccessRoute(ROLES.ADMINISTRADOR, '/cargos')).toBe(true)
       expect(canAccessRoute(ROLES.ADMINISTRADOR, '/dashboards/administrador')).toBe(true)
     })

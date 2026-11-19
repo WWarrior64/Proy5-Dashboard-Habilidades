@@ -11,6 +11,9 @@ const {
 const { tableUsuarios, tableColaboradores, tableAsignaciones } = require('../config/environment');
 const { ErrorApp, CODIGOS } = require('../utils/errors');
 
+const CONTROL_ADMIN_ID = 'CONTROL#ADMINISTRADORES_ACTIVOS';
+const MENSAJE_ULTIMO_ADMIN = 'Debe existir al menos otro administrador activo antes de desactivar la cuenta o cambiar su rol';
+
 /**
  * Consultar un usuario por su usuarioId.
  * @param {string} usuarioId
@@ -89,6 +92,8 @@ async function listar(filtros = {}) {
   const params = {
     TableName: tableUsuarios,
     Limit: limit,
+    FilterExpression: 'attribute_not_exists(#control)',
+    ExpressionAttributeNames: { '#control': 'tipoRegistroControl' },
   };
   if (lastKey) params.ExclusiveStartKey = lastKey;
 
@@ -97,6 +102,79 @@ async function listar(filtros = {}) {
     items: result.Items || [],
     lastKey: result.LastEvaluatedKey || null,
   };
+}
+
+/**
+ * Control transaccional del número de administradores activos.
+ * Se inicializa con los usuarios históricos mediante lecturas consistentes y
+ * se actualiza en la misma transacción que los cambios de rol o estado.
+ */
+async function asegurarControlAdministradores() {
+  const clave = { usuarioId: CONTROL_ADMIN_ID };
+  const existente = await dynamoDb.send(new GetCommand({
+    TableName: tableUsuarios, Key: clave, ConsistentRead: true,
+  }));
+  if (existente.Item) {
+    if (!Number.isInteger(existente.Item.totalActivos) || existente.Item.totalActivos < 0) {
+      throw new ErrorApp('El control de administradores necesita revisión', 409, CODIGOS.CONFLICTO);
+    }
+    return existente.Item.totalActivos;
+  }
+
+  let totalActivos = 0;
+  let cursor;
+  do {
+    const pagina = await dynamoDb.send(new ScanCommand({
+      TableName: tableUsuarios,
+      ConsistentRead: true,
+      FilterExpression: '#rol = :rol AND #estado = :estado',
+      ExpressionAttributeNames: { '#rol': 'rol', '#estado': 'estado' },
+      ExpressionAttributeValues: { ':rol': 'ADMINISTRADOR', ':estado': 'ACTIVO' },
+      ...(cursor && { ExclusiveStartKey: cursor }),
+    }));
+    totalActivos += (pagina.Items || []).length;
+    cursor = pagina.LastEvaluatedKey;
+  } while (cursor);
+
+  try {
+    await dynamoDb.send(new PutCommand({
+      TableName: tableUsuarios,
+      Item: { ...clave, tipoRegistroControl: 'ADMINISTRADORES_ACTIVOS', totalActivos },
+      ConditionExpression: 'attribute_not_exists(usuarioId)',
+    }));
+    return totalActivos;
+  } catch (err) {
+    if (err.name !== 'ConditionalCheckFailedException') throw err;
+    const guardado = await dynamoDb.send(new GetCommand({
+      TableName: tableUsuarios, Key: clave, ConsistentRead: true,
+    }));
+    if (!Number.isInteger(guardado.Item?.totalActivos)) {
+      throw new ErrorApp('El control de administradores necesita revisión', 409, CODIGOS.CONFLICTO);
+    }
+    return guardado.Item.totalActivos;
+  }
+}
+
+async function ajusteAdministradores(delta) {
+  const actuales = await asegurarControlAdministradores();
+  if (delta < 0 && actuales <= 1) {
+    throw new ErrorApp(MENSAJE_ULTIMO_ADMIN, 409, CODIGOS.CONFLICTO);
+  }
+  return { Update: {
+    TableName: tableUsuarios,
+    Key: { usuarioId: CONTROL_ADMIN_ID },
+    UpdateExpression: 'ADD #total :delta',
+    ConditionExpression: '#total >= :minimo',
+    ExpressionAttributeNames: { '#total': 'totalActivos' },
+    ExpressionAttributeValues: { ':delta': delta, ':minimo': delta < 0 ? 2 : 0 },
+  } };
+}
+
+function conflictoCambioAdministrador(err) {
+  if (['TransactionCanceledException', 'ConditionalCheckFailedException', 'TransactionConflictException'].includes(err.name)) {
+    throw new ErrorApp('No se pudo confirmar el cambio de administradores; debe permanecer al menos uno activo. Recargue e intente de nuevo', 409, CODIGOS.CONFLICTO);
+  }
+  throw err;
 }
 
 /**
@@ -135,13 +213,23 @@ async function crear(data) {
     throw new ErrorApp('Ya existe un usuario interno con ese correo', 409, CODIGOS.CONFLICTO);
   }
 
-  await dynamoDb.send(
-    new PutCommand({
-      TableName: tableUsuarios,
-      Item: item,
-      ConditionExpression: 'attribute_not_exists(usuarioId)',
-    })
-  );
+  const insertarUsuario = {
+    TableName: tableUsuarios,
+    Item: item,
+    ConditionExpression: 'attribute_not_exists(usuarioId)',
+  };
+  if (item.rol === 'ADMINISTRADOR' && item.estado === 'ACTIVO') {
+    const contador = await ajusteAdministradores(1);
+    try {
+      await dynamoDb.send(new TransactWriteCommand({
+        TransactItems: [{ Put: insertarUsuario }, contador],
+      }));
+    } catch (err) {
+      conflictoCambioAdministrador(err);
+    }
+  } else {
+    await dynamoDb.send(new PutCommand(insertarUsuario));
+  }
 
   return item;
 }
@@ -166,9 +254,12 @@ async function actualizar(usuarioId, data) {
   if (data.estado !== undefined) {
     throw new ErrorApp('Utilice el cambio de estado transaccional para desactivar o activar cuentas', 400, CODIGOS.VALIDACION);
   }
+  if (data.rol !== undefined) {
+    throw new ErrorApp('Utilice el cambio de rol transaccional para modificar administradores', 400, CODIGOS.VALIDACION);
+  }
   if (data.email !== undefined) data.correo = data.email.trim().toLowerCase();
   if (data.nombre !== undefined) data.nombreCompleto = data.nombre;
-  const camposPermitidos = ['nombre', 'email', 'nombreCompleto', 'correo', 'rol'];
+  const camposPermitidos = ['nombre', 'email', 'nombreCompleto', 'correo'];
   camposPermitidos.forEach((campo) => {
     if (data[campo] !== undefined) {
       updateParts.push(`#${campo} = :${campo}`);
@@ -228,7 +319,47 @@ async function registrarUltimoAcceso(usuarioId) {
  * @returns {Promise<Object>}
  */
 async function cambiarRol(usuarioId, rol) {
-  return actualizar(usuarioId, { rol });
+  const usuario = await obtenerPorId(usuarioId);
+  if (!usuario) throw new ErrorApp('Usuario no encontrado', 404, CODIGOS.NO_ENCONTRADO);
+  if (usuario.rol === rol) return usuario;
+
+  const ahora = new Date().toISOString();
+  const actualizarRol = {
+    TableName: tableUsuarios,
+    Key: { usuarioId },
+    UpdateExpression: 'SET #rol = :nuevo, #fecha = :fecha',
+    ConditionExpression: 'attribute_exists(usuarioId) AND #rol = :anterior AND #estado = :estadoAnterior',
+    ExpressionAttributeNames: { '#rol': 'rol', '#estado': 'estado', '#fecha': 'fechaActualizacion' },
+    ExpressionAttributeValues: {
+      ':nuevo': rol, ':anterior': usuario.rol, ':estadoAnterior': usuario.estado, ':fecha': ahora,
+    },
+  };
+
+  const delta = usuario.estado === 'ACTIVO'
+    ? (rol === 'ADMINISTRADOR' ? 1 : 0) - (usuario.rol === 'ADMINISTRADOR' ? 1 : 0)
+    : 0;
+  if (delta !== 0) {
+    const contador = await ajusteAdministradores(delta);
+    try {
+      await dynamoDb.send(new TransactWriteCommand({
+        TransactItems: [{ Update: actualizarRol }, contador],
+      }));
+    } catch (err) {
+      conflictoCambioAdministrador(err);
+    }
+    return { ...usuario, rol, fechaActualizacion: ahora };
+  }
+  try {
+    const resultado = await dynamoDb.send(new UpdateCommand({
+      ...actualizarRol, ReturnValues: 'ALL_NEW',
+    }));
+    return resultado.Attributes;
+  } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') {
+      throw new ErrorApp('La cuenta cambió; recargue antes de modificar el rol', 409, CODIGOS.CONFLICTO);
+    }
+    throw err;
+  }
 }
 
 /**
@@ -284,23 +415,35 @@ async function cambiarEstado(usuarioId, activo) {
   const usuario = await obtenerPorId(usuarioId);
   if (!usuario) throw new ErrorApp('Usuario no encontrado', 404, CODIGOS.NO_ENCONTRADO);
   const estado = activo ? 'ACTIVO' : 'INACTIVO';
+  if (usuario.estado === estado) return usuario;
+  const contador = usuario.rol === 'ADMINISTRADOR'
+    ? await ajusteAdministradores(activo ? 1 : -1) : null;
   const ahora = new Date().toISOString();
   const perfil = await obtenerColaboradorVinculado(usuarioId);
   const actualizarUsuario = {
     TableName: tableUsuarios,
     Key: { usuarioId },
     UpdateExpression: 'SET #estado = :nuevo, #fecha = :fecha',
-    ConditionExpression: 'attribute_exists(usuarioId) AND #estado = :anterior',
-    ExpressionAttributeNames: { '#estado': 'estado', '#fecha': 'fechaActualizacion' },
-    ExpressionAttributeValues: { ':nuevo': estado, ':anterior': usuario.estado, ':fecha': ahora },
+    ConditionExpression: 'attribute_exists(usuarioId) AND #estado = :anterior AND #rol = :rolAnterior',
+    ExpressionAttributeNames: { '#estado': 'estado', '#rol': 'rol', '#fecha': 'fechaActualizacion' },
+    ExpressionAttributeValues: {
+      ':nuevo': estado, ':anterior': usuario.estado, ':rolAnterior': usuario.rol, ':fecha': ahora,
+    },
   };
   if (activo || !perfil) {
     try {
+      if (contador) {
+        await dynamoDb.send(new TransactWriteCommand({
+          TransactItems: [{ Update: actualizarUsuario }, contador],
+        }));
+        return { ...usuario, estado, fechaActualizacion: ahora };
+      }
       const resultado = await dynamoDb.send(new UpdateCommand({
         ...actualizarUsuario, ReturnValues: 'ALL_NEW',
       }));
       return resultado.Attributes;
     } catch (err) {
+      if (contador) conflictoCambioAdministrador(err);
       if (err.name === 'ConditionalCheckFailedException') {
         throw new ErrorApp('La cuenta cambió de estado; recargue antes de reintentar', 409, CODIGOS.CONFLICTO);
       }
@@ -326,6 +469,7 @@ async function cambiarEstado(usuarioId, activo) {
   try {
     await dynamoDb.send(new TransactWriteCommand({ TransactItems: [
       { Update: actualizarUsuario },
+      ...(contador ? [contador] : []),
       { Update: {
         TableName: tableColaboradores, Key: { colaboradorId: perfil.colaboradorId },
         UpdateExpression: 'SET #estado = :inactivo, #fecha = :fecha' + cambioPerfil,
@@ -341,6 +485,7 @@ async function cambiarEstado(usuarioId, activo) {
       } },
     ] }));
   } catch (err) {
+    if (contador) conflictoCambioAdministrador(err);
     if (['TransactionCanceledException', 'ConditionalCheckFailedException', 'TransactionConflictException'].includes(err.name)) {
       throw new ErrorApp('La cuenta o las asignaciones cambiaron; recargue antes de desactivar', 409, CODIGOS.CONFLICTO);
     }

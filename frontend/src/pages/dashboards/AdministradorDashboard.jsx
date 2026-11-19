@@ -126,8 +126,8 @@ export default function AdministradorDashboard() {
 
   const quickActions = [
     { label: 'Gestionar usuarios', onClick: () => navigate('/usuarios') },
-    { label: 'Gestionar colaboradores', onClick: () => navigate('/colaboradores') },
-    { label: 'Gestionar proyectos', onClick: () => navigate('/proyectos') },
+    { label: 'Roles y permisos', onClick: () => navigate('/roles-permisos') },
+    { label: 'Configuración', onClick: () => navigate('/configuracion') },
   ]
 
   return (
@@ -237,7 +237,7 @@ export default function AdministradorDashboard() {
             </div>
             <div className="card-section-body">
               <p className="admin-dashboard-access-text">
-                Utiliza las acciones rápidas para gestionar usuarios, colaboradores y proyectos. El menú lateral conserva las herramientas del Administrador.
+                Utiliza las acciones rápidas para gestionar usuarios, roles, permisos y configuración. La auditoría también está disponible en el menú lateral.
               </p>
             </div>
           </div>

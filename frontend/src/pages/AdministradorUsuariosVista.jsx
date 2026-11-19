@@ -113,6 +113,8 @@ export default function AdministradorUsuariosVista() {
   const visibles = filtrados.slice((paginaActual - 1) * cantidadPorPagina, paginaActual * cantidadPorPagina)
 
   const activos = usuarios.filter(item => item.estado === 'ACTIVO').length
+  const administradoresActivos = usuarios.filter(item => item.rol === 'ADMINISTRADOR' && item.estado === 'ACTIVO').length
+  const esUltimoAdministrador = item => item?.rol === 'ADMINISTRADOR' && item.estado === 'ACTIVO' && administradoresActivos <= 1
   const inactivos = usuarios.filter(item => item.estado === 'INACTIVO').length
 
   const filtrar = (actualizar, valor) => {
@@ -139,6 +141,10 @@ export default function AdministradorUsuariosVista() {
 
   const guardar = async datos => {
     if (guardando || !puedeGestionar) return
+    if (esUltimoAdministrador(usuarioEditar) && datos.rol !== 'ADMINISTRADOR') {
+      setError('Debe existir otro administrador activo antes de cambiar el rol del último administrador.')
+      return
+    }
     setGuardando(true)
     setError('')
     setAviso('')
@@ -166,6 +172,11 @@ export default function AdministradorUsuariosVista() {
 
   const cambiarEstado = async () => {
     if (!confirmacion || guardando || !puedeGestionar) return
+    if (esUltimoAdministrador(confirmacion)) {
+      setConfirmacion(null)
+      setError('No se puede desactivar al último administrador activo. Active o registre otro administrador primero.')
+      return
+    }
     const nuevoEstado = confirmacion.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO'
     setGuardando(true)
     setError('')
@@ -340,7 +351,9 @@ export default function AdministradorUsuariosVista() {
                           {menuAbierto === item.usuarioId && (
                             <div className="admin-usuario-menu">
                               <button type="button" className={activo ? 'admin-usuario-desactivar' : ''}
-                                onClick={() => { setConfirmacion(item); setMenuAbierto(null) }}>
+                                disabled={esUltimoAdministrador(item)}
+                                 title={esUltimoAdministrador(item) ? 'Debe existir otro administrador activo para desactivar esta cuenta' : undefined}
+                                 onClick={() => { setConfirmacion(item); setMenuAbierto(null) }}>
                                 {activo ? 'Desactivar usuario' : 'Activar usuario'}
                               </button>
                             </div>
@@ -383,7 +396,7 @@ export default function AdministradorUsuariosVista() {
         <Modal isOpen={formularioAbierto} title={usuarioEditar ? 'Editar usuario' : 'Crear usuario'}
           onClose={() => { if (!guardando) setFormularioAbierto(false) }}>
           <UsuarioForm key={usuarioEditar?.usuarioId || 'nuevo'} usuario={usuarioEditar}
-            onSave={guardar} onCancel={() => setFormularioAbierto(false)}
+            bloquearRol={esUltimoAdministrador(usuarioEditar)} onSave={guardar} onCancel={() => setFormularioAbierto(false)}
             loading={guardando} mode={usuarioEditar ? 'edit' : 'create'} />
         </Modal>
         <ConfirmDialog isOpen={Boolean(confirmacion)}
