@@ -55,7 +55,7 @@ function SoloRol({ permitidos, children }) {
 // Para RRHH, Colaboradores usa su propio diseño de tarjetas y barra lateral.
 function ColaboradoresPorRol() {
   const { user } = useAuth()
-  return [ROLES.RRHH, ROLES.ADMINISTRADOR].includes(user?.rol) ? <Colaboradores />
+  return user?.rol === ROLES.RRHH ? <Colaboradores />
     : user?.rol === ROLES.LIDER_PROYECTO ? <LiderBuscarTalentoVista /> : <MainLayout />
 }
 
@@ -63,7 +63,7 @@ function ColaboradoresPorRol() {
 function ProyectosPorRol() {
   const { user } = useAuth()
   return user?.rol === 'EMPLEADO' ? <EmpleadoProyectos />
-    : [ROLES.RRHH, ROLES.ADMINISTRADOR].includes(user?.rol) ? <Proyectos />
+    : user?.rol === ROLES.RRHH ? <Proyectos />
       : user?.rol === ROLES.LIDER_PROYECTO ? <LiderProyectosVista /> : <MainLayout />
 }
 
@@ -108,10 +108,10 @@ function App() {
           >
             <Route path="/" element={<InicioPorRol />} />
           </Route>
-          <Route element={<ProtectedRoute><SoloRol permitidos={[ROLES.RRHH, ROLES.LIDER_PROYECTO, ROLES.ADMINISTRADOR]}><ColaboradoresPorRol /></SoloRol></ProtectedRoute>}>
+          <Route element={<ProtectedRoute><SoloRol permitidos={[ROLES.RRHH, ROLES.LIDER_PROYECTO]}><ColaboradoresPorRol /></SoloRol></ProtectedRoute>}>
             <Route path="colaboradores" element={<Colaboradores />} />
           </Route>
-          <Route element={<ProtectedRoute><SoloRol permitidos={[ROLES.EMPLEADO, ROLES.RRHH, ROLES.LIDER_PROYECTO, ROLES.ADMINISTRADOR]}><ProyectosPorRol /></SoloRol></ProtectedRoute>}>
+          <Route element={<ProtectedRoute><SoloRol permitidos={[ROLES.EMPLEADO, ROLES.RRHH, ROLES.LIDER_PROYECTO]}><ProyectosPorRol /></SoloRol></ProtectedRoute>}>
             <Route path="proyectos" element={<Proyectos />} />
           </Route>
           <Route element={<ProtectedRoute><SoloRol permitidos={[ROLES.EMPLEADO, ROLES.LIDER_PROYECTO]}><PostulacionesPorRol /></SoloRol></ProtectedRoute>}>

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import Button from '../common/Button.jsx'
 import RoleSelector from './RoleSelector.jsx'
 
-export default function UsuarioForm({ usuario, onSave, onCancel, loading = false, mode = 'create' }) {
+export default function UsuarioForm({ usuario, onSave, onCancel, loading = false, mode = 'create', bloquearRol = false }) {
   const [form, setForm] = useState({
     nombre: usuario?.nombre || '',
     email: usuario?.email || '',
@@ -49,7 +49,8 @@ export default function UsuarioForm({ usuario, onSave, onCancel, loading = false
         {errors.email && <p className="error-text">{errors.email}</p>}
       </div>
       <div className="form-group">
-        <RoleSelector value={form.rol} onChange={(v) => setForm({ ...form, rol: v })} />
+        <RoleSelector value={form.rol} onChange={(v) => setForm({ ...form, rol: v })} disabled={bloquearRol} />
+        {bloquearRol && <p className="error-text">Debe existir otro administrador activo antes de cambiar este rol.</p>}
         {errors.rol && <p className="error-text">{errors.rol}</p>}
       </div>
       {mode === 'create' && (

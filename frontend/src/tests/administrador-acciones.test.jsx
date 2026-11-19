@@ -11,6 +11,10 @@ vi.mock('../context/AuthContext.jsx', () => ({
 vi.mock('../components/layout/ProtectedRoute.jsx', () => ({
   ProtectedRoute: ({ children }) => children,
 }))
+vi.mock('../components/layout/MainLayout.jsx', async () => {
+  const { Outlet } = await import('react-router-dom')
+  return { default: () => <Outlet /> }
+})
 vi.mock('../pages/Colaboradores.jsx', () => ({
   default: () => <h1>Gestión de colaboradores conectada</h1>,
 }))
@@ -19,6 +23,15 @@ vi.mock('../pages/Proyectos.jsx', () => ({
 }))
 vi.mock('../pages/AdministradorUsuariosVista.jsx', () => ({
   default: () => <h1>Gestión de usuarios conectada</h1>,
+}))
+vi.mock('../pages/AdministradorRolesPermisosVista.jsx', () => ({
+  default: () => <h1>Roles y permisos conectados</h1>,
+}))
+vi.mock('../pages/AdministradorConfiguracionVista.jsx', () => ({
+  default: () => <h1>Configuración conectada</h1>,
+}))
+vi.mock('../pages/dashboards/AdministradorDashboard.jsx', () => ({
+  default: () => <h1>Panel de administrador</h1>,
 }))
 
 describe('Acciones rápidas del Administrador', () => {
@@ -37,11 +50,21 @@ describe('Acciones rápidas del Administrador', () => {
 
   it.each([
     ['/usuarios', 'Gestión de usuarios conectada'],
-    ['/colaboradores', 'Gestión de colaboradores conectada'],
-    ['/proyectos', 'Gestión de proyectos conectada'],
-  ])('un Administrador abre %s desde su dashboard sin caer en el layout genérico', (ruta, titulo) => {
+    ['/roles-permisos', 'Roles y permisos conectados'],
+    ['/configuracion', 'Configuración conectada'],
+  ])('un Administrador abre %s desde su dashboard', (ruta, titulo) => {
     window.history.replaceState({}, '', ruta)
     render(<App />)
     expect(screen.getByRole('heading', { name: titulo })).toBeTruthy()
+  })
+
+  it.each([
+    ['/colaboradores', 'Gestión de colaboradores conectada'],
+    ['/proyectos', 'Gestión de proyectos conectada'],
+  ])('el Administrador no puede abrir directamente %s', async (ruta, titulo) => {
+    window.history.replaceState({}, '', ruta)
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: 'Panel de administrador' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: titulo })).toBeNull()
   })
 })
