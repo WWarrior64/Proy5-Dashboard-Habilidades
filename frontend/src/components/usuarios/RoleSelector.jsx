@@ -1,6 +1,4 @@
-import { useState } from 'react'
-
-export default function RoleSelector({ value, onChange }) {
+export default function RoleSelector({ value, onChange, disabled = false }) {
   const roles = [
     { value: 'EMPLEADO', label: 'Empleado' },
     { value: 'RRHH', label: 'Recursos Humanos' },
@@ -12,6 +10,7 @@ export default function RoleSelector({ value, onChange }) {
     <div className="form-group">
       <label className="label">Rol</label>
       <select
+        disabled={disabled}
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
         className="input"

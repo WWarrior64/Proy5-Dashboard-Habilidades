@@ -24,8 +24,9 @@ export default function Sidebar({ user, onLogout }) {
   const isAdmin = user?.rol === ROLES.ADMINISTRADOR
   const isRRHH = user?.rol === ROLES.RRHH
 
-  // Filtrar módulos visibles por rol: RRHH y ADMINISTRADOR ven todos los módulos de gestión
+  // El administrador accede a sus herramientas propias, no a las vistas de RRHH.
   const visibleItems = ALL_NAV_ITEMS.filter((item) => {
+    if (isAdmin && [ROUTE_PATHS.COLABORADORES, ROUTE_PATHS.PROYECTOS].includes(item.path)) return false
     if (!item.permission) return true
     if (!hasPermission(item.permission)) return false
     return true

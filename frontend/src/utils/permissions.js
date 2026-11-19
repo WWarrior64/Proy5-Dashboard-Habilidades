@@ -115,6 +115,7 @@ export function hasPermission(role, permission) {
  */
 export function canAccessRoute(role, path) {
   if (!role || !path) return false
+  if (role === ROLES.ADMINISTRADOR && ['/colaboradores', '/proyectos'].includes(path)) return false
   const requiredPermission = ROUTE_PERMISSION_MAP[path]
   if (!requiredPermission) return false
   const dashboards = {
