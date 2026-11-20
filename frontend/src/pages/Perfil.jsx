@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth.js'
 import { useAutoDismiss } from '../hooks/useAutoDismiss.js'
 import AvisoSinPerfilColaborador, { esAvisoSinPerfilColaborador } from '../components/common/AvisoSinPerfilColaborador.jsx'
 import { usuariosService } from '../services/usuarios.service.js'
+import VerificacionCorreo from '../components/usuarios/VerificacionCorreo.jsx'
 import { colaboradoresService } from '../services/colaboradores.service.js'
 import { habilidadesService } from '../services/habilidades.service.js'
 import { proyectosService } from '../services/proyectos.service.js'
@@ -415,6 +416,8 @@ export default function Perfil() {
               <Pencil size={18} aria-hidden="true" />
             </button>
           </section>
+
+          <VerificacionCorreo email={perfil?.email || perfil?.correo} />
 
           {rol === 'EMPLEADO' ? (
             <>
