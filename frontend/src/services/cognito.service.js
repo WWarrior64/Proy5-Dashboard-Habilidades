@@ -141,7 +141,13 @@ function solicitarRecuperacion(email) {
   return new Promise((resolve, reject) => {
     user.forgotPassword({
       onSuccess: () => resolve(),
-      onFailure: error => reject(new Error(error?.message || 'No se pudo enviar el código de recuperación.')),
+      onFailure: error => {
+        if (/cannot reset password|no registered\/verified email/i.test(error?.message || '')) {
+          reject(new Error('No se puede recuperar la contraseña sin un correo verificado. Inicia sesión y verifica el correo desde Perfil. Si ya no puedes iniciar sesión, contacta al administrador.'))
+        } else {
+          reject(new Error(error?.message || 'No se pudo enviar el código de recuperación.'))
+        }
+      },
       inputVerificationCode: () => resolve(),
     })
   })
@@ -153,6 +159,60 @@ function confirmarRecuperacion(email, codigo, nuevaContrasena) {
     user.confirmPassword(codigo.trim(), nuevaContrasena, {
       onSuccess: () => resolve(),
       onFailure: error => reject(new Error(error?.message || 'El código de recuperación no es válido.')),
+    })
+  })
+}
+
+function obtenerUsuarioConSesion() {
+  const usuario = userPool.getCurrentUser()
+  if (!usuario) return Promise.reject(new Error('Inicia sesión para verificar tu correo electrónico.'))
+  return new Promise((resolve, reject) => {
+    usuario.getSession((error, sesion) => {
+      if (error || !sesion?.isValid()) {
+        reject(new Error('La sesión de Cognito expiró. Inicia sesión nuevamente.'))
+      } else {
+        resolve(usuario)
+      }
+    })
+  })
+}
+
+async function obtenerEstadoVerificacionCorreo() {
+  const usuario = await obtenerUsuarioConSesion()
+  return new Promise((resolve, reject) => {
+    usuario.getUserAttributes((error, atributos) => {
+      if (error) {
+        reject(new Error('No se pudo consultar la verificación del correo en Cognito.'))
+        return
+      }
+      const atributosPorNombre = Object.fromEntries(
+        (atributos || []).map(atributo => [atributo.getName(), atributo.getValue()])
+      )
+      resolve({
+        email: atributosPorNombre.email || '',
+        verificado: atributosPorNombre.email_verified === 'true',
+      })
+    })
+  })
+}
+
+async function solicitarVerificacionCorreo() {
+  const usuario = await obtenerUsuarioConSesion()
+  return new Promise((resolve, reject) => {
+    usuario.getAttributeVerificationCode('email', {
+      onSuccess: () => resolve(),
+      inputVerificationCode: () => resolve(),
+      onFailure: error => reject(new Error(error?.message || 'No se pudo enviar el código de verificación.')),
+    })
+  })
+}
+
+async function confirmarVerificacionCorreo(codigo) {
+  const usuario = await obtenerUsuarioConSesion()
+  return new Promise((resolve, reject) => {
+    usuario.verifyAttribute('email', codigo.trim(), {
+      onSuccess: () => resolve(),
+      onFailure: error => reject(new Error(error?.message || 'El código de verificación no es válido.')),
     })
   })
 }
@@ -196,6 +256,7 @@ function signOut() {
 
 export {
   signIn, completeNewPassword, solicitarRecuperacion, confirmarRecuperacion,
+  obtenerEstadoVerificacionCorreo, solicitarVerificacionCorreo, confirmarVerificacionCorreo,
   refreshSession, signOut, getAccessToken, getIdToken, getRefreshToken,
   isAuthenticated, clearTokens, storeTokens, decodeJwtPayload,
   USER_POOL_ID, CLIENT_ID, REGION,
